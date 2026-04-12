@@ -1263,6 +1263,9 @@ function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
 // ═══════════════════════════════════════════════════════════════
 //  PERSISTÊNCIA
 // ═══════════════════════════════════════════════════════════════
+// Timer para auto-sync com Drive (evita chamadas em excesso)
+let _driveSyncTimer = null;
+
 function salvar() {
   state.meta.lastSaved = new Date().toISOString();
   try {
@@ -1272,6 +1275,18 @@ function salvar() {
   } catch(e) {
     console.error('Erro ao salvar:', e);
     toast('Erro ao salvar! localStorage cheio?', 'error');
+  }
+  // Auto-sync com Google Drive (aguarda 3s após última alteração)
+  if (driveAccessToken) {
+    clearTimeout(_driveSyncTimer);
+    _driveSyncTimer = setTimeout(async () => {
+      const badge = document.getElementById('badge-drive');
+      const nome  = document.getElementById('drive-user-name');
+      const nomeOriginal = nome.textContent;
+      nome.textContent = 'Sincronizando…';
+      await driveSalvarSilencioso();
+      nome.textContent = nomeOriginal;
+    }, 3000);
   }
 }
 
@@ -2885,6 +2900,44 @@ async function driveBuscarArquivo() {
     }
   } catch(e) { console.error('Erro ao buscar arquivo:', e); }
   return null;
+}
+
+/* ── Salvar silencioso (auto-sync) ── */
+async function driveSalvarSilencioso() {
+  if (!driveAccessToken) return;
+  try {
+    const jsonStr = JSON.stringify(state, null, 2);
+    const blob    = new Blob([jsonStr], { type: 'application/json' });
+    if (!driveFileId) await driveBuscarArquivo();
+    let res;
+    if (driveFileId) {
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name: DRIVE_FILE_NAME })], { type: 'application/json' }));
+      form.append('file', blob);
+      res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`, {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer ' + driveAccessToken },
+        body: form
+      });
+    } else {
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: 'application/json' })], { type: 'application/json' }));
+      form.append('file', blob);
+      res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + driveAccessToken },
+        body: form
+      });
+    }
+    const data = await res.json();
+    if (data.id) {
+      driveFileId = data.id;
+      const agora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('save-text').textContent = 'Nuvem: ' + agora;
+    }
+  } catch(e) {
+    console.warn('Auto-sync Drive falhou silenciosamente:', e);
+  }
 }
 
 /* ── Salvar no Drive ── */
