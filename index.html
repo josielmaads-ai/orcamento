@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS/ORÇAMENTO — v1.0 PRO</title>
+<title>SYS/ORÇAMENTO — v3.0 PRO</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 /* ══════════════════════════════════════════════════
@@ -858,8 +858,8 @@ tr:hover td{background:rgba(0,0,0,.04)}
 <div id="page-saida" class="page">
   <div class="page-header">
     <div>
-      <div class="page-title"><span class="page-title-icon">↑</span>Registrar Empenho / Liquidação</div>
-      <div class="page-sub">Empenho ou Liquidação/Pagamento — saldo verificado automaticamente</div>
+      <div class="page-title"><span class="page-title-icon">↑</span>Registrar Saída / Empenho</div>
+      <div class="page-sub">Execução de despesa — verifica saldo antes de confirmar</div>
     </div>
   </div>
   <div class="card">
@@ -1387,7 +1387,6 @@ function carregar() {
   if (raw) {
     try {
       const d = JSON.parse(raw);
-      // Merge seguro: Array.isArray + cópia por valor evita corrupção cruzada
       state.meta        = d.meta || state.meta;
       state.fontes      = Array.isArray(d.fontes)      ? [...d.fontes]                  : [...DEFAULT_FONTES];
       state.ptres       = Array.isArray(d.ptres)       ? [...d.ptres]                   : [...DEFAULT_PTRES];
@@ -1439,7 +1438,17 @@ function auditLog(acao, entidade, id, descricao, snapshot) {
 // ═══════════════════════════════════════════════════════════════
 //  CÁLCULOS FINANCEIROS
 // ═══════════════════════════════════════════════════════════════
-const TIPOS_SAIDA = ['Saída','Empenho','Liquidação','Pagamento'];
+// ── TIPOS válidos (retrocompatibilidade: 'Saída' é tratada como empenho legado)
+const TIPOS_SAIDA     = ['Saída','Empenho','Liquidação','Pagamento']; // mantido para filtros de histórico
+const TIPOS_EMPENHO   = ['Saída','Empenho'];       // lançamentos que comprometem dotação
+const TIPOS_LIQ_PAG   = ['Liquidação','Pagamento']; // lançamentos que efetivam pagamento
+
+// Retorna tipoLancamento resolvido, com fallback para dados antigos sem o campo
+function resolveTipoLancamento(l) {
+  if (l.tipoLancamento) return l.tipoLancamento;
+  // Fallback retrocompatível: classifica pelo campo 'tipo' original
+  return TIPOS_EMPENHO.includes(l.tipo) ? 'EMPENHO' : 'LIQUIDACAO_PAGAMENTO';
+}
 
 function getLancsAtivos(tipo, cat, referenciaId) {
   return state.lancamentos.filter(l => {
@@ -1450,8 +1459,36 @@ function getLancsAtivos(tipo, cat, referenciaId) {
     return true;
   });
 }
+
+// Filtra por tipoLancamento contábil (com fallback para dados antigos)
+function getLancsPorTipoContabil(tipoContabil, cat, referenciaId) {
+  return state.lancamentos.filter(l => {
+    if (l.status !== 'Ativo') return false;
+    if (resolveTipoLancamento(l) !== tipoContabil) return false;
+    if (cat && l.categoria !== cat) return false;
+    if (referenciaId !== undefined && l.referenciaId !== referenciaId) return false;
+    return true;
+  });
+}
+
 function sumValor(arr) { return arr.reduce((s,l) => s + (l.valor||0), 0); }
 function totalEntradas(cat) { return sumValor(getLancsAtivos('Entrada', cat)); }
+
+// totalEmpenhos: APENAS lançamentos classificados como EMPENHO
+function totalEmpenhos(cat, refId) {
+  return sumValor(getLancsPorTipoContabil('EMPENHO', cat, refId));
+}
+
+// totalLiqPag: APENAS lançamentos classificados como LIQUIDACAO_PAGAMENTO
+function totalLiqPag(cat, refId) {
+  return sumValor(getLancsPorTipoContabil('LIQUIDACAO_PAGAMENTO', cat, refId));
+}
+
+// Mantidos por compatibilidade com módulos de contratos/AE (usam tipo explícito)
+function totalLiquidacoes(cat, refId) { return sumValor(getLancsAtivos('Liquidação', cat, refId)); }
+function totalPagamentos(cat,  refId) { return sumValor(getLancsAtivos('Pagamento',  cat, refId)); }
+
+// totalSaidas: soma EMPENHO + LIQUIDACAO_PAGAMENTO = total comprometido (para saldo disponível)
 function totalSaidas(cat) {
   return sumValor(state.lancamentos.filter(l =>
     l.status==='Ativo' &&
@@ -1459,9 +1496,7 @@ function totalSaidas(cat) {
     (!cat || l.categoria===cat)
   ));
 }
-function totalEmpenhos(cat, refId) { return sumValor(getLancsAtivos('Empenho', cat, refId)); }
-function totalLiquidacoes(cat, refId) { return sumValor(getLancsAtivos('Liquidação', cat, refId)); }
-function totalPagamentos(cat, refId) { return sumValor(getLancsAtivos('Pagamento', cat, refId)); }
+
 function saldo(cat) { return totalEntradas(cat) - totalSaidas(cat); }
 function pct(cat) {
   const e = totalEntradas(cat);
@@ -1524,14 +1559,14 @@ function renderSidebar() {
 //  DASHBOARD
 // ═══════════════════════════════════════════════════════════════
 function renderDashboard() {
-  const totE      = totalEntradas();
-  const totS      = totalSaidas();
-  const totSaldo  = totE - totS;
-  const totEmp    = sumValor(getLancsAtivos('Empenho'));
-  const totLiq    = sumValor(getLancsAtivos('Liquidação'));
-  const totPag    = sumValor(getLancsAtivos('Pagamento'));
-  const totLiqPag = totLiq + totPag; // Liquidações + Pagamentos separados de Empenho
-  const pCompr    = totE > 0 ? clamp(Math.round(totS/totE*100),0,999) : 0;
+  const totE       = totalEntradas();
+  const totS       = totalSaidas();    // Empenho + Liq/Pag = total comprometido
+  const totSaldo   = totE - totS;
+  const totEmp     = totalEmpenhos();                      // APENAS Empenho
+  const totLiq     = totalLiquidacoes();                   // APENAS Liquidação
+  const totPag     = totalPagamentos();                    // APENAS Pagamento
+  const totLiqPagD = totalLiqPag();                        // Liquidação + Pagamento
+  const pCompr     = totE > 0 ? clamp(Math.round(totS/totE*100),0,999) : 0;
   const nContratos = state.contratos.filter(c=>c.status!=='Excluído').length;
   const nAcoes     = state.acoes.filter(a=>a.status!=='Excluído').length;
 
@@ -1554,7 +1589,7 @@ function renderDashboard() {
     <div class="kpi accent-blue">
       <div class="kpi-label">Total Empenhado <span class="kpi-badge badge-blue">empenho</span></div>
       <div class="kpi-value text-blue">${fmtBR(totEmp)}</div>
-      <div class="kpi-sub">liq: ${fmtBR(totLiq)} · pago: ${fmtBR(totPag)}</div>
+      <div class="kpi-sub">somente empenhos registrados</div>
     </div>
     <div class="kpi accent-purple">
       <div class="kpi-label">Contratos / Ações <span class="kpi-badge badge-purple">entidades</span></div>
@@ -1563,25 +1598,30 @@ function renderDashboard() {
     </div>
     <div class="kpi accent-amber">
       <div class="kpi-label">Liquidações / Pagamentos <span class="kpi-badge badge-warn">liq+pag</span></div>
-      <div class="kpi-value text-amber">${fmtBR(totLiqPag)}</div>
+      <div class="kpi-value text-amber">${fmtBR(totLiqPagD)}</div>
       <div class="kpi-sub">liq: ${fmtBR(totLiq)} · pag: ${fmtBR(totPag)}</div>
     </div>`;
 
   // Tabela mensal
   const ano = new Date().getFullYear();
   let thead = '<tr><th>Indicador</th>' + MESES.map(m=>`<th>${m}</th>`).join('') + '<th>Total</th></tr>';
-  const rows = ['Entradas','Saídas/Empenhos','Saldo Mensal'].map(label => {
+  // Tabela mensal com separação contábil: Empenho ≠ Liquidação/Pagamento
+  const rows = ['Entradas','Empenhos','Liquidações/Pag.','Saldo Mensal'].map(label => {
     const cells = MESES.map((_,mi) => {
       const mesStr = String(mi+1).padStart(2,'0');
       const prefix = `${ano}-${mesStr}`;
-      const entradas = sumValor(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.data&&l.data.startsWith(prefix)));
-      const saidas   = sumValor(state.lancamentos.filter(l=>l.status==='Ativo'&&TIPOS_SAIDA.includes(l.tipo)&&l.data&&l.data.startsWith(prefix)));
-      if (label==='Entradas') return {v:entradas, color:'var(--green)'};
-      if (label==='Saídas/Empenhos') return {v:saidas, color:'var(--red)'};
-      return {v:entradas-saidas, color:entradas-saidas<0?'var(--red)':'var(--green)'};
+      const lancsAtMes = state.lancamentos.filter(l=>l.status==='Ativo'&&l.data&&l.data.startsWith(prefix));
+      const entradas  = sumValor(lancsAtMes.filter(l=>l.tipo==='Entrada'));
+      const empenhos  = sumValor(lancsAtMes.filter(l=>resolveTipoLancamento(l)==='EMPENHO'));
+      const liqpag    = sumValor(lancsAtMes.filter(l=>resolveTipoLancamento(l)==='LIQUIDACAO_PAGAMENTO'));
+      const saldoMes  = entradas - empenhos - liqpag;
+      if (label==='Entradas')          return {v:entradas, color:'var(--green)'};
+      if (label==='Empenhos')          return {v:empenhos, color:'var(--blue)'};
+      if (label==='Liquidações/Pag.')  return {v:liqpag,   color:'var(--amber)'};
+      return {v:saldoMes, color:saldoMes<0?'var(--red)':'var(--green)'};
     });
     const total = cells.reduce((s,c)=>s+c.v,0);
-    const tColor = label==='Entradas'?'var(--green)':label==='Saídas/Empenhos'?'var(--red)':total<0?'var(--red)':'var(--green)';
+    const tColor = label==='Entradas'?'var(--green)':label==='Empenhos'?'var(--blue)':label==='Liquidações/Pag.'?'var(--amber)':total<0?'var(--red)':'var(--green)';
     return `<tr><td>${label}</td>${cells.map(c=>`<td style="color:${c.color}">${c.v?fmtBR(c.v).replace('R$ ',''):'-'}</td>`).join('')}<td style="color:${tColor};font-weight:600">${fmtBR(total).replace('R$ ','')}</td></tr>`;
   });
   document.getElementById('dash-monthly').innerHTML = `<thead>${thead}</thead><tbody>${rows.join('')}</tbody>`;
@@ -1876,8 +1916,13 @@ function registrarSaida() {
     if (mes) mesRef = mes.value;
   }
 
+  // Determinar tipoLancamento contábil com validação estrita
+  const tipoLancamento = (tipo === "Empenho") ? "EMPENHO" : "LIQUIDACAO_PAGAMENTO";
+  if (!["EMPENHO","LIQUIDACAO_PAGAMENTO"].includes(tipoLancamento)) {
+    return toast("Tipo de lançamento inválido. Operação cancelada.", "error");
+  }
   const lanc = {
-    id: shortId('S'), tipo, categoria: cat, subcategoria, referenciaId,
+    id: shortId('S'), tipo, tipoLancamento, categoria: cat, subcategoria, referenciaId,
     descricao: desc, valor, data, mesRef,
     fonte: null, ptres: null,
     referencia: ref, observacoes: obs,
@@ -2352,7 +2397,9 @@ function renderAeMensal() {
     const prefix = `${ano}-${mesStr}`;
     const lancsDoMes = state.lancamentos.filter(l=>l.status==='Ativo'&&l.categoria==='Assist. Estudantil'&&l.data&&l.data.startsWith(prefix));
     const prevMes    = acoes.reduce((s,a)=>s+((a.previstoMensal||[])[m]||0),0);
-    const execMes    = sumValor(lancsDoMes.filter(l=>TIPOS_SAIDA.includes(l.tipo)));
+    const empMes  = sumValor(lancsDoMes.filter(l=>resolveTipoLancamento(l)==='EMPENHO'));
+    const liqMes  = sumValor(lancsDoMes.filter(l=>resolveTipoLancamento(l)==='LIQUIDACAO_PAGAMENTO'));
+    const execMes = empMes + liqMes; // total gasto no mês (empenho + liq/pag)
     const pMes       = prevMes>0?clamp(Math.round(execMes/prevMes*100),0,999):0;
     const st         = pMes>100?'danger':pMes>=80?'warn':'ok';
     html += `
@@ -2817,7 +2864,6 @@ function importarJSON(ev) {
   reader.onload = e => {
     try {
       const d = JSON.parse(e.target.result);
-      // Merge seguro: preserva integridade, cópia por valor
       state.fontes      = Array.isArray(d.fontes)      ? [...d.fontes]                  : [...DEFAULT_FONTES];
       state.ptres       = Array.isArray(d.ptres)       ? [...d.ptres]                   : [...DEFAULT_PTRES];
       state.cats        = Array.isArray(d.cats)        ? [...d.cats]                    : [...DEFAULT_CATS];
