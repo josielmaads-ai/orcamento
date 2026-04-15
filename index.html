@@ -27,7 +27,7 @@
 
 /* ═══════════════════════ RESET ═══════════════════════ */
 *{box-sizing:border-box;margin:0;padding:0}
-html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:5px}
@@ -104,15 +104,17 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .card-title-dot{width:5px;height:5px;border-radius:50%;background:var(--border3)}
 
 /* ═══ KPI GRID ═══ */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:10px;margin-bottom:14px}
-.kpi{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;position:relative;overflow:hidden;transition:all .2s;box-shadow:var(--shadow-sm)}
-.kpi:hover{border-color:var(--border2);transform:translateY(-2px)}
-.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--border2))}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:18px}
+.kpi{background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:24px 22px 20px;position:relative;overflow:hidden;transition:all .22s cubic-bezier(.34,1.2,.64,1);box-shadow:0 4px 24px rgba(0,0,0,.45);min-width:0;min-height:148px;display:flex;flex-direction:column;justify-content:space-between;cursor:default}
+.kpi:hover{border-color:var(--kpi-accent,var(--border3));transform:translateY(-4px) scale(1.012);box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 0 1px var(--kpi-accent,transparent)}
+.kpi::after{content:'';position:absolute;top:-30px;right:-30px;width:110px;height:110px;border-radius:50%;background:var(--kpi-accent,transparent);opacity:.07;filter:blur(28px);pointer-events:none;transition:opacity .22s}
+.kpi:hover::after{opacity:.14}
+.kpi::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--kpi-accent,var(--border2));border-radius:16px 0 0 16px}
 .kpi.accent-green{--kpi-accent:var(--green)}.kpi.accent-red{--kpi-accent:var(--red)}.kpi.accent-gold{--kpi-accent:var(--gold)}.kpi.accent-blue{--kpi-accent:var(--blue)}.kpi.accent-amber{--kpi-accent:var(--amber)}.kpi.accent-purple{--kpi-accent:var(--purple)}
-.kpi-label{font-size:10.5px;color:var(--text3);font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;letter-spacing:.04em;text-transform:uppercase}
-.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:clamp(14px,2.2vw,24px);font-weight:700;margin-bottom:4px;line-height:1.2;word-break:break-all;overflow-wrap:anywhere}
-.kpi-sub{font-size:11px;color:var(--text3)}
-.kpi-badge{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600;white-space:nowrap}
+.kpi-label{font-size:11px;color:var(--text3);font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:6px;letter-spacing:.07em;text-transform:uppercase;flex-wrap:wrap;line-height:1.4}
+.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:clamp(18px,2.2vw,30px);font-weight:700;margin-bottom:6px;line-height:1.15;word-break:break-word;overflow-wrap:anywhere;white-space:normal;letter-spacing:-.02em}
+.kpi-sub{font-size:12px;color:var(--text3);margin-top:auto;padding-top:6px;border-top:1px solid var(--border)}
+.kpi-badge{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:700;white-space:nowrap;letter-spacing:.03em}
 .badge-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
 .badge-warn{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
 .badge-danger{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
@@ -1094,7 +1096,7 @@ function openModal(title,sub,cb){
   document.getElementById('modal-bg').classList.add('show');
 }
 function closeModal(){document.getElementById('modal-bg').classList.remove('show');_modalCb=null;document.getElementById('modal-form-area').innerHTML='';}
-document.getElementById('modal-confirm-btn').onclick=()=>{if(_modalCb){_modalCb();}}
+document.getElementById('modal-confirm-btn').onclick=()=>{if(_modalCb){_modalCb();closeModal();}}
 document.getElementById('modal-bg').onclick=e=>{if(e.target===document.getElementById('modal-bg'))closeModal();}
 
 // ═══════════════════════════════════════════════════════════
@@ -1296,6 +1298,8 @@ function registrarCredito(){
   if(!valor||valor<=0){toast('Valor deve ser maior que zero','warn');return;}
   if(!data){toast('Data obrigatória','warn');return;}
   if(!desc){toast('Descrição obrigatória','warn');return;}
+  const _cNd=document.getElementById('c-nd');
+  const _cPi=document.getElementById('c-pi');
   const l={
     id:shortId('E'),tipo:'Entrada',categoria:cat,
     subcategoria:document.getElementById('c-subcat').value.trim(),
@@ -1303,8 +1307,8 @@ function registrarCredito(){
     competencia:document.getElementById('c-comp').value||'',
     fonte:document.getElementById('c-fonte').value,
     ptres:document.getElementById('c-ptres').value,
-    nd:document.getElementById('c-nd').value,
-    pi:document.getElementById('c-pi').value,
+    nd:_cNd?_cNd.value:'',
+    pi:_cPi?_cPi.value:'',
     observacoes:document.getElementById('c-obs').value.trim(),
     status:'Ativo',ts:new Date().toISOString()
   };
@@ -1744,12 +1748,15 @@ function renderContratoDash(){
   const totContratado=cts.reduce((s,c)=>s+(c.valorTotal||0),0);
   const totEmpContratos=cts.reduce((s,c)=>s+sum(getLancsAtivos('Empenho',null,c.id)),0);
   const totPagContratos=cts.reduce((s,c)=>s+sum(getLancsAtivos('Pagamento',null,c.id)),0);
+  const totLiqContratos=cts.reduce((s,c)=>s+sum(getLancsAtivos('Liquidação',null,c.id)),0);
+  const pctExecGeral=totContratado>0?Math.round(totEmpContratos/totContratado*100):0;
   document.getElementById('contratos-dash').innerHTML=`
     <div class="kpi-grid">
       <div class="kpi accent-blue"><div class="kpi-label">Contratos Ativos</div><div class="kpi-value text-blue">${cts.length}</div><div class="kpi-sub">contratos cadastrados</div></div>
-      <div class="kpi accent-gold"><div class="kpi-label">Valor Total Contratado</div><div class="kpi-value text-gold">${fmtBR(totContratado)}</div></div>
-      <div class="kpi accent-blue"><div class="kpi-label">Total Empenhado</div><div class="kpi-value text-blue">${fmtBR(totEmpContratos)}</div></div>
-      <div class="kpi accent-green"><div class="kpi-label">Total Pago</div><div class="kpi-value text-green">${fmtBR(totPagContratos)}</div></div>
+      <div class="kpi accent-gold"><div class="kpi-label">Valor Total Contratado</div><div class="kpi-value text-gold">${fmtBR(totContratado)}</div><div class="kpi-sub">${pctExecGeral}% empenhado</div></div>
+      <div class="kpi accent-blue"><div class="kpi-label">Total Empenhado</div><div class="kpi-value text-blue">${fmtBR(totEmpContratos)}</div><div class="kpi-sub">${pctExecGeral}% do contratado</div></div>
+      <div class="kpi accent-amber"><div class="kpi-label">Total Liquidado</div><div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiqContratos)}</div><div class="kpi-sub">${totEmpContratos>0?Math.round(totLiqContratos/totEmpContratos*100):0}% do empenhado</div></div>
+      <div class="kpi accent-green"><div class="kpi-label">Total Pago</div><div class="kpi-value text-green">${fmtBR(totPagContratos)}</div><div class="kpi-sub">${totLiqContratos>0?Math.round(totPagContratos/totLiqContratos*100):0}% do liquidado</div></div>
       <div class="kpi accent-amber"><div class="kpi-label">Vencendo em 30 dias</div><div class="kpi-value" style="color:var(--amber)">${vencendo.length}</div><div class="kpi-sub">${vencendo.slice(0,2).map(c=>c.nContrato||c.nome).join(', ')||'nenhum'}</div></div>
       <div class="kpi accent-red"><div class="kpi-label">Contratos Vencidos</div><div class="kpi-value text-red">${vencidos.length}</div><div class="kpi-sub">${vencidos.slice(0,2).map(c=>c.nContrato||c.nome).join(', ')||'nenhum'}</div></div>
     </div>
@@ -2146,7 +2153,7 @@ function delCfg(key,idx){
     const val=state[key][idx];
     state[key].splice(idx,1);
     auditLog('DELETE','CONFIG',key,'Removido de '+key+': '+val,{value:val});
-    salvar();renderConfig();toast('Item removido','warn');
+    salvar();closeModal();renderConfig();toast('Item removido','warn');
   });
 }
 
