@@ -110,7 +110,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-accent,var(--border2))}
 .kpi.accent-green{--kpi-accent:var(--green)}.kpi.accent-red{--kpi-accent:var(--red)}.kpi.accent-gold{--kpi-accent:var(--gold)}.kpi.accent-blue{--kpi-accent:var(--blue)}.kpi.accent-amber{--kpi-accent:var(--amber)}.kpi.accent-purple{--kpi-accent:var(--purple)}
 .kpi-label{font-size:10.5px;color:var(--text3);font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;letter-spacing:.04em;text-transform:uppercase}
-.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:700;margin-bottom:4px;line-height:1.1}
+.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:clamp(14px,2.2vw,24px);font-weight:700;margin-bottom:4px;line-height:1.2;word-break:break-all;overflow-wrap:anywhere}
 .kpi-sub{font-size:11px;color:var(--text3)}
 .kpi-badge{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600;white-space:nowrap}
 .badge-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
@@ -334,6 +334,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   .fase-flow{grid-template-columns:1fr}
 }
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <div class="app">
@@ -352,6 +353,17 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   </div>
   <div class="topbar-right">
     <div class="badge-save" id="save-badge"><span class="badge-dot"></span><span id="save-text">Dados salvos</span></div>
+    <!-- GOOGLE DRIVE -->
+    <button class="btn-top btn-drive-login" id="btn-drive-login" onclick="driveLogin()">☁ Conectar Drive</button>
+    <button class="btn-top btn-drive-action" id="btn-drive-save" onclick="driveSalvar()" style="display:none">☁↑ Salvar</button>
+    <button class="btn-top btn-drive-action" id="btn-drive-load" onclick="driveCarregar()" style="display:none">☁↓ Carregar</button>
+    <button class="btn-top btn-drive-logout" id="btn-drive-logout" onclick="driveLogout()" style="display:none">☁ Sair</button>
+    <div class="badge-drive-status" id="badge-drive">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--blue);display:inline-block"></span>
+      <span id="drive-user-name">Drive</span>
+      <span id="drive-sync-time" style="font-size:9px;opacity:.7"></span>
+    </div>
+    <!-- FIM DRIVE -->
     <button class="btn-top" onclick="exportarJSON()">↓ Backup JSON</button>
     <button class="btn-top" onclick="exportarCSV()">↓ CSV</button>
     <button class="btn-top" onclick="imprimirRelatorio()">⎙ Imprimir</button>
@@ -468,11 +480,9 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="form-grid cols3 mt4">
       <div class="field"><label>Fonte de Recurso</label><select id="c-fonte"></select></div>
       <div class="field"><label>PTRES</label><select id="c-ptres"></select></div>
-      <div class="field"><label>Natureza da Despesa</label><select id="c-nd"></select></div>
-    </div>
-    <div class="form-grid cols3 mt4">
-      <div class="field"><label>Plano Interno</label><select id="c-pi"></select></div>
       <div class="field"><label>Subcategoria</label><input type="text" id="c-subcat" placeholder="Ex: FUNPESQ, PROEXT..."></div>
+    </div>
+    <div class="form-grid cols12 mt4">
       <div class="field"><label>Descrição<span class="required-mark">*</span></label><input type="text" id="c-desc" placeholder="Descrição do crédito recebido"></div>
     </div>
     <div class="field mt4"><label>Observações</label><textarea id="c-obs" rows="2" placeholder="Observações adicionais..."></textarea></div>
@@ -642,10 +652,12 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   </div>
   <div class="module-tabs">
     <div class="mtab active" id="ct-tab-lista" onclick="setContratoTab('lista')">📋 Lista de Contratos</div>
+    <div class="mtab" id="ct-tab-detalhe" onclick="setContratoTab('detalhe')">🔍 Detalhe por Contrato</div>
     <div class="mtab" id="ct-tab-execucao" onclick="setContratoTab('execucao')">📈 Execução</div>
     <div class="mtab" id="ct-tab-dashboard" onclick="setContratoTab('dashboard')">◈ Dashboard</div>
   </div>
   <div id="contratos-lista"></div>
+  <div id="contratos-detalhe" style="display:none"></div>
   <div id="contratos-execucao" style="display:none"></div>
   <div id="contratos-dash" style="display:none"></div>
 </div>
@@ -658,10 +670,12 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   </div>
   <div class="module-tabs">
     <div class="mtab active" id="ae-tab-acoes" onclick="setAeTab('acoes')">🎯 Ações</div>
+    <div class="mtab" id="ae-tab-detalhe" onclick="setAeTab('detalhe')">🔍 Detalhe por Ação</div>
     <div class="mtab" id="ae-tab-mensal" onclick="setAeTab('mensal')">📅 Resumo Mensal</div>
     <div class="mtab" id="ae-tab-dashboard" onclick="setAeTab('dashboard')">◈ Dashboard</div>
   </div>
   <div id="ae-acoes"></div>
+  <div id="ae-detalhe" style="display:none"></div>
   <div id="ae-mensal" style="display:none"></div>
   <div id="ae-dashboard" style="display:none"></div>
 </div>
@@ -708,6 +722,25 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <div class="field"><label>Fonte</label><select id="rel-fonte"><option value="">Todas</option></select></div>
       <div class="field"><label>PTRES</label><select id="rel-ptres"><option value="">Todos</option></select></div>
       <div class="field"><label>Natureza da Despesa</label><select id="rel-nd"><option value="">Todas</option></select></div>
+    </div>
+    <div class="form-grid cols3" style="margin-top:10px">
+      <div class="field"><label>Filtrar por Mês</label>
+        <select id="rel-mes">
+          <option value="">Todos os meses</option>
+          ${['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Agrupar por</label>
+        <select id="rel-agrupar">
+          <option value="">Sem agrupamento</option>
+          <option value="nd">Natureza da Despesa</option>
+          <option value="cat">Categoria</option>
+          <option value="mes">Mês</option>
+        </select>
+      </div>
+      <div class="field" style="padding-top:18px">
+        <button class="btn btn-purple btn-sm" onclick="gerarRelatorioContratos()">📄 Relatório de Contratos</button>
+      </div>
     </div>
     <div class="btn-row" style="margin-top:10px">
       <button class="btn btn-primary" onclick="gerarRelatorio()">◈ Gerar Relatório</button>
@@ -875,6 +908,7 @@ function salvar(){
     const t=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('save-text').textContent='Salvo às '+t;
   }catch(e){toast('Erro ao salvar! localStorage cheio?','error')}
+  driveTriggerSync();
 }
 function carregar(){
   const raw=localStorage.getItem(STORAGE_KEY)||localStorage.getItem('sysOrcV4');
@@ -1616,7 +1650,7 @@ function excluirLancamento(id){
       if(ent){ent.status='Excluído';ent.tsModif=new Date().toISOString();}
     }
     auditLog('DELETE','LANCAMENTO',id,'Lançamento excluído: '+l.descricao,l);
-    salvar();renderDashboard();renderSidebar();
+    salvar();closeModal();renderDashboard();renderSidebar();
     toast('Lançamento excluído (soft-delete)','warn');
     // Re-render based on current tab
     if(_saidaTab==='empenho')renderSaidas();
@@ -1631,14 +1665,16 @@ function excluirLancamento(id){
 //  CONTRATOS
 // ═══════════════════════════════════════════════════════════
 function setContratoTab(t){
-  ['lista','execucao','dashboard'].forEach(x=>{
+  ['lista','detalhe','execucao','dashboard'].forEach(x=>{
     const tab=document.getElementById('ct-tab-'+x);
     if(tab)tab.classList.toggle('active',x===t);
   });
   document.getElementById('contratos-lista').style.display=t==='lista'?'':'none';
+  document.getElementById('contratos-detalhe').style.display=t==='detalhe'?'':'none';
   document.getElementById('contratos-execucao').style.display=t==='execucao'?'':'none';
   document.getElementById('contratos-dash').style.display=t==='dashboard'?'':'none';
   if(t==='lista')renderContratoLista();
+  else if(t==='detalhe')renderContratoDetalhe();
   else if(t==='execucao')renderContratoExec();
   else renderContratoDash();
 }
@@ -1733,10 +1769,15 @@ function openModalContrato(id){
   document.getElementById('modal-inner').className='modal modal-lg';
   openModal(c?'Editar Contrato':'Novo Contrato','Preencha os dados do contrato',()=>{
     const get=k=>{const el=document.getElementById('mc-'+k);return el?el.value.trim():'';}
+    const pm12ct=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((_,i)=>{
+      const el=document.getElementById('mc-m'+i);return el?parseFloat(el.value)||0:0;
+    });
+    const tsEl=document.getElementById('mc-tiposervico2');
     const ct={
       id:c?c.id:shortId('CT'),tipo:get('tipo'),cnpj:get('cnpj'),nome:get('nome'),empresa:get('empresa'),
-      tipoServico:get('tiposervico'),nContrato:get('ncontrato'),nEmpenho:get('nempenho'),
+      tipoServico:tsEl?tsEl.value:get('tiposervico'),nContrato:get('ncontrato'),nEmpenho:get('nempenho'),
       ptres:get('ptres'),nd:get('nd'),valorTotal:parseFloat(get('valortotal'))||0,
+      previstoMensalArr:pm12ct,
       descricao:get('descricao'),dataInicio:get('datainicio'),dataFim:get('datafim'),
       status:'Ativo',ts:c?c.ts:new Date().toISOString(),tsModif:new Date().toISOString()
     };
@@ -1754,21 +1795,32 @@ function openModalContrato(id){
     <div class="field"><label>CNPJ</label><input id="mc-cnpj" value="${c?c.cnpj||'':''}" placeholder="XX.XXX.XXX/XXXX-XX"></div>
     <div class="field"><label>Tipo de Serviço</label><input id="mc-tiposervico" value="${c?c.tipoServico||'':''}" placeholder="Ex: Limpeza"></div>
     <div class="field"><label>Nº Empenho</label><input id="mc-nempenho" value="${c?c.nEmpenho||'':''}" placeholder="2025NE000001"></div>
-    <div class="field"><label>Valor Total (R$)<span class="required-mark">*</span></label><input id="mc-valortotal" type="number" value="${c?c.valorTotal||'':''}" min="0" step="0.01"></div>
+    <div class="field"><label>Valor Total (R$)</label><input id="mc-valortotal" type="number" value="${c?c.valorTotal||'':''}" min="0" step="0.01" placeholder="Opcional"></div>
     <div class="field"><label>Data de Início</label><input id="mc-datainicio" type="date" value="${c?c.dataInicio||'':''}"></div>
     <div class="field"><label>Data de Fim / Vigência</label><input id="mc-datafim" type="date" value="${c?c.dataFim||'':''}"></div>
-    <div class="field"><label>PTRES</label><input id="mc-ptres" value="${c?c.ptres||'':''}" placeholder="PTRES"></div>
-    <div class="field"><label>Natureza da Despesa</label><input id="mc-nd" value="${c?c.nd||'':''}" placeholder="Ex: 33903702"></div>
+    <div class="field"><label>PTRES</label>
+      <select id="mc-ptres">${(state.ptres||[]).map(p=>`<option value="${p}" ${c&&c.ptres===p?'selected':''}>${p}</option>`).join('')}</select></div>
+    <div class="field"><label>Natureza da Despesa</label>
+      <select id="mc-nd">${(state.nd||[]).map(n=>`<option value="${n}" ${c&&c.nd===n?'selected':''}>${n}</option>`).join('')}</select></div>
+    <div class="field"><label>Tipo de Serviço</label>
+      <select id="mc-tiposervico2">${(state.ts||[]).map(t=>`<option value="${t}" ${c&&c.tipoServico===t?'selected':''}>${t}</option>`).join('')}</select></div>
+  </div>
+  <div class="card-title" style="margin:12px 0 8px;font-size:9.5px;letter-spacing:.08em">DISTRIBUIÇÃO MENSAL PREVISTA (R$) — opcional</div>
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:8px">
+    ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((mes,i)=>`
+      <div class="field"><label style="font-size:9px">${mes}</label>
+        <input type="number" id="mc-m${i}" value="${Array.isArray(c?.previstoMensalArr)?c.previstoMensalArr[i]||'':''}" min="0" step="0.01" placeholder="0,00" style="font-size:11px;padding:5px 6px">
+      </div>`).join('')}
   </div>
   <div class="field"><label>Descrição / Observações</label><textarea id="mc-descricao" rows="2">${c?c.descricao||'':''}</textarea></div></div>`;
 }
 function editarContrato(id){openModalContrato(id);}
 function excluirContrato(id){
   openModal('Excluir contrato?','O contrato será marcado como excluído.',()=>{
-    const c=state.contratos.find(x=>x.id===id);if(!c)return;
+    const c=state.contratos.find(x=>x.id===id);if(!c){closeModal();return;}
     c.status='Excluído';c.tsModif=new Date().toISOString();
     auditLog('DELETE','CONTRATO',id,'Contrato excluído: '+c.nome,c);
-    salvar();setContratoTab('lista');toast('Contrato excluído','warn');
+    salvar();closeModal();setContratoTab('lista');renderDashboard();toast('Contrato excluído','warn');
   });
 }
 
@@ -1776,13 +1828,14 @@ function excluirContrato(id){
 //  ASSISTÊNCIA ESTUDANTIL
 // ═══════════════════════════════════════════════════════════
 function setAeTab(t){
-  ['acoes','mensal','dashboard'].forEach(x=>{
+  ['acoes','detalhe','mensal','dashboard'].forEach(x=>{
     const tab=document.getElementById('ae-tab-'+x);
     const pane=document.getElementById('ae-'+x);
     if(tab)tab.classList.toggle('active',x===t);
     if(pane)pane.style.display=x===t?'':'none';
   });
   if(t==='acoes')renderAeAcoes();
+  else if(t==='detalhe')renderAeDetalhe();
   else if(t==='mensal')renderAeMensal();
   else renderAeDash();
 }
@@ -1885,9 +1938,13 @@ function openModalAcao(id){
   const a=id?state.acoes.find(x=>x.id===id):null;
   openModal(a?'Editar Ação':'Nova Ação de Assistência Estudantil','',()=>{
     const get=k=>{const el=document.getElementById('ma-'+k);return el?el.value.trim():'';}
+    const pm12=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((_,i)=>{
+      const el=document.getElementById('ma-m'+i);return el?parseFloat(el.value)||0:0;
+    });
+    const prevAnual=pm12.reduce((s,v)=>s+v,0);
     const ac={
       id:a?a.id:shortId('AE'),nome:get('nome'),tipo:get('tipo'),
-      previsto:parseFloat(get('previsto'))||0,previstoMensal:parseFloat(get('mensal'))||0,
+      previsto:prevAnual,previstoMensalArr:pm12,
       descricao:get('descricao'),status:'Ativo',
       ts:a?a.ts:new Date().toISOString(),tsModif:new Date().toISOString()
     };
@@ -1896,25 +1953,33 @@ function openModalAcao(id){
     else{state.acoes.push(ac);auditLog('CREATE','ACAO',ac.id,'Ação criada: '+ac.nome,ac);}
     salvar();closeModal();setAeTab('acoes');toast((a?'Ação atualizada':'Ação criada')+'!','success');
   });
+  document.getElementById('modal-inner').className='modal modal-lg';
+  const pm=a?.previstoMensal||(Array.isArray(a?.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0));
   document.getElementById('modal-form-area').innerHTML=`<div class="modal-form">
-    <div class="field"><label>Nome da Ação<span class="required-mark">*</span></label><input id="ma-nome" value="${a?a.nome||'':''}" placeholder="Ex: Bolsa de Estudo"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="field"><label>Nome da Ação<span class="required-mark">*</span></label><input id="ma-nome" value="${a?a.nome||'':''}" placeholder="Ex: Auxílio Moradia"></div>
       <div class="field"><label>Tipo</label><select id="ma-tipo">
-        ${['Bolsa de Estudo','Auxílio Alimentação','Auxílio Moradia','Auxílio Transporte','Auxílio Financeiro','Apoio a Pesquisadores','Assistência Social','Outros'].map(t=>`<option ${a&&a.tipo===t?'selected':''}>${t}</option>`).join('')}
+        ${['Benefício','Monitoria','Eventos/Outros'].map(t=>`<option ${a&&a.tipo===t?'selected':''}>${t}</option>`).join('')}
       </select></div>
-      <div class="field"><label>Valor Previsto Anual (R$)</label><input id="ma-previsto" type="number" value="${a?a.previsto||'':''}" min="0" step="0.01"></div>
     </div>
-    <div class="field"><label>Valor Mensal Médio (R$)</label><input id="ma-mensal" type="number" value="${a?a.previstoMensal||'':''}" min="0" step="0.01"></div>
-    <div class="field"><label>Descrição</label><textarea id="ma-descricao" rows="2">${a?a.descricao||'':''}</textarea></div>
+    <div class="card-title" style="margin:12px 0 8px;font-size:9.5px;letter-spacing:.08em">DISTRIBUIÇÃO MENSAL PREVISTA (R$)</div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px">
+      ${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((mes,i)=>`
+        <div class="field">
+          <label style="font-size:9px">${mes}</label>
+          <input type="number" id="ma-m${i}" value="${Array.isArray(pm)?pm[i]||'':''}" min="0" step="0.01" placeholder="0,00" style="font-size:11px;padding:5px 6px">
+        </div>`).join('')}
+    </div>
+    <div class="field" style="margin-top:8px"><label>Descrição</label><textarea id="ma-descricao" rows="2">${a?a.descricao||'':''}</textarea></div>
   </div>`;
 }
 function editarAcao(id){openModalAcao(id);}
 function excluirAcao(id){
-  openModal('Excluir ação?','',()=>{
-    const a=state.acoes.find(x=>x.id===id);if(!a)return;
+  openModal('Excluir ação?','A ação será marcada como excluída.',()=>{
+    const a=state.acoes.find(x=>x.id===id);if(!a){closeModal();return;}
     a.status='Excluído';a.tsModif=new Date().toISOString();
     auditLog('DELETE','ACAO',id,'Ação excluída',a);
-    salvar();setAeTab('acoes');toast('Ação excluída','warn');
+    salvar();closeModal();setAeTab('acoes');renderDashboard();toast('Ação excluída','warn');
   });
 }
 
@@ -2228,13 +2293,384 @@ function init(){
 // ═══════════════════════════════════════════════════════════
 //  BOOTSTRAP
 // ═══════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════
+//  AE — DETALHE POR AÇÃO
+// ═══════════════════════════════════════════════════════════
+function renderAeDetalhe(){
+  const el=document.getElementById('ae-detalhe');
+  if(!el)return;
+  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  if(!acoes.length){
+    el.innerHTML='<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhuma ação cadastrada.</div></div>';
+    return;
+  }
+  const selId='ae-detalhe-sel';
+  const curSel=el.querySelector('#'+selId)?.value||acoes[0].id;
+  el.innerHTML=`
+    <div class="card">
+      <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Selecionar Ação</div>
+      <div class="field" style="max-width:420px">
+        <select id="${selId}" onchange="renderAeDetalhe()">
+          ${acoes.map(a=>`<option value="${a.id}" ${a.id===curSel?'selected':''}>${a.nome} — ${a.tipo||'Benefício'}</option>`).join('')}
+        </select>
+      </div>
+    </div>`;
+  const a=acoes.find(x=>x.id===curSel)||acoes[0];
+  if(!a)return;
+  const pm=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
+  const totPrev=pm.reduce((s,v)=>s+v,0)||a.previsto||0;
+  const emp=sum(getLancsAtivos('Empenho',null,a.id));
+  const liq=sum(getLancsAtivos('Liquidação',null,a.id));
+  const pag=sum(getLancsAtivos('Pagamento',null,a.id));
+  const liqPag=liq+pag;
+  const saldoNEmp=totPrev-emp;
+  const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  el.innerHTML+=`
+    <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
+      <div class="kpi accent-gold"><div class="kpi-label">Previsto Total</div><div class="kpi-value text-gold" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(totPrev)}</div></div>
+      <div class="kpi accent-blue"><div class="kpi-label">Empenhado</div><div class="kpi-value text-blue" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(emp)}</div></div>
+      <div class="kpi accent-amber"><div class="kpi-label">Liquidado / Pago</div><div class="kpi-value" style="color:var(--amber);font-size:clamp(13px,1.8vw,22px)">${fmtBR(liqPag)}</div><div class="kpi-sub">liq: ${fmtBR(liq)} · pag: ${fmtBR(pag)}</div></div>
+      <div class="kpi ${saldoNEmp<0?'accent-red':'accent-green'}"><div class="kpi-label">Saldo Não Empenhado</div><div class="kpi-value ${saldoNEmp<0?'text-red':'text-green'}" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(saldoNEmp)}</div></div>
+      <div class="kpi accent-purple"><div class="kpi-label">Tipo</div><div class="kpi-value" style="color:var(--purple);font-size:14px;padding-top:4px">${a.tipo||'Benefício'}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Valores Mensais Previstos vs Executados</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
+        ${pm.map((v,i)=>{
+          const anoAtual=new Date().getFullYear();
+          const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
+          const lancsM=state.lancamentos.filter(l=>l.status==='Ativo'&&l.referenciaId===a.id&&l.data&&l.data.startsWith(prefix));
+          const empM=sum(lancsM.filter(l=>l.tipo==='Empenho'));
+          const liqM=sum(lancsM.filter(l=>l.tipo==='Liquidação'||l.tipo==='Pagamento'));
+          return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;text-align:center">
+            <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px">${MESES_ABR[i]}</div>
+            <div style="font-size:11px;color:var(--gold);font-family:'IBM Plex Mono',monospace">${v>0?fmtBR(v).replace('R$ ',''):'—'}</div>
+            <div style="font-size:9.5px;color:var(--blue);margin-top:2px">emp: ${empM>0?fmtBR(empM).replace('R$ ',''):'—'}</div>
+            <div style="font-size:9.5px;color:var(--amber)">liq: ${liqM>0?fmtBR(liqM).replace('R$ ',''):'—'}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CONTRATOS — DETALHE POR CONTRATO
+// ═══════════════════════════════════════════════════════════
+function renderContratoDetalhe(){
+  const el=document.getElementById('contratos-detalhe');
+  if(!el)return;
+  const contratos=state.contratos.filter(c=>c.status!=='Excluído');
+  if(!contratos.length){
+    el.innerHTML='<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhum contrato cadastrado.</div></div>';
+    return;
+  }
+  const selId='ct-detalhe-sel';
+  const curSel=el.querySelector('#'+selId)?.value||contratos[0].id;
+  el.innerHTML=`
+    <div class="card">
+      <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Selecionar Contrato</div>
+      <div class="field" style="max-width:520px">
+        <select id="${selId}" onchange="renderContratoDetalhe()">
+          ${contratos.map(c=>`<option value="${c.id}" ${c.id===curSel?'selected':''}>${c.nome||c.empresa||c.id} — Nº ${c.nContrato||'—'}</option>`).join('')}
+        </select>
+      </div>
+    </div>`;
+  const c=contratos.find(x=>x.id===curSel)||contratos[0];
+  if(!c)return;
+  const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
+  const totPrevMensal=pm.reduce((s,v)=>s+v,0);
+  const emp=sum(getLancsAtivos('Empenho',c.id));
+  const liq=sum(getLancsAtivos('Liquidação',c.id));
+  const pag=sum(getLancsAtivos('Pagamento',c.id));
+  const liqPag=liq+pag;
+  const valorRef=c.valorTotal||totPrevMensal||0;
+  const saldoNEmp=valorRef-emp;
+  const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  el.innerHTML+=`
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">${c.nome||c.empresa||'—'}</div>
+      <div style="font-size:12px;color:var(--text3)">${c.tipo||'—'} · CNPJ: ${c.cnpj||'—'} · Nº ${c.nContrato||'—'} · PTRES: ${c.ptres||'—'} · ND: ${c.nd||'—'} · TS: ${c.tipoServico||'—'}</div>
+      ${c.descricao?`<div style="font-size:12px;color:var(--text2);margin-top:6px">${c.descricao}</div>`:''}
+    </div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
+      <div class="kpi accent-gold"><div class="kpi-label">Valor Total</div><div class="kpi-value text-gold" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(c.valorTotal||0)}</div></div>
+      <div class="kpi accent-blue"><div class="kpi-label">Empenhado</div><div class="kpi-value text-blue" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(emp)}</div></div>
+      <div class="kpi accent-amber"><div class="kpi-label">Liquidado / Pago</div><div class="kpi-value" style="color:var(--amber);font-size:clamp(13px,1.8vw,22px)">${fmtBR(liqPag)}</div><div class="kpi-sub">liq: ${fmtBR(liq)} · pag: ${fmtBR(pag)}</div></div>
+      <div class="kpi ${saldoNEmp<0?'accent-red':'accent-green'}"><div class="kpi-label">Saldo Não Empenhado</div><div class="kpi-value ${saldoNEmp<0?'text-red':'text-green'}" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(saldoNEmp)}</div></div>
+      <div class="kpi accent-purple"><div class="kpi-label">Prev. Mensal Total</div><div class="kpi-value" style="color:var(--purple);font-size:clamp(13px,1.8vw,22px)">${fmtBR(totPrevMensal)}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Distribuição Mensal Prevista vs Executada</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
+        ${pm.map((v,i)=>{
+          const anoAtual=new Date().getFullYear();
+          const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
+          const lancsM=state.lancamentos.filter(l=>l.status==='Ativo'&&l.contratoId===c.id&&l.data&&l.data.startsWith(prefix));
+          const empM=sum(lancsM.filter(l=>l.tipo==='Empenho'));
+          const liqM=sum(lancsM.filter(l=>l.tipo==='Liquidação'||l.tipo==='Pagamento'));
+          return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;text-align:center">
+            <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px">${MESES_ABR[i]}</div>
+            <div style="font-size:11px;color:var(--gold);font-family:'IBM Plex Mono',monospace">${v>0?fmtBR(v).replace('R$ ',''):'—'}</div>
+            <div style="font-size:9.5px;color:var(--blue);margin-top:2px">emp: ${empM>0?fmtBR(empM).replace('R$ ',''):'—'}</div>
+            <div style="font-size:9.5px;color:var(--amber)">liq: ${liqM>0?fmtBR(liqM).replace('R$ ',''):'—'}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RELATÓRIO DE CONTRATOS
+// ═══════════════════════════════════════════════════════════
+function gerarRelatorioContratos(){
+  const mesFiltro=document.getElementById('rel-mes')?.value||'';
+  const ndFiltro=document.getElementById('rel-nd')?.value||'';
+  const contratos=state.contratos.filter(c=>c.status!=='Excluído');
+  const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const MESES_FULL=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let grupos={};
+  contratos.forEach(c=>{
+    if(ndFiltro&&c.nd!==ndFiltro)return;
+    const nd=c.nd||'Sem ND';
+    if(!grupos[nd])grupos[nd]=[];
+    grupos[nd].push(c);
+  });
+  const el=document.getElementById('rel-resultado');
+  if(!Object.keys(grupos).length){
+    el.innerHTML='<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhum contrato encontrado com os filtros aplicados.</div></div>';
+    return;
+  }
+  const mesesCols=mesFiltro
+    ?`<th>${MESES_FULL[parseInt(mesFiltro)-1]}</th>`
+    :MESES_ABR.map(m=>`<th>${m}</th>`).join('');
+  let html='';
+  Object.keys(grupos).sort().forEach(nd=>{
+    const cts=grupos[nd];
+    html+=`<div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="font-size:11px"><span class="card-title-dot" style="background:var(--purple)"></span>Natureza da Despesa: ${nd}</div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Contrato</th><th>PTRES</th><th>Plano Interno</th><th>Valor Total</th>${mesesCols}<th>Empenhado</th><th>Liq/Pago</th></tr></thead>
+        <tbody>
+          ${cts.map(c=>{
+            const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
+            const empC=sum(getLancsAtivos('Empenho',c.id));
+            const liqC=sum(getLancsAtivos('Liquidação',c.id))+sum(getLancsAtivos('Pagamento',c.id));
+            const mesesCells=mesFiltro
+              ?`<td class="r">${fmtBR(pm[parseInt(mesFiltro)-1])}</td>`
+              :pm.map(v=>`<td class="r" style="font-size:10px;color:${v>0?'var(--gold)':'var(--text4)'}">${v>0?fmtBR(v).replace('R$ ',''):'-'}</td>`).join('');
+            return`<tr>
+              <td><strong style="font-size:12px">${c.nome||c.empresa||'—'}</strong><br>
+                <span style="font-size:10px;color:var(--text3)">Nº ${c.nContrato||'—'} · ${c.tipo||'—'} · ${c.empresa||'—'}</span></td>
+              <td class="r mono" style="font-size:11px">${c.ptres||'—'}</td>
+              <td class="r mono" style="font-size:11px">${c.nd||'—'}</td>
+              <td class="r mono text-gold" style="font-size:11px">${fmtBR(c.valorTotal||0)}</td>
+              ${mesesCells}
+              <td class="r mono text-blue" style="font-size:11px">${fmtBR(empC)}</td>
+              <td class="r mono" style="color:var(--amber);font-size:11px">${fmtBR(liqC)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GOOGLE DRIVE — INTEGRAÇÃO COMPLETA
+// ═══════════════════════════════════════════════════════════
+const DRIVE_CLIENT_ID='650384223031-5022u8tv9pa4otrhamr77f2lmjsrbppn.apps.googleusercontent.com';
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const DRIVE_FILE_NAME='orcamento_v6_dados.json';
+let driveAccessToken=null;
+let driveFileId=null;
+let _driveSyncTimer=null;
+
+function driveSetUI(logado){
+  const btnLogin=document.getElementById('btn-drive-login');
+  const btnSave=document.getElementById('btn-drive-save');
+  const btnLoad=document.getElementById('btn-drive-load');
+  const btnLogout=document.getElementById('btn-drive-logout');
+  const badge=document.getElementById('badge-drive');
+  if(btnLogin)btnLogin.style.display=logado?'none':'';
+  if(btnSave)btnSave.style.display=logado?'':'none';
+  if(btnLoad)btnLoad.style.display=logado?'':'none';
+  if(btnLogout)btnLogout.style.display=logado?'':'none';
+  if(badge)badge.style.display=logado?'':'none';
+}
+
+function driveLogin(){
+  if(!window.google){toast('API do Google ainda carregando, aguarde...','warn');return;}
+  const client=google.accounts.oauth2.initTokenClient({
+    client_id:DRIVE_CLIENT_ID,scope:DRIVE_SCOPE,
+    callback:async(resp)=>{
+      if(resp.error){toast('Erro ao conectar com o Google: '+resp.error,'error');return;}
+      driveAccessToken=resp.access_token;
+      try{
+        const uinfo=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+driveAccessToken}});
+        const ud=await uinfo.json();
+        const nome=(ud.name||ud.email||'Google').split(' ')[0];
+        const el=document.getElementById('drive-user-name');
+        if(el)el.textContent=nome;
+      }catch(e){}
+      driveSetUI(true);
+      toast('Google Drive conectado! ☁','success');
+      await driveBuscarArquivo();
+      if(driveFileId)toast('Arquivo encontrado no Drive. Use "☁↓ Carregar" para sincronizar.','success');
+    }
+  });
+  client.requestAccessToken();
+}
+
+function driveLogout(){
+  if(driveAccessToken&&window.google)google.accounts.oauth2.revoke(driveAccessToken,()=>{});
+  driveAccessToken=null;driveFileId=null;
+  driveSetUI(false);
+  const el=document.getElementById('drive-user-name');
+  if(el)el.textContent='Drive';
+  toast('Desconectado do Google Drive.','warn');
+}
+
+async function driveBuscarArquivo(){
+  if(!driveAccessToken)return null;
+  try{
+    const q=encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
+    const res=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`,{headers:{Authorization:'Bearer '+driveAccessToken}});
+    const data=await res.json();
+    if(data.files&&data.files.length>0){driveFileId=data.files[0].id;return driveFileId;}
+  }catch(e){console.error('Erro ao buscar arquivo Drive:',e);}
+  return null;
+}
+
+async function driveSalvarSilencioso(){
+  if(!driveAccessToken)return;
+  try{
+    const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+    if(!driveFileId)await driveBuscarArquivo();
+    let res;
+    if(driveFileId){
+      const form=new FormData();
+      form.append('metadata',new Blob([JSON.stringify({name:DRIVE_FILE_NAME})],{type:'application/json'}));
+      form.append('file',blob);
+      res=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`,{method:'PATCH',headers:{Authorization:'Bearer '+driveAccessToken},body:form});
+    }else{
+      const form=new FormData();
+      form.append('metadata',new Blob([JSON.stringify({name:DRIVE_FILE_NAME,mimeType:'application/json'})],{type:'application/json'}));
+      form.append('file',blob);
+      res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+driveAccessToken},body:form});
+    }
+    const data=await res.json();
+    if(data.id){
+      driveFileId=data.id;
+      const agora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      const el=document.getElementById('drive-sync-time');
+      if(el)el.textContent='☁ '+agora;
+    }
+  }catch(e){console.warn('Auto-sync Drive falhou:',e);}
+}
+
+async function driveSalvar(){
+  if(!driveAccessToken){toast('Conecte ao Google Drive primeiro.','warn');return;}
+  toast('Salvando na nuvem...','success');
+  await driveSalvarSilencioso();
+  toast('✓ Dados salvos no Google Drive!','success');
+}
+
+async function driveCarregar(){
+  if(!driveAccessToken){toast('Conecte ao Google Drive primeiro.','warn');return;}
+  if(!driveFileId)await driveBuscarArquivo();
+  if(!driveFileId){toast('Nenhum arquivo encontrado no Drive. Salve primeiro.','warn');return;}
+  try{
+    const res=await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,{headers:{Authorization:'Bearer '+driveAccessToken}});
+    if(!res.ok){toast('Erro ao baixar dados do Drive.','error');return;}
+    const d=await res.json();
+    state.lancamentos=Array.isArray(d.lancamentos)?d.lancamentos.map(l=>({...l})):[];
+    state.contratos=Array.isArray(d.contratos)?d.contratos.map(c=>({...c})):[];
+    state.acoes=Array.isArray(d.acoes)?d.acoes.map(a=>({...a})):[];
+    state.fontes=Array.isArray(d.fontes)?[...d.fontes]:[...DEFAULT_FONTES];
+    state.ptres=Array.isArray(d.ptres)?[...d.ptres]:[...DEFAULT_PTRES];
+    state.nd=Array.isArray(d.nd)?[...d.nd]:[...DEFAULT_ND];
+    state.pi=Array.isArray(d.pi)?[...d.pi]:[...DEFAULT_PI];
+    state.ts=Array.isArray(d.ts)?[...d.ts]:[...DEFAULT_TS];
+    state.cats=Array.isArray(d.cats)?[...d.cats]:[...DEFAULT_CATS];
+    state.auditLog=Array.isArray(d.auditLog)?[...d.auditLog]:[];
+    salvar();init();
+    toast('✓ Dados carregados do Google Drive!','success');
+  }catch(e){toast('Erro ao carregar do Drive: '+e.message,'error');console.error(e);}
+}
+
+// Hook: auto-sync após cada salvar()
+const _salvarOriginal=window._salvarHook||null;
+function driveTriggerSync(){
+  if(driveAccessToken){
+    clearTimeout(_driveSyncTimer);
+    _driveSyncTimer=setTimeout(driveSalvarSilencioso,3000);
+  }
+}
+
+// Modal de boas-vindas Drive
+function showDriveWelcome(){
+  if(localStorage.getItem('drive_welcome_v6')==='1')return;
+  if(driveAccessToken)return;
+  const el=document.getElementById('modal-drive-welcome');
+  if(el)el.classList.add('show');
+}
+function closeDriveWelcome(){
+  const el=document.getElementById('modal-drive-welcome');
+  if(el)el.classList.remove('show');
+  if(document.getElementById('drive-noshow')?.checked)
+    localStorage.setItem('drive_welcome_v6','1');
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   const loaded=carregar();
   if(!loaded||state.lancamentos.length===0){
     seedDataDez2025();
   }
   init();
+  window.addEventListener('load',()=>setTimeout(showDriveWelcome,1500));
 });
 </script>
+
+<!-- GOOGLE DRIVE BUTTONS -->
+<style>
+.btn-drive-login{color:var(--blue)!important;background:rgba(96,165,250,0.1)!important;border-color:var(--blue)!important;font-weight:600}
+.btn-drive-action{color:var(--blue)!important;background:rgba(96,165,250,0.08)!important;border-color:var(--blue)!important}
+.btn-drive-logout{color:var(--text3)!important}
+.badge-drive-status{font-size:10.5px;color:var(--blue);background:rgba(96,165,250,0.1);border:1px solid var(--blue);border-radius:20px;padding:4px 10px;display:none;align-items:center;gap:5px;white-space:nowrap}
+.badge-drive-status.show{display:flex}
+#modal-drive-welcome{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:600;opacity:0;pointer-events:none;transition:opacity .25s}
+#modal-drive-welcome.show{opacity:1;pointer-events:all}
+#modal-drive-inner{background:var(--bg2);border:1px solid var(--border2,#383a58);border-radius:18px;padding:28px;max-width:460px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+</style>
+
+<!-- Modal boas-vindas Drive -->
+<div id="modal-drive-welcome">
+  <div id="modal-drive-inner">
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:44px;margin-bottom:10px">☁</div>
+      <div style="font-size:17px;font-weight:600;margin-bottom:6px">Conecte ao Google Drive</div>
+      <div style="font-size:13px;color:var(--text3,#5c6280);line-height:1.7">Seus dados ficam no navegador — mas podem ser perdidos se o cache for limpo.<br><strong style="color:var(--amber,#fb923c)">Sincronize com o Drive para não perder nada.</strong></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:10px;background:var(--bg3,#20212e);border-radius:10px;padding:10px 14px">
+        <span style="font-size:20px">🔄</span>
+        <div><div style="font-size:12px;font-weight:600">Sync automático</div><div style="font-size:11px;color:var(--text3,#5c6280)">Salva 3s após cada registro</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:var(--bg3,#20212e);border-radius:10px;padding:10px 14px">
+        <span style="font-size:20px">📱</span>
+        <div><div style="font-size:12px;font-weight:600">Acesse de qualquer lugar</div><div style="font-size:11px;color:var(--text3,#5c6280)">Qualquer dispositivo, qualquer navegador</div></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button onclick="closeDriveWelcome()" style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border,#2e3048);background:var(--bg3,#20212e);color:var(--text2,#9fa8c0);cursor:pointer;font-size:12px">Agora não</button>
+      <button onclick="closeDriveWelcome();driveLogin()" style="flex:2;padding:9px;border-radius:8px;border:1px solid var(--blue,#60a5fa);background:rgba(96,165,250,0.1);color:var(--blue,#60a5fa);cursor:pointer;font-weight:600;font-size:12px">☁ Conectar ao Drive</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text3,#5c6280);justify-content:center">
+      <input type="checkbox" id="drive-noshow" style="accent-color:var(--blue,#60a5fa)"> Não mostrar novamente
+    </label>
+  </div>
+</div>
 </body>
 </html>
