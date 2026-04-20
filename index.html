@@ -112,9 +112,9 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .kpi:hover::after{opacity:.14}
 .kpi::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--kpi-accent,var(--border2));border-radius:16px 0 0 16px}
 .kpi.accent-green{--kpi-accent:var(--green)}.kpi.accent-red{--kpi-accent:var(--red)}.kpi.accent-gold{--kpi-accent:var(--gold)}.kpi.accent-blue{--kpi-accent:var(--blue)}.kpi.accent-amber{--kpi-accent:var(--amber)}.kpi.accent-purple{--kpi-accent:var(--purple)}.kpi.accent-teal{--kpi-accent:var(--teal)}.kpi.accent-cyan{--kpi-accent:var(--cyan)}
-.kpi-label{font-size:11px;color:var(--text3);font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:6px;letter-spacing:.07em;text-transform:uppercase;flex-wrap:wrap;line-height:1.4}
-.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:clamp(18px,2.2vw,30px);font-weight:700;margin-bottom:6px;line-height:1.15;word-break:break-word;overflow-wrap:anywhere;white-space:normal;letter-spacing:-.02em}
-.kpi-sub{font-size:12px;color:var(--text3);margin-top:auto;padding-top:6px;border-top:1px solid var(--border)}
+.kpi-label{font-size:10px;color:var(--text3);font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:6px;letter-spacing:.06em;text-transform:uppercase;flex-wrap:wrap;line-height:1.3}
+.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:clamp(20px,2.4vw,32px);font-weight:700;margin-bottom:6px;line-height:1.15;word-break:break-word;overflow-wrap:anywhere;white-space:normal;letter-spacing:-.02em}
+.kpi-sub{font-size:12.5px;color:var(--text3);margin-top:auto;padding-top:6px;border-top:1px solid var(--border)}
 .kpi-badge{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:700;white-space:nowrap;letter-spacing:.03em}
 .badge-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
 .badge-warn{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
@@ -179,6 +179,12 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .cat-card{background:var(--bg4);border:2px solid var(--border);border-radius:var(--radius-lg);padding:12px 10px;cursor:pointer;transition:all .18s;text-align:center}
 .cat-card:hover{border-color:var(--border3);transform:translateY(-2px)}
 .cat-card.sel{border-color:var(--gold);background:var(--gold-bg);box-shadow:var(--glow-gold)}
+.cat-btn{background:var(--bg4);border:2px solid var(--border);border-radius:var(--radius-lg);padding:12px 10px;cursor:pointer;transition:all .18s;text-align:center;display:flex;flex-direction:column;align-items:center}
+.cat-btn:hover{border-color:var(--border3);transform:translateY(-2px)}
+.cat-btn.active{border-color:var(--gold);background:var(--gold-bg);box-shadow:var(--glow-gold)}
+.cat-btn-icon{font-size:22px;margin-bottom:6px;display:block}
+.cat-btn-nome{font-size:11.5px;font-weight:600;color:var(--text2);line-height:1.3}
+.cat-btn.active .cat-btn-nome{color:var(--gold)}
 .cat-icon{font-size:22px;margin-bottom:6px;display:block}
 .cat-name{font-size:11.5px;font-weight:600;color:var(--text2);line-height:1.3}
 .cat-saldo{font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--text3);margin-top:3px}
@@ -502,50 +508,39 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 <!-- ════════ REGISTRAR SAÍDA ════════ -->
 <div id="page-saida" class="page">
   <div class="page-header">
-    <div><div class="page-title"><span>↑</span>Registrar Saída / Execução</div><div class="page-sub">Empenho · Anulação · Transferência · Liquidação + Pagamento</div></div>
+    <div><div class="page-title"><span>↑</span>Registrar Saída / Execução</div><div class="page-sub">Empenho · Anulação · Transferência</div></div>
   </div>
   <div class="module-tabs">
     <div class="mtab active" id="saida-tab-empenho" onclick="setSaidaTab('empenho')">📝 Empenho</div>
     <div class="mtab" id="saida-tab-anulacao" onclick="setSaidaTab('anulacao')">↩ Anulação</div>
     <div class="mtab" id="saida-tab-transferencia" onclick="setSaidaTab('transferencia')">⇄ Transferência</div>
-    <div class="mtab" id="saida-tab-liquidacao" onclick="setSaidaTab('liquidacao')">✓ Liq./Pagamento</div>
   </div>
 
   <!-- 3.1 EMPENHO -->
   <div id="saida-pane-empenho">
-    <div class="info-box info"><span class="info-icon">ℹ</span><div>O empenho representa o comprometimento de recursos orçamentários. Verifique o saldo disponível antes de registrar.</div></div>
+    <div class="info-box info"><span class="info-icon">ℹ</span><div>Registre a inclusão de saldo em cada empenho cadastrado. O empenho deve estar previamente cadastrado no módulo "Cadastro Empenho".</div></div>
     <div class="card">
-      <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Registrar Empenho</div>
-      <div class="form-grid cols3">
-        <div class="field"><label>Categoria<span class="required-mark">*</span></label><select id="s-cat" onchange="updateSaldoSaida();updateContratoRef()"></select></div>
-        <div class="field"><label>Valor (R$)<span class="required-mark">*</span></label><input type="number" id="s-valor" min="0" step="0.01" placeholder="0,00" oninput="updateSaldoSaida()"></div>
+      <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Registrar Saída (Inclusão de Saldo no Empenho)</div>
+      <div class="form-grid cols2">
+        <div class="field"><label>Categoria<span class="required-mark">*</span></label><select id="s-cat" onchange="updateSaldoSaida();updateEmpenhosCadastrados()"></select></div>
+        <div class="field"><label>Empenho Referenciado<span class="required-mark">*</span></label><select id="s-empenho-cad" onchange="carregarDadosEmpenhoCadastrado()"><option value="">-- Selecione um empenho cadastrado --</option></select></div>
+      </div>
+      <div id="s-empenho-info" style="margin-top:8px;margin-bottom:8px"></div>
+      <div class="form-grid cols3 mt4">
         <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="s-data"></div>
+        <div class="field"><label>Valor (R$)<span class="required-mark">*</span></label><input type="number" id="s-valor" min="0" step="0.01" placeholder="0,00" oninput="updateSaldoSaida()"></div>
+        <div class="field"><label>Subcategoria<span class="required-mark">*</span></label><input type="text" id="s-subcat" placeholder="Ex: 33903702"></div>
       </div>
-      <div class="form-grid cols3 mt4">
-        <div class="field"><label>Fonte</label><select id="s-fonte"></select></div>
-        <div class="field"><label>PTRES</label><select id="s-ptres"></select></div>
-        <div class="field"><label>Natureza da Despesa</label><select id="s-nd"></select></div>
-      </div>
-      <div class="form-grid cols3 mt4">
-        <div class="field"><label>N° Empenho / Referência</label><input type="text" id="s-referencia" placeholder="Ex: 2025NE000123"></div>
-        <div class="field"><label>Competência (Mês)</label><select id="s-comp"></select></div>
-        <div class="field"><label>Contrato / Processo (Contratos)</label><select id="s-contrato-ref"></select></div>
-      </div>
-      <div class="form-grid cols2 mt4">
-        <div class="field"><label>Ação AE (Assist. Estudantil)</label><select id="s-acao-ref"></select></div>
-        <div class="field"><label>Subcategoria</label><input type="text" id="s-subcat" placeholder="Ex: 33903702"></div>
-      </div>
-      <div class="field mt4"><label>Descrição<span class="required-mark">*</span></label><input type="text" id="s-desc" placeholder="Descreva a despesa..."></div>
-      <div class="field mt4"><label>Observações</label><textarea id="s-obs" rows="2" placeholder="Informações adicionais..."></textarea></div>
+      <div class="field mt4"><label>Descrição</label><input type="text" id="s-desc" placeholder="Descrição adicional (opcional)"></div>
       <div id="s-saldo-bar"></div>
       <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-primary" onclick="registrarSaida()">✓ Registrar Empenho</button>
+        <button class="btn btn-primary" onclick="registrarSaida()">✓ Registrar Saída</button>
         <button class="btn btn-sec" onclick="limparFormSaida()">↺ Limpar</button>
       </div>
     </div>
     <div class="tbl-wrap">
-      <div class="tbl-head"><div class="tbl-title">Empenhos registrados</div><div class="tbl-count" id="saida-count"></div></div>
-      <table><thead><tr><th>ID</th><th>Data</th><th>Categoria</th><th>Descrição</th><th>Referência</th><th>Fonte</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="saida-table"></tbody></table>
+      <div class="tbl-head"><div class="tbl-title">Saídas registradas (Inclusão de Saldo)</div><div class="tbl-count" id="saida-count"></div></div>
+      <table><thead><tr><th>ID</th><th>Data</th><th>Categoria</th><th>Nº Empenho</th><th>Descrição</th><th>Subcategoria</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="saida-table"></tbody></table>
     </div>
   </div>
 
@@ -602,46 +597,6 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="tbl-wrap">
       <div class="tbl-head"><div class="tbl-title">Transferências registradas</div><div class="tbl-count" id="tr-count"></div></div>
       <table><thead><tr><th>ID</th><th>Data</th><th>Origem</th><th>Destino</th><th>Descrição</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="tr-table"></tbody></table>
-    </div>
-  </div>
-
-  <!-- 3.4 LIQUIDAÇÃO + PAGAMENTO -->
-  <div id="saida-pane-liquidacao" style="display:none">
-    <div class="info-box info"><span class="info-icon">ℹ</span><div>Somente valores <strong>previamente empenhados</strong> podem ser liquidados/pagos. Selecione o empenho de referência para garantir rastreabilidade.</div></div>
-    <div class="card">
-      <div class="card-title">
-        <span class="card-title-dot" style="background:var(--amber)"></span>Liquidação + Pagamento
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <button class="btn btn-amber btn-sm" id="lp-btn-liq" onclick="setLpFase('Liquidação')">✓ Liquidação</button>
-          <button class="btn btn-green btn-sm" id="lp-btn-pag" onclick="setLpFase('Pagamento')">💳 Pagamento</button>
-        </div>
-      </div>
-      <div class="form-grid cols3">
-        <div class="field"><label>Categoria<span class="required-mark">*</span></label><select id="lp-cat" onchange="updateLpSaldo();updateLpEmpenhos()"></select></div>
-        <div class="field"><label>Empenho Referenciado<span class="required-mark">*</span></label><select id="lp-empenho-ref" onchange="preencherDadosEmpenho()"></select></div>
-        <div class="field"><label>Valor (R$)<span class="required-mark">*</span></label><input type="number" id="lp-valor" min="0" step="0.01" placeholder="0,00"></div>
-      </div>
-      <div class="form-grid cols3 mt4">
-        <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="lp-data"></div>
-        <div class="field"><label>Competência (Mês)</label><select id="lp-comp"></select></div>
-        <div class="field"><label>Fonte</label><select id="lp-fonte"></select></div>
-      </div>
-      <div class="form-grid cols3 mt4">
-        <div class="field"><label>PTRES</label><select id="lp-ptres"></select></div>
-        <div class="field"><label>Natureza da Despesa</label><select id="lp-nd"></select></div>
-        <div class="field"><label>Subcategoria</label><input type="text" id="lp-subcat" placeholder="Ex: 33903702"></div>
-      </div>
-      <div id="lp-saldo-bar"></div>
-      <div class="field mt4"><label>Descrição<span class="required-mark">*</span></label><input type="text" id="lp-desc" placeholder="Descreva a despesa..."></div>
-      <div class="field mt4"><label>Observações</label><textarea id="lp-obs" rows="2"></textarea></div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-amber" id="lp-btn-registrar" onclick="registrarLiqPag()">✓ Registrar Liquidação</button>
-        <button class="btn btn-sec" onclick="limparFormLiqPag()">↺ Limpar</button>
-      </div>
-    </div>
-    <div class="tbl-wrap">
-      <div class="tbl-head"><div class="tbl-title">Liquidações e Pagamentos</div><div class="tbl-count" id="lp-count"></div></div>
-      <table><thead><tr><th>ID</th><th>Data</th><th>Fase</th><th>Categoria</th><th>Empenho Ref.</th><th>Descrição</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="lp-table"></tbody></table>
     </div>
   </div>
 </div>
@@ -702,8 +657,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="field" style="margin-bottom:14px">
       <label>Tipo de Empenho<span class="required-mark">*</span></label>
       <div style="display:flex;gap:16px;margin-top:4px">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="cemp-exe-rap" id="cemp-exe" value="EXE" checked onchange="cempValidarAno()"> <strong>EXE</strong> — Ano corrente</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="cemp-exe-rap" id="cemp-rap" value="RAP" onchange="cempValidarAno()"> <strong>RAP</strong> — Anos anteriores (2023, 2024, 2025)</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="radio" name="cemp-exe-rap" id="cemp-exe" value="EXE" checked onchange="cempValidarAno()"> <strong>EXE</strong> — Ano corrente</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="radio" name="cemp-exe-rap" id="cemp-rap" value="RAP" onchange="cempValidarAno()"> <strong>RAP</strong> — Anos anteriores</label>
       </div>
     </div>
     <!-- Categoria grid -->
@@ -1611,7 +1566,7 @@ let _lpFase='Liquidação';
 
 function setSaidaTab(t){
   _saidaTab=t;
-  ['empenho','anulacao','transferencia','liquidacao'].forEach(x=>{
+  ['empenho','anulacao','transferencia'].forEach(x=>{
     const tab=document.getElementById('saida-tab-'+x);
     const pane=document.getElementById('saida-pane-'+x);
     if(tab)tab.classList.toggle('active',x===t);
@@ -1620,20 +1575,66 @@ function setSaidaTab(t){
   if(t==='empenho'){renderSaidaForms();renderSaidas();}
   else if(t==='anulacao'){renderAnulacaoForm();renderAnulacoes();}
   else if(t==='transferencia'){renderTransfForm();renderTransferencias();}
-  else if(t==='liquidacao'){renderLiqPagForm();renderLiqPags();}
 }
 
 // ─── ABA 1: EMPENHO ───
 function renderSaidaForms(){
   populateSelect('s-cat',[''].concat(state.cats));
-  populateSelect('s-fonte',state.fontes);
-  populateSelect('s-ptres',state.ptres);
-  populateSelect('s-nd',state.nd);
-  populateMesesSelect('s-comp');
-  updateContratoRef();
-  updateAcaoRef();
   if(!document.getElementById('s-data').value) document.getElementById('s-data').value=new Date().toISOString().slice(0,10);
   renderSaidas();
+}
+
+function updateEmpenhosCadastrados(){
+  const cat=document.getElementById('s-cat').value;
+  const sel=document.getElementById('s-empenho-cad');
+  if(!sel)return;
+  if(!cat){
+    sel.innerHTML='<option value="">-- Primeiro selecione uma categoria --</option>';
+    document.getElementById('s-empenho-info').innerHTML='';
+    return;
+  }
+  const empenhos=state.empenhosCad?state.empenhosCad.filter(e=>e.status==='Ativo'&&normalizarCategoria(e.categoria)===normalizarCategoria(cat)):[];
+  if(empenhos.length===0){
+    sel.innerHTML='<option value="">-- Nenhum empenho cadastrado nesta categoria --</option>';
+    document.getElementById('s-empenho-info').innerHTML='<div class="info-box warn"><span class="info-icon">⚠</span><div>Não há empenhos cadastrados para esta categoria. Cadastre um empenho primeiro no módulo "Cadastro Empenho".</div></div>';
+  } else {
+    sel.innerHTML='<option value="">-- Selecione um empenho cadastrado --</option>'+empenhos.map(e=>`<option value="${e.id}">${e.numero} — ${e.fornNome||'S/Fornecedor'} — Saldo disponível: ${fmtBR(calcularSaldoEmpenho(e.id))}</option>`).join('');
+    document.getElementById('s-empenho-info').innerHTML='';
+  }
+}
+
+function calcularSaldoEmpenho(empenhoCadId){
+  // Calcula o saldo disponível de um empenho cadastrado
+  // Soma todos os valores registrados na aba Empenho (Registrar Saída) para este empenho
+  const saidas=state.lancamentos?state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.empenhoCadId===empenhoCadId):[];
+  const totalSaidas=saidas.reduce((sum,l)=>sum+l.valor,0);
+  // O saldo inicial é infinito (ou seja, podemos registrar qualquer valor até que seja consumido por liquidações)
+  // Por enquanto, vamos apenas retornar o total de saídas já registradas como referência
+  return totalSaidas;
+}
+
+function carregarDadosEmpenhoCadastrado(){
+  const empId=document.getElementById('s-empenho-cad').value;
+  const infoEl=document.getElementById('s-empenho-info');
+  if(!empId){
+    infoEl.innerHTML='';
+    return;
+  }
+  const emp=state.empenhosCad?state.empenhosCad.find(e=>e.id===empId):null;
+  if(!emp){
+    infoEl.innerHTML='<div class="info-box warn"><span class="info-icon">⚠</span><div>Empenho não encontrado.</div></div>';
+    return;
+  }
+  const saldo=calcularSaldoEmpenho(empId);
+  infoEl.innerHTML=`<div class="saldo-bar-card">
+    <div class="sb-top">
+      <span class="sb-nome">${catIcon(emp.categoria)} ${emp.numero} — ${emp.fornNome||'S/Fornecedor'}</span>
+      <span class="sb-val ok">${fmtBR(saldo)}</span>
+    </div>
+    <div class="sb-caption">
+      Fonte: ${emp.fonte||'—'} · PTRES: ${emp.ptres||'—'} · ND: ${emp.nd||'—'}${emp.pi?' · PI: '+emp.pi:''}
+    </div>
+  </div>`;
 }
 function updateContratoRef(){
   const cat=document.getElementById('s-cat').value;
@@ -1668,45 +1669,54 @@ function updateSaldoSaida(){
   document.getElementById('s-saldo-bar').innerHTML=`<div class="saldo-bar-card" style="margin-top:10px"><div class="sb-top"><span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para empenho</span><span class="sb-val ${st}">${fmtBR(s)}</span></div><div class="sb-bar"><div class="sb-fill ${st}" style="width:${p}%"></div></div><div class="sb-caption">Crédito: ${fmtBR(te)} · Empenhado: ${fmtBR(emp)} · ${p}% comprometido</div></div>`;
 }
 function registrarSaida(){
-  const cat=document.getElementById('s-cat').value;if(!cat){toast('Selecione uma categoria','warn');return;}
+  const cat=document.getElementById('s-cat').value;
+  if(!cat){toast('Selecione uma categoria','warn');return;}
+  const empCadId=document.getElementById('s-empenho-cad').value;
+  if(!empCadId){toast('Selecione um empenho cadastrado','warn');return;}
+  const empCad=state.empenhosCad?state.empenhosCad.find(e=>e.id===empCadId):null;
+  if(!empCad){toast('Empenho cadastrado não encontrado','error');return;}
   const valor=parseFloat(document.getElementById('s-valor').value)||0;
   const data=document.getElementById('s-data').value;
+  const subcat=document.getElementById('s-subcat').value.trim();
   const desc=document.getElementById('s-desc').value.trim();
   if(!valor||valor<=0){toast('Valor deve ser maior que zero','warn');return;}
   if(!data){toast('Data obrigatória','warn');return;}
-  if(!desc){toast('Descrição obrigatória','warn');return;}
+  if(!subcat){toast('Subcategoria obrigatória','warn');return;}
   const saldo=saldoCat(cat);
   if(valor>saldo+0.01){toast('Saldo insuficiente na categoria selecionada','warn');return;}
-  const contratorefEl=document.getElementById('s-contrato-ref');
-  const acaorefEl=document.getElementById('s-acao-ref');
-  const contratoId=contratorefEl&&contratorefEl.closest('.field').style.display!=='none'?contratorefEl.value||null:null;
-  const acaoId=acaorefEl&&acaorefEl.closest('.field').style.display!=='none'?acaorefEl.value||null:null;
   const l={
     id:shortId('S'),tipo:'Empenho',categoria:cat,
-    subcategoria:document.getElementById('s-subcat').value.trim(),
-    descricao:desc,valor,data,
-    competencia:document.getElementById('s-comp').value||'',
-    fonte:document.getElementById('s-fonte').value,
-    ptres:document.getElementById('s-ptres').value,
-    nd:document.getElementById('s-nd').value,
-    referencia:document.getElementById('s-referencia').value.trim(),
-    referenciaId:contratoId||acaoId||null,
-    observacoes:document.getElementById('s-obs').value.trim(),
+    subcategoria:subcat,
+    descricao:desc||'Inclusão de saldo no empenho '+empCad.numero,
+    valor,data,
+    empenhoCadId:empCadId,
+    numeroEmpenho:empCad.numero,
+    fonte:empCad.fonte||'',
+    ptres:empCad.ptres||'',
+    nd:empCad.nd||'',
+    pi:empCad.pi||'',
+    fornNome:empCad.fornNome||'',
+    referencia:empCad.numero,
     status:'Ativo',ts:new Date().toISOString()
   };
   state.lancamentos.push(l);
-  auditLog('CREATE','LANCAMENTO',l.id,'Empenho registrado: '+desc,l);
+  auditLog('CREATE','LANCAMENTO',l.id,'Saída registrada (Empenho): '+empCad.numero,l);
   salvar();renderSaidaForms();renderSaidas();renderSidebar();renderDashboard();
-  toast('Empenho registrado com sucesso!','success');
+  toast('Saída registrada com sucesso no empenho '+empCad.numero+'!','success');
   limparFormSaida();
 }
-function limparFormSaida(){['s-valor','s-subcat','s-referencia','s-desc','s-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
+function limparFormSaida(){
+  ['s-valor','s-subcat','s-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const sel=document.getElementById('s-empenho-cad');
+  if(sel)sel.value='';
+  document.getElementById('s-empenho-info').innerHTML='';
+}
 function renderSaidas(){
   const l=state.lancamentos.filter(l=>l.tipo==='Empenho'&&l.status==='Ativo').slice().reverse();
   document.getElementById('saida-count').textContent=l.length+' registros';
   document.getElementById('saida-table').innerHTML=l.length?l.map(l=>`
-    <tr><td><code style="font-size:10px">${l.id}</code></td><td>${fmtData(l.data)}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.descricao}</td><td style="font-size:11px;color:var(--text3)">${l.referencia||'—'}</td><td style="font-size:11px;color:var(--text3)">${(l.fonte||'').split('–')[0]||'—'}</td><td class="r text-red fw6">${fmtBR(l.valor)}</td><td><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>
-  `).join(''):'<tr class="empty-row"><td colspan="8">Nenhum empenho registrado</td></tr>';
+    <tr><td><code style="font-size:10px">${l.id}</code></td><td>${fmtData(l.data)}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="font-size:11px;color:var(--text3)">${l.numeroEmpenho||l.referencia||'—'}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.descricao||'—'}</td><td style="font-size:11px;color:var(--text3)">${l.subcategoria||'—'}</td><td class="r text-red fw6">${fmtBR(l.valor)}</td><td><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>
+  `).join(''):'<tr class="empty-row"><td colspan="8">Nenhuma saída registrada</td></tr>';
 }
 
 // ─── ABA 2: ANULAÇÃO ───
@@ -3149,7 +3159,8 @@ function cempSelecionarCat(cat){
 function cempMontarVinculo(cat){
   const area=document.getElementById('cemp-vinculo-area');
   if(!area)return;
-  const CATS_CNPJ_CONTRATO=['CONTRATOS','APOIO AO ENSINO','COSIP'];
+  const CATS_CNPJ_CONTRATO=['CONTRATOS','APOIO AO ENSINO'];
+  const CATS_CNPJ_SEM_CONTRATO=['COSIP'];
   const CATS_AE=['ASSISTÊNCIA ESTUDANTIL'];
   const CATS_CNPJ_APENAS=['ENERGIA ELÉTRICA','RESTAURANTE','MATERIAL DE CONSUMO','ÁGUA E ESGOTO','TAXAS E TRIBUTOS','OUTROS'];
   const CATS_PNAE=['PNAE'];
