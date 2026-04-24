@@ -105,8 +105,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .card-title-dot{width:5px;height:5px;border-radius:50%;background:var(--border3)}
 
 /* ═══ KPI GRID ═══ */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:18px}
-.kpi{background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:24px 22px 20px;position:relative;overflow:hidden;transition:all .22s cubic-bezier(.34,1.2,.64,1);box-shadow:0 4px 24px rgba(0,0,0,.45);min-width:0;min-height:148px;display:flex;flex-direction:column;justify-content:space-between;cursor:default}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:18px}
+.kpi{background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:16px 22px 14px;position:relative;overflow:hidden;transition:all .22s cubic-bezier(.34,1.2,.64,1);box-shadow:0 4px 24px rgba(0,0,0,.45);min-width:0;min-height:100px;display:flex;flex-direction:column;justify-content:space-between;cursor:default}
 .kpi:hover{border-color:var(--kpi-accent,var(--border3));transform:translateY(-4px) scale(1.012);box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 0 1px var(--kpi-accent,transparent)}
 .kpi::after{content:'';position:absolute;top:-30px;right:-30px;width:110px;height:110px;border-radius:50%;background:var(--kpi-accent,transparent);opacity:.07;filter:blur(28px);pointer-events:none;transition:opacity .22s}
 .kpi:hover::after{opacity:.14}
@@ -468,6 +468,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="tbl-head"><div class="tbl-title">Últimos 10 Lançamentos</div><button class="btn btn-sec btn-xs" onclick="showPage('historico')">Ver todos →</button></div>
     <table><thead><tr><th>ID</th><th>Data</th><th>Fase</th><th>Categoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th></tr></thead><tbody id="dash-recentes"></tbody></table>
   </div>
+  <!-- Card RAP -->
+  <div id="dash-rap-card" style="margin-bottom:14px"></div>
   <div class="page-footer">José Marcondes Ribeiro Coelho – Contador · IFPI Campus São João do Piauí · COCF</div>
 </div>
 
@@ -518,13 +520,45 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 
   <!-- 3.1 EMPENHO -->
   <div id="saida-pane-empenho">
-    <div class="info-box info"><span class="info-icon">ℹ</span><div>Registre a inclusão de saldo em cada empenho cadastrado. O empenho deve estar previamente cadastrado no módulo "Cadastro Empenho".</div></div>
+    <div class="info-box info"><span class="info-icon">ℹ</span><div>Registre a inclusão de saldo em cada empenho cadastrado. O tipo e a categoria são <strong>herdados automaticamente</strong> do cadastro do empenho selecionado — sem possibilidade de alteração.</div></div>
     <div class="card">
       <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Registrar Saída (Inclusão de Saldo no Empenho)</div>
-      <div class="form-grid cols2">
-        <div class="field"><label>Categoria<span class="required-mark">*</span></label><select id="s-cat" onchange="updateSaldoSaida();updateEmpenhosCadastrados()"></select></div>
-        <div class="field"><label>Empenho Referenciado<span class="required-mark">*</span></label><select id="s-empenho-cad" onchange="carregarDadosEmpenhoCadastrado()"><option value="">-- Selecione um empenho cadastrado --</option></select></div>
+
+      <!-- FILTRO: EXE/RAP — apenas para filtrar a lista de empenhos -->
+      <div class="field" style="margin-bottom:14px">
+        <label>Filtrar por Tipo de Recurso</label>
+        <select id="s-exe-rap" onchange="onSaidaTipoChange()" style="max-width:320px">
+          <option value="">-- Todos os tipos --</option>
+          <option value="EXE">EXE — Recurso do Exercício</option>
+          <option value="RAP">RAP — Restos a Pagar</option>
+        </select>
+        <div class="field-hint">Filtra os empenhos disponíveis abaixo. O tipo efetivo é sempre o do empenho cadastrado.</div>
       </div>
+
+      <!-- EMPENHO: seleção principal -->
+      <div class="field" style="margin-bottom:10px">
+        <label>Empenho Referenciado<span class="required-mark">*</span></label>
+        <select id="s-empenho-cad" onchange="carregarDadosEmpenhoCadastrado()">
+          <option value="">-- Selecione um empenho cadastrado --</option>
+        </select>
+      </div>
+
+      <!-- CAMPOS DERIVADOS: read-only, herdados do cadastro -->
+      <div class="form-grid cols2" style="margin-bottom:10px">
+        <div class="field">
+          <label>Tipo de Empenho <span style="color:var(--amber);font-size:9px;font-weight:700;letter-spacing:.06em">🔒 DERIVADO DO CADASTRO</span></label>
+          <input type="text" id="s-tipo-derivado" readonly placeholder="Selecionado automaticamente"
+            style="background:var(--bg2);color:var(--text3);cursor:not-allowed;border-color:var(--border);font-weight:700;letter-spacing:.06em">
+        </div>
+        <div class="field">
+          <label>Categoria <span style="color:var(--amber);font-size:9px;font-weight:700;letter-spacing:.06em">🔒 DERIVADA DO CADASTRO</span></label>
+          <input type="text" id="s-cat-derivada" readonly placeholder="Selecionada automaticamente"
+            style="background:var(--bg2);color:var(--text3);cursor:not-allowed;border-color:var(--border)">
+        </div>
+      </div>
+      <!-- Campo oculto para compatibilidade com funções internas que leem s-cat -->
+      <input type="hidden" id="s-cat">
+
       <div id="s-empenho-info" style="margin-top:8px;margin-bottom:8px"></div>
       <div class="form-grid cols3 mt4">
         <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="s-data"></div>
@@ -540,7 +574,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     </div>
     <div class="tbl-wrap">
       <div class="tbl-head"><div class="tbl-title">Saídas registradas (Inclusão de Saldo)</div><div class="tbl-count" id="saida-count"></div></div>
-      <table><thead><tr><th>ID</th><th>Data</th><th>Categoria</th><th>Nº Empenho</th><th>Descrição</th><th>Subcategoria</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="saida-table"></tbody></table>
+      <table><thead><tr><th>ID</th><th>Tipo</th><th>Data</th><th>Categoria</th><th>Nº Empenho</th><th>Descrição</th><th>Subcategoria</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="saida-table"></tbody></table>
     </div>
   </div>
 
@@ -657,8 +691,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="field" style="margin-bottom:14px">
       <label>Tipo de Empenho<span class="required-mark">*</span></label>
       <div style="display:flex;gap:16px;margin-top:4px">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="radio" name="cemp-exe-rap" id="cemp-exe" value="EXE" checked onchange="cempValidarAno()"> <strong>EXE</strong> — Ano corrente</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="radio" name="cemp-exe-rap" id="cemp-rap" value="RAP" onchange="cempValidarAno()"> <strong>RAP</strong> — Anos anteriores</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="radio" name="cemp-exe-rap" id="cemp-exe" value="EXE" checked onchange="cempValidarAno();cempAtualizarSaldoInfo()"> <strong>EXE</strong> — Ano corrente</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="radio" name="cemp-exe-rap" id="cemp-rap" value="RAP" onchange="cempValidarAno();cempAtualizarSaldoInfo()"> <strong>RAP</strong> — Anos anteriores</label>
       </div>
     </div>
     <!-- Categoria grid -->
@@ -841,9 +875,12 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <button class="btn btn-primary" onclick="gerarRelatorio()">◈ Gerar Relatório</button>
       <button class="btn btn-blue btn-sm" onclick="exportarRelatorioCSV()">↓ CSV</button>
       <button class="btn btn-amber btn-sm" onclick="imprimirRelatorio()">⎙ Imprimir / PDF</button>
+      <button class="btn btn-sec btn-sm" style="border-color:var(--purple);color:var(--purple)" onclick="gerarRelatorioRAP()">📋 Relatório RAP</button>
     </div>
   </div>
   <div id="rel-resultado"></div>
+  <!-- Relatório RAP exclusivo -->
+  <div id="rel-rap-area" style="margin-top:18px"></div>
 </div>
 
 <!-- ════════ AUDITORIA ════════ -->
@@ -1490,6 +1527,7 @@ function renderDashboard(){
   `).join(''):'<tr class="empty-row"><td colspan="8">Nenhum lançamento registrado</td></tr>';
 
   renderSidebar();
+  renderRapCardDashboard();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1579,12 +1617,13 @@ function setSaidaTab(t){
 
 // ─── ABA 1: EMPENHO ───
 function renderSaidaForms(){
-  populateSelect('s-cat',[''].concat(state.cats));
+  // s-cat agora é campo hidden — valor sincronizado automaticamente via carregarDadosEmpenhoCadastrado
   if(!document.getElementById('s-data').value) document.getElementById('s-data').value=new Date().toISOString().slice(0,10);
+  updateEmpenhosCadastrados();
   renderSaidas();
 }
 
-function updateEmpenhosCadastrados(){
+function _orig_updateEmpenhosCadastrados(){
   const cat=document.getElementById('s-cat').value;
   const sel=document.getElementById('s-empenho-cad');
   if(!sel)return;
@@ -1660,7 +1699,7 @@ function updateAcaoRef(){
     sel.innerHTML=opts.join('');
   }
 }
-function updateSaldoSaida(){
+function _orig_updateSaldoSaida(){
   const cat=document.getElementById('s-cat').value;
   if(!cat){document.getElementById('s-saldo-bar').innerHTML='';return;}
   const te=totalCreditosOriginais(cat),s=saldoCat(cat),emp=totalEmpenhos(cat);
@@ -1668,7 +1707,7 @@ function updateSaldoSaida(){
   const st=statusCor(p);
   document.getElementById('s-saldo-bar').innerHTML=`<div class="saldo-bar-card" style="margin-top:10px"><div class="sb-top"><span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para empenho</span><span class="sb-val ${st}">${fmtBR(s)}</span></div><div class="sb-bar"><div class="sb-fill ${st}" style="width:${p}%"></div></div><div class="sb-caption">Crédito: ${fmtBR(te)} · Empenhado: ${fmtBR(emp)} · ${p}% comprometido</div></div>`;
 }
-function registrarSaida(){
+function _orig_registrarSaida(){
   const cat=document.getElementById('s-cat').value;
   if(!cat){toast('Selecione uma categoria','warn');return;}
   const empCadId=document.getElementById('s-empenho-cad').value;
@@ -1705,13 +1744,13 @@ function registrarSaida(){
   toast('Saída registrada com sucesso no empenho '+empCad.numero+'! Saldo baixado da categoria.','success');
   limparFormSaida();
 }
-function limparFormSaida(){
+function _orig_limparFormSaida(){
   ['s-valor','s-subcat','s-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const sel=document.getElementById('s-empenho-cad');
   if(sel)sel.value='';
   document.getElementById('s-empenho-info').innerHTML='';
 }
-function renderSaidas(){
+function _orig_renderSaidas(){
   const l=state.lancamentos.filter(l=>l.tipo==='Empenho'&&l.status==='Ativo').slice().reverse();
   document.getElementById('saida-count').textContent=l.length+' registros';
   document.getElementById('saida-table').innerHTML=l.length?l.map(l=>`
@@ -3170,22 +3209,62 @@ function cempSelecionarCat(cat){
   document.querySelectorAll('#cemp-cat-grid .cat-btn').forEach(b=>b.classList.remove('active'));
   const btn=document.getElementById('cemp-cat-'+cat.replace(/\s/g,'_'));
   if(btn)btn.classList.add('active');
-  // Mostrar saldo
-  const saldo=saldoCat(cat);
-  const te=totalEntradas(cat);
-  const infoEl=document.getElementById('cemp-saldo-info');
-  if(infoEl){
-    if(saldo<=0){
-      infoEl.innerHTML=`<div class="info-box warn" style="margin:8px 0"><span class="info-icon">⚠</span><div><strong>Saldo zero ou insuficiente em ${cat}.</strong> Registre um crédito antes de empenhar.</div></div>`;
-    } else {
-      infoEl.innerHTML=`<div class="saldo-bar-card" style="margin:8px 0"><div class="sb-top"><span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível</span><span class="sb-val ok">${fmtBR(saldo)}</span></div><div class="sb-caption">Crédito: ${fmtBR(te)}</div></div>`;
-    }
-  }
+  // Atualizar info de saldo com verificação EXE/RAP
+  cempAtualizarSaldoInfo();
   // Montar área de vínculo dinâmico
   cempMontarVinculo(cat);
   // Mostrar campos do empenho
   const campos=document.getElementById('cemp-campos-area');
   if(campos)campos.style.display='';
+}
+
+// Atualiza o painel de saldo e aplica trava visual conforme tipo EXE/RAP selecionado
+function cempAtualizarSaldoInfo(){
+  const cat=_cempCat;
+  const infoEl=document.getElementById('cemp-saldo-info');
+  const btnRegistrar=document.querySelector('#cemp-campos-area .btn-primary');
+  if(!infoEl) return;
+  if(!cat){ infoEl.innerHTML=''; return; }
+
+  const tipoEmp=document.querySelector('input[name="cemp-exe-rap"]:checked')?.value||'EXE';
+  const saldo=saldoCat(cat);
+  const te=totalEntradas(cat);
+
+  if(tipoEmp==='RAP'){
+    // RAP: livre, sem verificação de saldo
+    infoEl.innerHTML=`<div class="saldo-bar-card" style="margin:8px 0;border-color:var(--purple-border)">
+      <div class="sb-top">
+        <span class="sb-nome">${catIcon(cat)} ${cat}</span>
+        <span style="font-size:10px;font-weight:700;color:var(--purple);background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:10px;padding:2px 8px">RAP — Livre</span>
+      </div>
+      <div class="sb-caption" style="color:var(--purple2)">Restos a Pagar: sem verificação de saldo do exercício. Cadastro permitido em qualquer categoria.</div>
+    </div>`;
+    if(btnRegistrar){ btnRegistrar.disabled=false; btnRegistrar.style.opacity=''; btnRegistrar.title=''; }
+    return;
+  }
+
+  // EXE: verificar saldo
+  if(saldo>0){
+    infoEl.innerHTML=`<div class="saldo-bar-card" style="margin:8px 0;border-color:var(--green-border)">
+      <div class="sb-top">
+        <span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para EXE</span>
+        <span class="sb-val ok">${fmtBR(saldo)}</span>
+      </div>
+      <div class="sb-caption">Crédito registrado: ${fmtBR(te)} · ✓ Cadastro permitido</div>
+    </div>`;
+    if(btnRegistrar){ btnRegistrar.disabled=false; btnRegistrar.style.opacity=''; btnRegistrar.title=''; }
+  } else {
+    infoEl.innerHTML=`<div class="info-box" style="margin:8px 0;background:var(--red-bg);border-color:var(--red-border);color:var(--red2)">
+      <span class="info-icon" style="color:var(--red)">🔒</span>
+      <div>
+        <strong style="color:var(--red)">Cadastro bloqueado — EXE sem saldo disponível</strong><br>
+        <span style="font-size:11px">A categoria <strong>${cat}</strong> não possui crédito registrado no módulo <strong>Registrar Crédito</strong>.
+        Para empenhos do exercício corrente (EXE), é obrigatório haver saldo disponível.<br>
+        <em>Dica: Registre um crédito para esta categoria primeiro, ou selecione o tipo RAP se for restos a pagar.</em></span>
+      </div>
+    </div>`;
+    if(btnRegistrar){ btnRegistrar.disabled=true; btnRegistrar.style.opacity='0.4'; btnRegistrar.title='Bloqueado: categoria sem saldo no exercício (EXE).'; }
+  }
 }
 
 function cempMontarVinculo(cat){
@@ -3288,8 +3367,6 @@ function cempValidarAno(){
 
 function registrarCadastroEmpenho(){
   if(!_cempCat){toast('Selecione uma categoria','warn');return;}
-  const saldo=saldoCat(_cempCat);
-  if(saldo<=0){toast('Saldo zero na categoria. Registre crédito antes de empenhar.','warn');return;}
   const numero=document.getElementById('cemp-numero')?.value.trim();
   const data=document.getElementById('cemp-data')?.value;
   const fonte=document.getElementById('cemp-fonte')?.value;
@@ -3301,6 +3378,16 @@ function registrarCadastroEmpenho(){
   if(!ptres){toast('PTRES obrigatório','warn');return;}
   // Verificar duplicata
   if(state.empenhosCad.find(e=>e.numero===numero&&e.status!=='Excluído')){toast('Empenho '+numero+' já cadastrado.','warn');return;}
+  // ── TRAVA EXE: categoria deve ter saldo disponível no exercício ──
+  const tipoEmp=document.querySelector('input[name="cemp-exe-rap"]:checked')?.value||'EXE';
+  if(tipoEmp==='EXE'){
+    const saldoDisp=saldoCat(_cempCat);
+    if(saldoDisp<=0){
+      toast('❌ Bloqueado: categoria "'+_cempCat+'" sem saldo no exercício. Registre um crédito antes de empenhar (EXE).','warn');
+      return;
+    }
+  }
+  // RAP: sem verificação de saldo — prossegue livremente
   // Coletar vínculo
   let cnpj='',fornNome='',contratoId='',acaoId='',pnaeDocumento='',pnaeContratoId='';
   const CATS_SEM=['DIÁRIAS E PASSAGENS'];
@@ -3318,7 +3405,6 @@ function registrarCadastroEmpenho(){
     const forn=buscarFornecedorPorDoc(pnaeDocumento);
     fornNome=forn?forn.nome:'';
   }
-  const tipoEmp=document.querySelector('input[name="cemp-exe-rap"]:checked')?.value||'EXE';
   const obj={
     id:shortId('CE'),numero,tipoEmp,categoria:normalizarCategoria(_cempCat),cnpj,fornNome,
     contratoId,acaoId,pnaeDocumento,pnaeContratoId,
@@ -4486,6 +4572,365 @@ function editarCredito(id){
     <div class="field" style="margin-top:8px"><label>Data</label><input type="date" id="edit-cred-data" value="${l.data}"></div>
     <div class="field" style="margin-top:8px"><label>Descrição</label><input type="text" id="edit-cred-desc" value="${l.descricao}"></div>`;
 }
+
+// ═══════════════════════════════════════════════════════════
+//  RAP — LÓGICA EXE/RAP INTEGRADA (REGISTRAR SAÍDA)
+// ═══════════════════════════════════════════════════════════
+
+// Chamado quando o seletor EXE/RAP muda
+// ═══════════════════════════════════════════════════════════
+//  REGISTRAR SAÍDA — VINCULAÇÃO OBRIGATÓRIA COM CADASTRO DE EMPENHO
+//  REGRA: tipo e categoria são SEMPRE derivados do cadastro.
+//         O campo s-exe-rap é apenas FILTRO de listagem.
+//         Os campos s-tipo-derivado e s-cat-derivada são read-only.
+// ═══════════════════════════════════════════════════════════
+
+function onSaidaTipoChange(){
+  // Reset do empenho selecionado ao mudar filtro
+  const sel = document.getElementById('s-empenho-cad');
+  if(sel) sel.value = '';
+  _saidaClearDerivedFields();
+  updateEmpenhosCadastrados();
+  document.getElementById('s-saldo-bar').innerHTML = '';
+}
+
+function _saidaClearDerivedFields(){
+  const tipoDeriv = document.getElementById('s-tipo-derivado');
+  const catDeriv  = document.getElementById('s-cat-derivada');
+  const catHidden = document.getElementById('s-cat');
+  if(tipoDeriv){ tipoDeriv.value=''; tipoDeriv.style.color='var(--text4)'; }
+  if(catDeriv) { catDeriv.value='';  catDeriv.style.color='var(--text4)'; }
+  if(catHidden){ catHidden.value=''; }
+  document.getElementById('s-empenho-info').innerHTML='';
+  document.getElementById('s-saldo-bar').innerHTML='';
+}
+
+// Popula a lista de empenhos filtrando pelo tipo selecionado (filtro de listagem apenas)
+function updateEmpenhosCadastrados(){
+  const tipoFiltro = document.getElementById('s-exe-rap')?.value||'';
+  const sel = document.getElementById('s-empenho-cad');
+  if(!sel) return;
+
+  // Todos os empenhos ativos, filtrando por tipoEmp (campo correto do cadastro)
+  let empenhos = (state.empenhosCad||[]).filter(e => e.status === 'Ativo');
+
+  if(tipoFiltro === 'EXE'){
+    empenhos = empenhos.filter(e => e.tipoEmp === 'EXE');
+  } else if(tipoFiltro === 'RAP'){
+    empenhos = empenhos.filter(e => e.tipoEmp === 'RAP');
+  }
+
+  if(empenhos.length === 0){
+    const msgTipo = tipoFiltro ? ' do tipo ' + tipoFiltro : '';
+    sel.innerHTML = `<option value="">-- Nenhum empenho cadastrado${msgTipo} --</option>`;
+    document.getElementById('s-empenho-info').innerHTML =
+      `<div class="info-box warn"><span class="info-icon">⚠</span><div>Não há empenhos cadastrados${msgTipo}. Cadastre um empenho primeiro no módulo "Cadastro Empenho".</div></div>`;
+  } else {
+    sel.innerHTML = '<option value="">-- Selecione um empenho cadastrado --</option>' +
+      empenhos.map(e => {
+        const tipoLabel = e.tipoEmp === 'RAP' ? '[RAP]' : '[EXE]';
+        return `<option value="${e.id}">${tipoLabel} ${e.numero} · ${e.categoria} · ${e.fornNome||'S/Fornecedor'} · Saldo: ${fmtBR(calcularSaldoEmpenho(e.id))}</option>`;
+      }).join('');
+    document.getElementById('s-empenho-info').innerHTML = '';
+  }
+}
+
+// Ao selecionar empenho: herda tipo e categoria automaticamente (read-only)
+function carregarDadosEmpenhoCadastrado(){
+  const empId = document.getElementById('s-empenho-cad')?.value||'';
+  const infoEl = document.getElementById('s-empenho-info');
+  if(!empId){ _saidaClearDerivedFields(); return; }
+
+  const emp = (state.empenhosCad||[]).find(e => e.id === empId);
+  if(!emp){ infoEl.innerHTML='<div class="info-box warn"><span class="info-icon">⚠</span><div>Empenho não encontrado.</div></div>'; return; }
+
+  // ── HERANÇA AUTOMÁTICA E IMUTÁVEL ──
+  const tipoDeriv = document.getElementById('s-tipo-derivado');
+  const catDeriv  = document.getElementById('s-cat-derivada');
+  const catHidden = document.getElementById('s-cat');
+
+  const tipoLabel = emp.tipoEmp === 'RAP' ? 'RAP — Restos a Pagar' : 'EXE — Exercício Corrente';
+  if(tipoDeriv){
+    tipoDeriv.value = tipoLabel;
+    tipoDeriv.style.color = emp.tipoEmp === 'RAP' ? 'var(--purple)' : 'var(--blue)';
+    tipoDeriv.style.fontWeight = '700';
+  }
+  if(catDeriv){
+    catDeriv.value = emp.categoria;
+    catDeriv.style.color = 'var(--gold)';
+  }
+  // Mantém campo oculto sincronizado (usado por updateSaldoSaida internamente)
+  if(catHidden) catHidden.value = emp.categoria;
+
+  // ── INFO DO EMPENHO ──
+  const saldo = calcularSaldoEmpenho(empId);
+  infoEl.innerHTML = `<div class="saldo-bar-card" style="border-color:${emp.tipoEmp==='RAP'?'var(--purple-border)':'var(--blue-border)'}">
+    <div class="sb-top">
+      <span class="sb-nome">${catIcon(emp.categoria)} <strong>${emp.numero}</strong> · <span style="color:${emp.tipoEmp==='RAP'?'var(--purple)':'var(--blue)'}"><strong>${emp.tipoEmp}</strong></span> · ${emp.categoria}</span>
+      <span class="sb-val ok">${fmtBR(saldo)} empenhado</span>
+    </div>
+    <div class="sb-caption">
+      Fornecedor: ${emp.fornNome||'—'} · Fonte: ${emp.fonte||'—'} · PTRES: ${emp.ptres||'—'} · ND: ${emp.nd||'—'}
+    </div>
+    <div style="margin-top:6px;font-size:10px;color:var(--amber);display:flex;align-items:center;gap:5px">
+      🔒 Tipo e Categoria herdados do cadastro — não editáveis nesta tela
+    </div>
+  </div>`;
+
+  updateSaldoSaida();
+}
+
+// Saldo: usa categoria do empenho selecionado (campo oculto sincronizado)
+function updateSaldoSaida(){
+  const empId = document.getElementById('s-empenho-cad')?.value||'';
+  const emp = empId ? (state.empenhosCad||[]).find(e=>e.id===empId) : null;
+  const cat = emp ? emp.categoria : (document.getElementById('s-cat')?.value||'');
+  const tipoEmp = emp ? emp.tipoEmp : '';
+
+  if(!cat){ document.getElementById('s-saldo-bar').innerHTML=''; return; }
+
+  if(tipoEmp === 'RAP'){
+    document.getElementById('s-saldo-bar').innerHTML =
+      '<div class="info-box info" style="margin-top:10px"><span class="info-icon">ℹ</span><div><strong>RAP — Restos a Pagar:</strong> Opera de forma independente do saldo do exercício. O valor pode ser registrado sem verificação de saldo de crédito.</div></div>';
+    return;
+  }
+  // EXE: exibe saldo real da categoria
+  const te=totalCreditosOriginais(cat), s=saldoCat(cat), emp2=totalEmpenhos(cat);
+  const p=te>0?clamp(Math.round(emp2/te*100),0,100):0;
+  const st=statusCor(p);
+  document.getElementById('s-saldo-bar').innerHTML=
+    `<div class="saldo-bar-card" style="margin-top:10px"><div class="sb-top"><span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para empenho</span><span class="sb-val ${st}">${fmtBR(s)}</span></div><div class="sb-bar"><div class="sb-fill ${st}" style="width:${p}%"></div></div><div class="sb-caption">Crédito: ${fmtBR(te)} · Empenhado: ${fmtBR(emp2)} · ${p}% comprometido</div></div>`;
+}
+
+// Registrar Saída — tipo e categoria SEMPRE derivados do empenho cadastrado
+function registrarSaida(){
+  const empCadId = document.getElementById('s-empenho-cad')?.value||'';
+  if(!empCadId){ toast('Selecione um empenho cadastrado','warn'); return; }
+
+  const empCad = (state.empenhosCad||[]).find(e => e.id === empCadId);
+  if(!empCad){ toast('Empenho cadastrado não encontrado','error'); return; }
+
+  // ── Tipo e categoria DERIVADOS DO CADASTRO (imutáveis) ──
+  const tipoRecurso = empCad.tipoEmp || 'EXE';
+  const cat         = empCad.categoria;
+
+  if(!tipoRecurso){ toast('Empenho sem tipo definido no cadastro. Corrija o cadastro.','error'); return; }
+  if(!cat){ toast('Empenho sem categoria definida no cadastro. Corrija o cadastro.','error'); return; }
+
+  const valor = parseFloat(document.getElementById('s-valor')?.value)||0;
+  const data  = document.getElementById('s-data')?.value||'';
+  const subcat= document.getElementById('s-subcat')?.value.trim()||'';
+  const desc  = document.getElementById('s-desc')?.value.trim()||'';
+
+  if(!valor||valor<=0){ toast('Valor deve ser maior que zero','warn'); return; }
+  if(!data){ toast('Data obrigatória','warn'); return; }
+  if(!subcat){ toast('Subcategoria obrigatória','warn'); return; }
+
+  // ── Verificação de saldo: EXE verifica, RAP não ──
+  if(tipoRecurso === 'EXE'){
+    const saldo = saldoCat(cat);
+    if(valor > saldo + 0.01){
+      toast('Saldo insuficiente na categoria ' + cat,'warn');
+      return;
+    }
+  }
+
+  const l = {
+    id: shortId('S'),
+    tipo: 'Empenho',
+    tipoRecurso,          // herdado do cadastro
+    categoria: cat,       // herdado do cadastro
+    subcategoria: subcat,
+    descricao: desc || 'Inclusão de saldo no empenho ' + empCad.numero,
+    valor, data,
+    empenhoCadId: empCadId,
+    numeroEmpenho: empCad.numero,
+    fonte: empCad.fonte||'',
+    ptres: empCad.ptres||'',
+    nd: empCad.nd||'',
+    pi: empCad.pi||'',
+    fornNome: empCad.fornNome||'',
+    referencia: empCad.numero,
+    status: 'Ativo', ts: new Date().toISOString()
+  };
+  state.lancamentos.push(l);
+  auditLog('CREATE','LANCAMENTO',l.id,
+    '['+tipoRecurso+'] Saída registrada: '+empCad.numero+' · '+cat, l);
+  salvar();
+  renderSaidaForms(); renderSaidas(); renderSidebar(); renderDashboard(); renderEntradas(); renderCatGrid();
+  toast('['+tipoRecurso+'] Saída registrada no empenho '+empCad.numero+' · '+cat+'!','success');
+  limparFormSaida();
+}
+
+// Limpar formulário — preserva o filtro EXE/RAP
+function limparFormSaida(){
+  ['s-valor','s-subcat','s-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const sel=document.getElementById('s-empenho-cad');if(sel)sel.value='';
+  _saidaClearDerivedFields();
+}
+
+// Adicionar coluna Tipo na tabela de saídas
+function renderSaidas(){
+  const l=state.lancamentos.filter(l=>l.tipo==='Empenho'&&l.status==='Ativo').slice().reverse();
+  document.getElementById('saida-count').textContent=l.length+' registros';
+  document.getElementById('saida-table').innerHTML=l.length?l.map(l=>{
+    const badge = l.tipoRecurso==='RAP'
+      ? '<span class="kpi-badge badge-purple" style="font-size:9px">RAP</span>'
+      : '<span class="kpi-badge badge-blue" style="font-size:9px">EXE</span>';
+    return `<tr><td><code style="font-size:10px">${l.id}</code></td><td>${badge}</td><td>${fmtData(l.data)}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="font-size:11px;color:var(--text3)">${l.numeroEmpenho||l.referencia||'—'}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.descricao||'—'}</td><td style="font-size:11px;color:var(--text3)">${l.subcategoria||'—'}</td><td class="r text-red fw6">${fmtBR(l.valor)}</td><td><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>`;
+  }).join(''):'<tr class="empty-row"><td colspan="9">Nenhuma saída registrada</td></tr>';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RAP — CARD DO DASHBOARD
+// ═══════════════════════════════════════════════════════════
+function renderRapCardDashboard(){
+  const el = document.getElementById('dash-rap-card');
+  if(!el) return;
+
+  // Empenhos RAP: lançamentos tipo 'Empenho' com tipoRecurso='RAP'
+  const empsRap = state.lancamentos.filter(l =>
+    l.status==='Ativo' && l.tipo==='Empenho' && l.tipoRecurso==='RAP'
+  );
+  // Para obter totais de liquidação e pagamento, precisamos dos empenhos cadastrados RAP
+  const empCadIdsRap = new Set(empsRap.map(l => l.empenhoCadId).filter(Boolean));
+  const numEmpRap   = empsRap.map(l=>l.referencia||l.numeroEmpenho).filter((v,i,a)=>v&&a.indexOf(v)===i);
+
+  // Total empenhado RAP
+  const totEmpRap = empsRap.reduce((s,l)=>s+l.valor,0);
+
+  // Total liquidado RAP: liquidações cujo empenho cadastrado é RAP
+  const totLiqRap = (state.liquidacoes||[])
+    .filter(l=>l.status!=='Excluído' && empCadIdsRap.has(
+      (state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho)?.id
+    ))
+    .reduce((s,l)=>s+(l.valorBruto||0),0);
+
+  // Total pago RAP: lançamentos tipo Pagamento vinculados a liquidações RAP
+  const totPagRap = state.lancamentos.filter(l=>{
+    if(l.status!=='Ativo'||l.tipo!=='Pagamento') return false;
+    const liq = (state.liquidacoes||[]).find(x=>x.id===l.liquidacaoId);
+    if(!liq) return false;
+    const empCad = (state.empenhosCad||[]).find(e=>e.numero===liq.nEmpenho);
+    return empCad && empCadIdsRap.has(empCad.id);
+  }).reduce((s,l)=>s+l.valor,0);
+
+  if(totEmpRap===0 && totLiqRap===0 && totPagRap===0){
+    el.innerHTML='';
+    return;
+  }
+
+  el.innerHTML=`
+    <div class="card" style="border-color:var(--purple-border);background:var(--purple-bg)">
+      <div class="card-title"><span class="card-title-dot" style="background:var(--purple)"></span>RESTOS A PAGAR (RAP) <span class="kpi-badge badge-purple" style="margin-left:6px">RAP</span></div>
+      <div class="kpi-grid" style="margin-bottom:0">
+        <div class="kpi accent-purple">
+          <div class="kpi-label">Total Empenhado <span class="kpi-badge badge-purple">RAP</span></div>
+          <div class="kpi-value" style="color:var(--purple)">${fmtBR(totEmpRap)}</div>
+          <div class="kpi-sub">${numEmpRap.length} empenho(s) RAP registrado(s)</div>
+        </div>
+        <div class="kpi accent-amber">
+          <div class="kpi-label">Total Liquidado <span class="kpi-badge badge-warn">RAP</span></div>
+          <div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiqRap)}</div>
+          <div class="kpi-sub">${totEmpRap>0?Math.round(totLiqRap/totEmpRap*100):0}% do empenhado liquidado</div>
+        </div>
+        <div class="kpi accent-green">
+          <div class="kpi-label">Total Pago <span class="kpi-badge badge-ok">RAP</span></div>
+          <div class="kpi-value text-green">${fmtBR(totPagRap)}</div>
+          <div class="kpi-sub">${totLiqRap>0?Math.round(totPagRap/totLiqRap*100):0}% do liquidado pago</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RAP — RELATÓRIO EXCLUSIVO
+// ═══════════════════════════════════════════════════════════
+function gerarRelatorioRAP(){
+  const el = document.getElementById('rel-rap-area');
+  if(!el) return;
+
+  const empsRap = state.lancamentos.filter(l =>
+    l.status==='Ativo' && l.tipo==='Empenho' && l.tipoRecurso==='RAP'
+  );
+  const empCadIdsRap = new Set(empsRap.map(l=>l.empenhoCadId).filter(Boolean));
+
+  if(empsRap.length===0){
+    el.innerHTML='<div class="info-box info" style="margin-top:8px"><span class="info-icon">ℹ</span><div>Nenhum empenho RAP registrado no sistema.</div></div>';
+    return;
+  }
+
+  // Agrupar por empenho
+  const grupos = {};
+  empsRap.forEach(l=>{
+    const k = l.referencia||l.numeroEmpenho||l.empenhoCadId||l.id;
+    if(!grupos[k]) grupos[k]={numero:k, cat:l.categoria, fornNome:l.fornNome||'—',
+      empenhado:0, liquidado:0, pago:0, empCadId:l.empenhoCadId};
+    grupos[k].empenhado += l.valor;
+  });
+
+  // Calcular liquidado e pago por empenho
+  Object.values(grupos).forEach(g=>{
+    const liqsDoEmp = (state.liquidacoes||[]).filter(l=>{
+      if(l.status==='Excluído') return false;
+      const empCad = (state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
+      return empCad && empCad.id === g.empCadId;
+    });
+    g.liquidado = liqsDoEmp.reduce((s,l)=>s+(l.valorBruto||0),0);
+    // Pago
+    const liqIds = new Set(liqsDoEmp.map(l=>l.id));
+    g.pago = state.lancamentos.filter(l=>
+      l.status==='Ativo' && l.tipo==='Pagamento' && liqIds.has(l.liquidacaoId)
+    ).reduce((s,l)=>s+l.valor,0);
+  });
+
+  const rows = Object.values(grupos).map(g=>`
+    <tr>
+      <td><strong>${g.numero}</strong></td>
+      <td>${catIcon(g.cat)} ${g.cat}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${g.fornNome}</td>
+      <td class="r text-blue">${fmtBR(g.empenhado)}</td>
+      <td class="r" style="color:var(--amber)">${fmtBR(g.liquidado)}</td>
+      <td class="r text-green">${fmtBR(g.pago)}</td>
+      <td class="r ${g.empenhado>0?'text-gold':'text-text3'}">${fmtBR(g.empenhado-g.liquidado)}</td>
+    </tr>`).join('');
+
+  const totEmp  = Object.values(grupos).reduce((s,g)=>s+g.empenhado,0);
+  const totLiq  = Object.values(grupos).reduce((s,g)=>s+g.liquidado,0);
+  const totPag  = Object.values(grupos).reduce((s,g)=>s+g.pago,0);
+  const totSaldo= totEmp-totLiq;
+
+  el.innerHTML=`
+    <div class="tbl-wrap" style="border-color:var(--purple-border)">
+      <div class="tbl-head" style="background:var(--purple-bg)">
+        <div class="tbl-title" style="color:var(--purple)">📋 Relatório Exclusivo — Restos a Pagar (RAP)</div>
+        <div class="tbl-count">${Object.keys(grupos).length} empenho(s)</div>
+      </div>
+      <div class="scroll-h">
+        <table>
+          <thead><tr>
+            <th>Nº Empenho</th><th>Categoria</th><th>Fornecedor</th>
+            <th class="r">Empenhado</th><th class="r">Liquidado</th>
+            <th class="r">Pago</th><th class="r">Saldo a Liquidar</th>
+          </tr></thead>
+          <tbody>
+            ${rows}
+            <tr style="font-weight:700;background:var(--bg4);border-top:2px solid var(--purple-border)">
+              <td colspan="3" style="color:var(--purple)">TOTAL RAP</td>
+              <td class="r text-blue">${fmtBR(totEmp)}</td>
+              <td class="r" style="color:var(--amber)">${fmtBR(totLiq)}</td>
+              <td class="r text-green">${fmtBR(totPag)}</td>
+              <td class="r text-gold">${fmtBR(totSaldo)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// renderRapCardDashboard integrado no renderDashboard original
+
+// RAP area é resetada pelo botão gerar relatório — sem patch necessário.
 
 // ═══════════════════════════════════════════════════════════
 //  INICIALIZAÇÃO DOS NOVOS MÓDULOS
