@@ -1415,8 +1415,13 @@ function _onModalConfirm(e){
   const r=cb();
   if(r!==false)closeModal();
 }
-(function(){
+function _initModalListeners(){
   const btn=document.getElementById('modal-confirm-btn');
+  if(!btn){
+    // DOM not ready yet — retry
+    document.addEventListener('DOMContentLoaded',_initModalListeners,{once:true});
+    return;
+  }
   // Clona o botão para remover qualquer listener anterior acumulado (problema no GitHub Pages)
   const newBtn=btn.cloneNode(true);
   btn.parentNode.replaceChild(newBtn,btn);
@@ -1424,6 +1429,13 @@ function _onModalConfirm(e){
   document.getElementById('modal-bg').addEventListener('click',function(e){
     if(e.target===document.getElementById('modal-bg'))closeModal();
   });
+}
+(function(){
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',_initModalListeners,{once:true});
+  } else {
+    _initModalListeners();
+  }
 })();
 
 // ═══════════════════════════════════════════════════════════
@@ -2283,12 +2295,20 @@ function setAeTab(t){
   else if(t==='mensal')renderAeMensal();
   else renderAeDash();
 }
+function getLancsAtivosPorAcao(tipo,acaoId){
+  return state.lancamentos.filter(l=>{
+    if(l.status!=='Ativo')return false;
+    if(l.tipo!==tipo)return false;
+    // Suporta tanto referenciaId (empenhos AE diretos) quanto acaoId (lançamentos via liquidação AE)
+    return l.referenciaId===acaoId || l.acaoId===acaoId;
+  });
+}
 function renderAeAcoes(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
   document.getElementById('ae-acoes').innerHTML=acoes.length?acoes.map(a=>{
-    const emp=sum(getLancsAtivos('Empenho',null,a.id));
-    const liq=sum(getLancsAtivos('Liquidação',null,a.id));
-    const pag=sum(getLancsAtivos('Pagamento',null,a.id));
+    const emp=sum(getLancsAtivosPorAcao('Empenho',a.id));
+    const liq=sum(getLancsAtivosPorAcao('Liquidação',a.id));
+    const pag=sum(getLancsAtivosPorAcao('Pagamento',a.id));
     const prev=a.previsto||0;
     const pEmp=prev>0?Math.round(emp/prev*100):0;
     const pExec=emp>0?Math.round((liq+pag)/emp*100):0;
@@ -2322,9 +2342,9 @@ function renderAeMensal(){
       const arr=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
       return s+(arr[mi]||0);
     },0);
-    const emp=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Empenho'&&(state.acoes.some(a=>a.id===l.referenciaId))));
-    const liq=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Liquidação'&&(state.acoes.some(a=>a.id===l.referenciaId))));
-    const pag=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Pagamento'&&(state.acoes.some(a=>a.id===l.referenciaId))));
+    const emp=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Empenho'&&(state.acoes.some(a=>a.id===l.referenciaId||a.id===l.acaoId))));
+    const liq=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Liquidação'&&(state.acoes.some(a=>a.id===l.referenciaId||a.id===l.acaoId))));
+    const pag=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Pagamento'&&(state.acoes.some(a=>a.id===l.referenciaId||a.id===l.acaoId))));
     return{prev,emp,liq,pag};
   });
   const totPrev=dadosMensais.reduce((s,d)=>s+d.prev,0);
@@ -2341,9 +2361,9 @@ function renderAeMensal(){
   `;
   // Resumo por ação
   const porAcaoRows=acoes.map(a=>{
-    const emp2=sum(getLancsAtivos('Empenho',null,a.id));
-    const liq2=sum(getLancsAtivos('Liquidação',null,a.id));
-    const pag2=sum(getLancsAtivos('Pagamento',null,a.id));
+    const emp2=sum(getLancsAtivosPorAcao('Empenho',a.id));
+    const liq2=sum(getLancsAtivosPorAcao('Liquidação',a.id));
+    const pag2=sum(getLancsAtivosPorAcao('Pagamento',a.id));
     const prev2=a.previsto||0;
     const pEmp=prev2>0?Math.round(emp2/prev2*100):0;
     const pPag=emp2>0?Math.round(pag2/emp2*100):0;
@@ -2360,8 +2380,8 @@ function renderAeMensal(){
 function renderAeDash(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
   const totPrev=acoes.reduce((s,a)=>s+(a.previsto||0),0);
-  const totEmp=acoes.reduce((s,a)=>s+sum(getLancsAtivos('Empenho',null,a.id)),0);
-  const totPag=acoes.reduce((s,a)=>s+sum(getLancsAtivos('Pagamento',null,a.id)),0);
+  const totEmp=acoes.reduce((s,a)=>s+sum(getLancsAtivosPorAcao('Empenho',a.id)),0);
+  const totPag=acoes.reduce((s,a)=>s+sum(getLancsAtivosPorAcao('Pagamento',a.id)),0);
   const pGeral=totPrev>0?Math.round(totEmp/totPrev*100):0;
   document.getElementById('ae-dashboard').innerHTML=`
     <div class="kpi-grid">
@@ -2373,8 +2393,8 @@ function renderAeDash(){
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Ações — Indicadores</div></div>
     <table><thead><tr><th>Ação</th><th>Tipo</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Pago</th><th class="r">Saldo Não Emp.</th><th class="r">% Emp.</th></tr></thead>
     <tbody>${acoes.map(a=>{
-      const emp=sum(getLancsAtivos('Empenho',null,a.id));
-      const pag=sum(getLancsAtivos('Pagamento',null,a.id));
+      const emp=sum(getLancsAtivosPorAcao('Empenho',a.id));
+      const pag=sum(getLancsAtivosPorAcao('Pagamento',a.id));
       const prev=a.previsto||0;
       const pct=prev>0?Math.round(emp/prev*100):0;
       return`<tr><td><strong>${a.nome}</strong></td><td><span class="kpi-badge badge-blue">${a.tipo}</span></td><td class="r text-green">${fmtBR(prev)}</td><td class="r text-blue">${fmtBR(emp)}</td><td class="r text-green">${fmtBR(pag)}</td><td class="r ${(prev-emp)<0?'text-red':'text-gold'}">${fmtBR(prev-emp)}</td><td class="r">${prev>0?semaforo(pct):'—'}</td></tr>`;
@@ -2383,6 +2403,8 @@ function renderAeDash(){
 }
 function openModalAcao(id){
   const a=id?state.acoes.find(x=>x.id===id):null;
+  // Define a classe ANTES de openModal para não ser sobrescrita
+  document.getElementById('modal-inner').className='modal modal-lg';
   openModal(a?'Editar Ação':'Nova Ação de Assistência Estudantil','',()=>{
     const get=k=>{const el=document.getElementById('ma-'+k);return el?el.value.trim():'';}
     const pm12=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((_,i)=>{
@@ -2403,7 +2425,6 @@ function openModalAcao(id){
     renderAeAcoes();
     toast((a?'Ação atualizada':'Ação criada')+'!','success');
   });
-  document.getElementById('modal-inner').className='modal modal-lg';
   const pm=Array.isArray(a?.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
   document.getElementById('modal-form-area').innerHTML=`<div class="modal-form">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -2427,14 +2448,14 @@ function editarAcao(id){openModalAcao(id);}
 function excluirAcao(id){
   openModal('Excluir ação?','A ação será marcada como excluída.',()=>{
     const idx=state.acoes.findIndex(x=>x.id===id);
-    if(idx<0)return;
+    if(idx<0){toast('Ação não encontrada','error');return false;}
     state.acoes[idx].status='Excluído';
     state.acoes[idx].tsModif=new Date().toISOString();
     auditLog('DELETE','ACAO',id,'Ação excluída: '+state.acoes[idx].nome,state.acoes[idx]);
     salvar();
-    // Pequeno delay para garantir que o modal fechou antes de re-renderizar
-    setTimeout(()=>{ renderAeAcoes(); },50);
     toast('Ação excluída','warn');
+    // Delay robusto: aguarda fechamento do modal antes de re-renderizar
+    setTimeout(()=>{ renderAeAcoes(); },120);
   });
 }
 
@@ -2780,9 +2801,9 @@ function renderAeDetalhe(){
   if(!a)return;
   const pm=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
   const totPrev=pm.reduce((s,v)=>s+v,0)||a.previsto||0;
-  const emp=sum(getLancsAtivos('Empenho',null,a.id));
-  const liq=sum(getLancsAtivos('Liquidação',null,a.id));
-  const pag=sum(getLancsAtivos('Pagamento',null,a.id));
+  const emp=sum(getLancsAtivosPorAcao('Empenho',a.id));
+  const liq=sum(getLancsAtivosPorAcao('Liquidação',a.id));
+  const pag=sum(getLancsAtivosPorAcao('Pagamento',a.id));
   const liqPag=liq+pag;
   const saldoNEmp=totPrev-emp;
   const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -2800,7 +2821,7 @@ function renderAeDetalhe(){
         ${pm.map((v,i)=>{
           const anoAtual=new Date().getFullYear();
           const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
-          const lancsM=state.lancamentos.filter(l=>l.status==='Ativo'&&l.referenciaId===a.id&&l.data&&l.data.startsWith(prefix));
+          const lancsM=state.lancamentos.filter(l=>l.status==='Ativo'&&(l.referenciaId===a.id||l.acaoId===a.id)&&l.data&&l.data.startsWith(prefix));
           const empM=sum(lancsM.filter(l=>l.tipo==='Empenho'));
           const liqM=sum(lancsM.filter(l=>l.tipo==='Liquidação'||l.tipo==='Pagamento'));
           return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;text-align:center">
@@ -4643,8 +4664,6 @@ function abrirDetalheLiquidacao(id){
     rodape=`<div style="margin-top:10px;padding:8px 12px;background:var(--bg4);border-radius:6px;font-size:12px;font-weight:600;color:var(--text3)">INCLUSÃO DE DADOS BANCÁRIOS COM O RESPECTIVO PRÉ-DOC</div>
       <div style="margin-top:6px;padding:8px 12px;background:var(--bg4);border-radius:6px;font-size:12px;font-weight:600;color:var(--text3)">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ-DOCs</div>`;
 
-  } else if(l.grupo==='pnae'){
-    // handled above
   } else if(l.grupo==='ae'){
     const acao=state.acoes.find(a=>a.id===l.acaoId);
     const d1=`LIQUIDAÇÃO PARA PAGAMENTO DE ${l.introducao} - REF AO MÊS DE ${l.mesRef} - CONF. EDITAL Nº ${l.edital} - PARA ALUNOS REGULARMENTE MATRICULADOS NO IFPI - CAMPUS SÃO JOÃO/PI DE ACORDO COM O OFÍCIO Nº ${l.oficio} - PROC SUAP ${l.suap}`;
@@ -4676,19 +4695,46 @@ function abrirDetalheLiquidacao(id){
 }
 
 function descBlock(label,texto){
-  const safeText=texto.replace(/'/g,"\\'").replace(/\n/g,' ');
+  // Usa data-attribute para evitar problemas de escaping em onclick inline (GitHub Pages)
+  const safeId='desc-'+Math.random().toString(36).slice(2,8);
+  // Armazena o texto em um mapa global para acesso pelo handler
+  if(!window._descTextos)window._descTextos={};
+  window._descTextos[safeId]=texto;
   return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;overflow:hidden">
     <div style="padding:8px 12px;background:rgba(245,200,66,.08);border-bottom:1px solid var(--border2)">
       <div style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.02em">${label}</div>
     </div>
     <div style="padding:10px 12px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word">${texto}</div>
     <div style="padding:6px 12px;border-top:1px solid var(--border)">
-      <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('${safeText}').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+      <button class="btn btn-amber btn-xs desc-copy-btn" data-desc-id="${safeId}">📋 Copiar</button>
     </div>
   </div>`;
 }
 
-function fecharDetalheModal(){document.getElementById('liq-detail-modal').style.display='none';}
+function fecharDetalheModal(){
+  document.getElementById('liq-detail-modal').style.display='none';
+  window._descTextos={};
+}
+
+// Listener delegado para botões de cópia de descrição (evita onclick inline problemático no GitHub Pages)
+document.addEventListener('click',function(e){
+  const btn=e.target.closest('.desc-copy-btn');
+  if(!btn)return;
+  const id=btn.dataset.descId;
+  const texto=(window._descTextos||{})[id]||'';
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(texto).then(()=>toast('Copiado!','success')).catch(()=>{
+      // Fallback para ambientes sem permissão de clipboard
+      const ta=document.createElement('textarea');ta.value=texto;ta.style.position='fixed';ta.style.opacity='0';
+      document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+      toast('Copiado!','success');
+    });
+  } else {
+    const ta=document.createElement('textarea');ta.value=texto;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    toast('Copiado!','success');
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 //  EDIÇÃO DE CRÉDITO (botão editar em Registrar Crédito)
