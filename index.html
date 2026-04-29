@@ -416,7 +416,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="nav-item" id="nav-contratos-pnae" onclick="showPage('contratos-pnae')"><span class="nav-icon">🥗</span>Contratos PNAE</div>
     <div class="nav-item" id="nav-ae" onclick="showPage('ae')"><span class="nav-icon">🎓</span>Assistência Estudantil</div>
     <div class="nav-sub">
-      <div class="nav-sub-item" onclick="showPage('ae');setAeTab('acoes')"><span class="sub-dot"></span>Ações</div>
+      <div class="nav-sub-item" onclick="showPage('ae');setAeTab('acoes')"><span class="sub-dot"></span>Visão Geral</div>
+      <div class="nav-sub-item" onclick="showPage('ae');setAeTab('gerenciar')"><span class="sub-dot"></span>Gerenciar Ações</div>
       <div class="nav-sub-item" onclick="showPage('ae');setAeTab('mensal')"><span class="sub-dot"></span>Resumo Mensal</div>
       <div class="nav-sub-item" onclick="showPage('ae');setAeTab('dashboard')"><span class="sub-dot"></span>Dashboard</div>
     </div>
@@ -813,12 +814,14 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="page-actions"><button class="btn btn-primary btn-sm" onclick="openModalAcao()">+ Nova Ação</button></div>
   </div>
   <div class="module-tabs">
-    <div class="mtab active" id="ae-tab-acoes" onclick="setAeTab('acoes')">🎯 Ações</div>
+    <div class="mtab active" id="ae-tab-acoes" onclick="setAeTab('acoes')">🎯 Visão Geral</div>
+    <div class="mtab" id="ae-tab-gerenciar" onclick="setAeTab('gerenciar')">⚙ Gerenciar Ações</div>
     <div class="mtab" id="ae-tab-detalhe" onclick="setAeTab('detalhe')">🔍 Detalhe por Ação</div>
     <div class="mtab" id="ae-tab-mensal" onclick="setAeTab('mensal')">📅 Resumo Mensal</div>
     <div class="mtab" id="ae-tab-dashboard" onclick="setAeTab('dashboard')">◈ Dashboard</div>
   </div>
   <div id="ae-acoes"></div>
+  <div id="ae-gerenciar" style="display:none"></div>
   <div id="ae-detalhe" style="display:none"></div>
   <div id="ae-mensal" style="display:none"></div>
   <div id="ae-dashboard" style="display:none"></div>
@@ -2315,16 +2318,225 @@ function excluirContrato(id){
 //  ASSISTÊNCIA ESTUDANTIL
 // ═══════════════════════════════════════════════════════════
 function setAeTab(t){
-  ['acoes','detalhe','mensal','dashboard'].forEach(x=>{
+  ['acoes','gerenciar','detalhe','mensal','dashboard'].forEach(x=>{
     const tab=document.getElementById('ae-tab-'+x);
     const pane=document.getElementById('ae-'+x);
     if(tab)tab.classList.toggle('active',x===t);
     if(pane)pane.style.display=x===t?'block':'none';
   });
   if(t==='acoes')renderAeAcoes();
+  else if(t==='gerenciar')renderAeGerenciar();
   else if(t==='detalhe')renderAeDetalhe();
   else if(t==='mensal')renderAeMensal();
   else renderAeDash();
+}
+
+// ── ABA GERENCIAR AÇÕES (formulário inline, sem modal compartilhado) ──
+let _aeEditId=null; // null = nova ação, string = id da ação em edição
+
+function renderAeGerenciar(){
+  const el=document.getElementById('ae-gerenciar');
+  if(!el)return;
+  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  const editando=_aeEditId?state.acoes.find(a=>a.id===_aeEditId):null;
+  const pm=Array.isArray(editando?.previstoMensalArr)?editando.previstoMensalArr:Array(12).fill(0);
+  const MESES_FORM=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const tiposAe=['Benefício','Monitoria','Eventos/Outros'];
+
+  el.innerHTML=`
+    <!-- FORMULÁRIO -->
+    <div class="card" style="border-color:${_aeEditId?'var(--amber-border)':'var(--green-border)'}">
+      <div class="card-title">
+        <span class="card-title-dot" style="background:${_aeEditId?'var(--amber)':'var(--green)'}"></span>
+        ${_aeEditId?'✎ Editando Ação — <span style="color:var(--amber)">'+(editando?editando.nome:'')+'</span>':'+ Nova Ação de Assistência Estudantil'}
+      </div>
+      <div class="form-grid cols2">
+        <div class="field">
+          <label>Nome da Ação<span class="required-mark">*</span></label>
+          <input id="gae-nome" value="${editando?editando.nome||'':''}" placeholder="Ex: Auxílio Moradia">
+        </div>
+        <div class="field">
+          <label>Tipo</label>
+          <select id="gae-tipo">
+            ${tiposAe.map(t=>`<option value="${t}"${editando&&editando.tipo===t?' selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="margin:12px 0 6px">
+        <div class="card-title" style="font-size:9.5px;letter-spacing:.08em;margin-bottom:8px">DISTRIBUIÇÃO MENSAL PREVISTA (R$)</div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px">
+          ${MESES_FORM.map((mes,i)=>`
+            <div class="field">
+              <label style="font-size:9px">${mes}</label>
+              <input type="number" id="gae-m${i}" value="${pm[i]||''}" min="0" step="0.01" placeholder="0,00" style="font-size:11px;padding:5px 6px" oninput="gaeAtualizarTotal()">
+            </div>`).join('')}
+        </div>
+        <div style="margin-top:6px;font-size:11.5px;color:var(--text3)">
+          Total previsto anual: <strong id="gae-total-prev" style="color:var(--green);font-family:'IBM Plex Mono',monospace">R$ 0,00</strong>
+        </div>
+      </div>
+      <div class="field" style="margin-top:6px">
+        <label>Descrição</label>
+        <textarea id="gae-descricao" rows="2" placeholder="Descrição opcional da ação">${editando?editando.descricao||'':''}</textarea>
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn ${_aeEditId?'btn-amber':'btn-primary'}" onclick="gae_salvar()">
+          ${_aeEditId?'✓ Salvar Alterações':'✓ Incluir Ação'}
+        </button>
+        ${_aeEditId?`<button class="btn btn-sec" onclick="gae_cancelarEdicao()">✕ Cancelar Edição</button>`:''}
+        <button class="btn btn-sec" onclick="gae_limpar()">↺ Limpar</button>
+      </div>
+    </div>
+
+    <!-- TABELA DE AÇÕES CADASTRADAS -->
+    <div class="tbl-wrap" style="border-color:var(--gold-border)">
+      <div class="tbl-head" style="background:var(--gold-bg)">
+        <div class="tbl-title" style="color:var(--gold)">🎓 Ações Cadastradas</div>
+        <div class="tbl-count">${acoes.length} ação(ões)</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nome da Ação</th>
+            <th>Tipo</th>
+            <th class="r">Previsto Anual</th>
+            <th class="r">Empenhado</th>
+            <th class="r">Pago</th>
+            <th>Status</th>
+            <th style="text-align:center;min-width:120px">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${acoes.length?acoes.map(a=>{
+            const emp=sum(getLancsAtivos('Empenho',null,a.id));
+            const pag=sum(getLancsAtivos('Pagamento',null,a.id));
+            const prev=a.previsto||0;
+            const pct=prev>0?Math.round(emp/prev*100):0;
+            const isEditing=_aeEditId===a.id;
+            return`<tr style="${isEditing?'background:rgba(255,171,64,0.06);border-left:2px solid var(--amber)':''}">
+              <td><code style="font-size:10px;color:var(--text3)">${a.id}</code></td>
+              <td><strong>${a.nome}</strong>${a.descricao?`<div style="font-size:10.5px;color:var(--text3);margin-top:1px">${a.descricao}</div>`:''}
+              </td>
+              <td><span class="kpi-badge badge-blue">${a.tipo||'—'}</span></td>
+              <td class="r text-green">${fmtBR(prev)}</td>
+              <td class="r text-blue">${fmtBR(emp)}</td>
+              <td class="r text-green">${fmtBR(pag)}</td>
+              <td>${prev>0?semaforo(pct):'<span class="kpi-badge badge-gold">S/ previsto</span>'}</td>
+              <td style="text-align:center;white-space:nowrap">
+                <button class="btn btn-amber btn-xs" onclick="gae_editar('${a.id}')" title="Editar ação" style="margin-right:4px">✎ Editar</button>
+                <button class="btn btn-red btn-xs" onclick="gae_excluir('${a.id}','${a.nome.replace(/'/g,"\\'")}')" title="Excluir ação">✕ Excluir</button>
+              </td>
+            </tr>`;
+          }).join(''):`<tr class="empty-row"><td colspan="8">Nenhuma ação cadastrada. Use o formulário acima para incluir.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- MODAL DE CONFIRMAÇÃO DE EXCLUSÃO (inline, independente) -->
+    <div id="gae-confirm-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center">
+      <div style="background:var(--bg2);border:1px solid var(--red-border);border-radius:14px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.7)">
+        <div style="font-size:28px;text-align:center;margin-bottom:12px">🗑</div>
+        <div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:6px">Excluir Ação?</div>
+        <div id="gae-confirm-msg" style="font-size:13px;color:var(--text3);text-align:center;margin-bottom:20px;line-height:1.5"></div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button class="btn btn-sec" onclick="gae_fecharConfirm()">Cancelar</button>
+          <button class="btn btn-red" id="gae-confirm-ok" onclick="gae_confirmarExclusao()">✕ Excluir</button>
+        </div>
+      </div>
+    </div>
+  `;
+  gaeAtualizarTotal();
+}
+
+let _gaePendingDeleteId=null;
+
+function gaeAtualizarTotal(){
+  const MESES_FORM=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  let total=0;
+  MESES_FORM.forEach((_,i)=>{
+    const el=document.getElementById('gae-m'+i);
+    if(el)total+=parseFloat(el.value)||0;
+  });
+  const el=document.getElementById('gae-total-prev');
+  if(el)el.textContent=fmtBR(total);
+}
+
+function gae_salvar(){
+  const nome=(document.getElementById('gae-nome')?.value||'').trim();
+  if(!nome){toast('Nome da ação é obrigatório','warn');return;}
+  const tipo=document.getElementById('gae-tipo')?.value||'Benefício';
+  const desc=(document.getElementById('gae-descricao')?.value||'').trim();
+  const pm=Array.from({length:12},(_,i)=>parseFloat(document.getElementById('gae-m'+i)?.value)||0);
+  const prevAnual=pm.reduce((s,v)=>s+v,0);
+  if(_aeEditId){
+    const idx=state.acoes.findIndex(a=>a.id===_aeEditId);
+    if(idx>=0){
+      state.acoes[idx]={...state.acoes[idx],nome,tipo,previsto:prevAnual,previstoMensalArr:pm,descricao:desc,tsModif:new Date().toISOString()};
+      auditLog('UPDATE','ACAO',_aeEditId,'Ação atualizada',state.acoes[idx]);
+      toast('Ação atualizada com sucesso!','success');
+    }
+    _aeEditId=null;
+  } else {
+    const ac={id:shortId('AE'),nome,tipo,previsto:prevAnual,previstoMensalArr:pm,descricao:desc,status:'Ativo',ts:new Date().toISOString(),tsModif:new Date().toISOString()};
+    state.acoes.push(ac);
+    auditLog('CREATE','ACAO',ac.id,'Ação criada: '+nome,ac);
+    toast('Ação incluída com sucesso!','success');
+  }
+  salvar();
+  renderAeGerenciar();
+  renderAeAcoes();
+}
+
+function gae_editar(id){
+  _aeEditId=id;
+  renderAeGerenciar();
+  // Rola até o formulário
+  const el=document.getElementById('ae-gerenciar');
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function gae_cancelarEdicao(){
+  _aeEditId=null;
+  renderAeGerenciar();
+}
+
+function gae_limpar(){
+  _aeEditId=null;
+  renderAeGerenciar();
+}
+
+function gae_excluir(id,nome){
+  _gaePendingDeleteId=id;
+  const msg=document.getElementById('gae-confirm-msg');
+  if(msg)msg.innerHTML=`A ação <strong style="color:var(--text)">${nome}</strong> será marcada como excluída.<br>Os lançamentos vinculados serão preservados.`;
+  const overlay=document.getElementById('gae-confirm-overlay');
+  if(overlay){overlay.style.display='flex';}
+}
+
+function gae_fecharConfirm(){
+  _gaePendingDeleteId=null;
+  const overlay=document.getElementById('gae-confirm-overlay');
+  if(overlay)overlay.style.display='none';
+}
+
+function gae_confirmarExclusao(){
+  if(!_gaePendingDeleteId)return;
+  const id=_gaePendingDeleteId;
+  _gaePendingDeleteId=null;
+  const overlay=document.getElementById('gae-confirm-overlay');
+  if(overlay)overlay.style.display='none';
+  const idx=state.acoes.findIndex(a=>a.id===id);
+  if(idx<0){toast('Ação não encontrada','warn');return;}
+  const nomeAcao=state.acoes[idx].nome;
+  state.acoes[idx].status='Excluído';
+  state.acoes[idx].tsModif=new Date().toISOString();
+  if(_aeEditId===id)_aeEditId=null;
+  auditLog('DELETE','ACAO',id,'Ação excluída: '+nomeAcao,state.acoes[idx]);
+  salvar();
+  renderAeGerenciar();
+  renderAeAcoes();
+  toast('Ação "'+nomeAcao+'" excluída','warn');
 }
 function renderAeAcoes(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
@@ -2468,17 +2680,14 @@ function openModalAcao(id){
 }
 function editarAcao(id){openModalAcao(id);}
 function excluirAcao(id){
-  openModal('Excluir ação?','A ação será marcada como excluída.',()=>{
-    const idx=state.acoes.findIndex(x=>x.id===id);
-    if(idx<0)return;
-    state.acoes[idx].status='Excluído';
-    state.acoes[idx].tsModif=new Date().toISOString();
-    auditLog('DELETE','ACAO',id,'Ação excluída: '+state.acoes[idx].nome,state.acoes[idx]);
-    salvar();
-    // Pequeno delay para garantir que o modal fechou antes de re-renderizar
-    setTimeout(()=>{ renderAeAcoes(); },50);
-    toast('Ação excluída','warn');
-  });
+  // Redireciona para a aba Gerenciar Ações onde a exclusão é feita de forma confiável
+  _gaePendingDeleteId=id;
+  setAeTab('gerenciar');
+  // Aguarda o DOM ser renderizado antes de abrir o confirm
+  setTimeout(()=>{
+    const ac=state.acoes.find(a=>a.id===id);
+    if(ac)gae_excluir(id,ac.nome);
+  },80);
 }
 
 // ═══════════════════════════════════════════════════════════
