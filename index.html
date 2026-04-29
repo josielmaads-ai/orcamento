@@ -1346,10 +1346,21 @@ function openModal(title,sub,cb){
   document.getElementById('modal-sub').textContent=sub;
   document.getElementById('modal-form-area').innerHTML='';
   _modalCb=cb;
+  const btn=document.getElementById('modal-confirm-btn');
+  btn.onclick=()=>{
+    if(_modalCb){
+      const fn=_modalCb;
+      _modalCb=null;
+      fn();
+      // Fechar apenas se o modal ainda estiver visível (callback pode ter feito algo)
+      if(document.getElementById('modal-bg').classList.contains('show')){
+        closeModal();
+      }
+    }
+  };
   document.getElementById('modal-bg').classList.add('show');
 }
 function closeModal(){document.getElementById('modal-bg').classList.remove('show');_modalCb=null;document.getElementById('modal-form-area').innerHTML='';}
-document.getElementById('modal-confirm-btn').onclick=()=>{if(_modalCb){_modalCb();closeModal();}}
 document.getElementById('modal-bg').onclick=e=>{if(e.target===document.getElementById('modal-bg'))closeModal();}
 
 // ═══════════════════════════════════════════════════════════
@@ -2317,7 +2328,7 @@ function openModalAcao(id){
   });
   document.getElementById('modal-inner').className='modal modal-lg';
   const pm=Array.isArray(a?.previstoMensalArr)?a.previstoMensalArr:(a?.previstoMensal?Array(12).fill(+(a.previstoMensal/12).toFixed(2)):Array(12).fill(0));
-  document.getElementById('modal-form-area').innerHTML=`<div class="modal-form">
+  document.getElementById('modal-form-area').innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div class="field"><label>Nome da Ação<span class="required-mark">*</span></label><input id="ma-nome" value="${a?a.nome||'':''}" placeholder="Ex: Auxílio Moradia"></div>
       <div class="field"><label>Tipo</label><select id="ma-tipo">
@@ -2333,7 +2344,7 @@ function openModalAcao(id){
         </div>`).join('')}
     </div>
     <div class="field" style="margin-top:8px"><label>Descrição</label><textarea id="ma-descricao" rows="2">${a?a.descricao||'':''}</textarea></div>
-  </div>`;
+  `;
 }
 function editarAcao(id){openModalAcao(id);}
 function excluirAcao(id){
