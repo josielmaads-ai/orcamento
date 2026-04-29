@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SYS/ORÇAMENTO — v10.0 PRO · IFPI Campus SJP</title>
+<title>FinSight — v10.0 PRO · IFPI Campus SJP</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23111118'/><path d='M8 22 L13 14 L18 18 L23 10' stroke='%23f5c842' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='23' cy='10' r='2.5' fill='%2300e676'/></svg>" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════ TOKENS ═══════════════════════ */
@@ -332,6 +333,14 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 /* ═══ FOOTER ═══ */
 .page-footer{text-align:center;font-size:11px;color:var(--text4);padding:16px 0 8px;border-top:1px solid var(--border);margin-top:16px;letter-spacing:.03em}
 
+/* ═══ PAGINATION ═══ */
+.pagination{display:flex;align-items:center;justify-content:center;gap:4px;padding:12px 16px;border-top:1px solid var(--border)}
+.pg-btn{min-width:30px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--radius);font-size:11.5px;font-family:'IBM Plex Mono',monospace;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:var(--bg4);color:var(--text3);transition:all .12s;padding:0 8px}
+.pg-btn:hover{border-color:var(--gold);color:var(--gold)}
+.pg-btn.active{background:var(--gold-bg);border-color:var(--gold-border);color:var(--gold)}
+.pg-btn:disabled{opacity:.3;cursor:default;pointer-events:none}
+.pg-info{font-size:10.5px;color:var(--text3);margin:0 8px;white-space:nowrap}
+
 /* ═══ RESPONSIVE ═══ */
 @media(max-width:768px){
   .app{grid-template-columns:1fr;grid-template-rows:52px auto 1fr}
@@ -350,9 +359,15 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 
 <!-- ═══════════ TOPBAR ═══════════ -->
 <header class="topbar">
-  <div class="logo">
-    SYS<span class="logo-slash">/</span>ORÇAMENTO
-    <span class="logo-badge">v9.0 PRO</span>
+  <div class="logo" style="gap:6px;align-items:center">
+    <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+      <rect width="32" height="32" rx="6" fill="#111118"/>
+      <path d="M7 23 L12 14 L17 18 L24 9" stroke="#f5c842" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="24" cy="9" r="2.5" fill="#00e676"/>
+      <path d="M7 26 L25 26" stroke="#1a1a28" stroke-width="1.5"/>
+    </svg>
+    <span>Fin<span style="color:var(--green)">Sight</span></span>
+    <span class="logo-badge">v10.0 PRO</span>
   </div>
   <div class="topbar-center">
     <div class="topbar-inst">
@@ -419,7 +434,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div id="sidebar-saldo"><div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">Sem dados</div></div>
   </div>
   <div class="sidebar-footer">
-    <div class="sf-text">IFPI Campus São João do Piauí · v9.0 PRO<br>localStorage · Soft-delete · Auditoria</div>
+    <div class="sf-text">IFPI Campus São João do Piauí · FinSight v10.0 PRO<br>localStorage · Soft-delete · Auditoria</div>
   </div>
 </aside>
 
@@ -1116,6 +1131,38 @@ function downloadFile(content,filename,mime){
 }
 
 // ═══════════════════════════════════════════════════════════
+//  PAGINAÇÃO GLOBAL
+// ═══════════════════════════════════════════════════════════
+const PAGE_SIZE=20;
+const _pages={};// estado de página por módulo
+function getPagina(modulo){return _pages[modulo]||0;}
+function setPagina(modulo,pg){_pages[modulo]=pg;}
+function paginar(arr,modulo){
+  const pg=getPagina(modulo);
+  const total=arr.length;
+  const totalPgs=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  const pg2=Math.min(pg,totalPgs-1);
+  if(pg2!==pg)setPagina(modulo,pg2);
+  const slice=arr.slice(pg2*PAGE_SIZE,(pg2+1)*PAGE_SIZE);
+  return{slice,pg:pg2,totalPgs,total};
+}
+function renderPagination(modulo,totalPgs,pg,total,fnRender){
+  if(totalPgs<=1&&total<=PAGE_SIZE)return'';
+  const btns=[];
+  const start=Math.max(0,pg-2);
+  const end=Math.min(totalPgs-1,pg+2);
+  if(start>0)btns.push(`<button class="pg-btn" onclick="setPagina('${modulo}',0);${fnRender}">1</button>${start>1?'<span class="pg-info">…</span>':''}`);
+  for(let i=start;i<=end;i++){
+    btns.push(`<button class="pg-btn${i===pg?' active':''}" onclick="setPagina('${modulo}',${i});${fnRender}">${i+1}</button>`);
+  }
+  if(end<totalPgs-1)btns.push(`${end<totalPgs-2?'<span class="pg-info">…</span>':''}<button class="pg-btn" onclick="setPagina('${modulo}',${totalPgs-1});${fnRender}">${totalPgs}</button>`);
+  const prev=pg>0?`<button class="pg-btn" onclick="setPagina('${modulo}',${pg-1});${fnRender}">‹</button>`:`<button class="pg-btn" disabled>‹</button>`;
+  const next=pg<totalPgs-1?`<button class="pg-btn" onclick="setPagina('${modulo}',${pg+1});${fnRender}">›</button>`:`<button class="pg-btn" disabled>›</button>`;
+  const showing=`${pg*PAGE_SIZE+1}–${Math.min((pg+1)*PAGE_SIZE,total)} de ${total}`;
+  return`<div class="pagination">${prev}${btns.join('')}${next}<span class="pg-info">${showing}</span></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
 //  PERSISTÊNCIA
 // ═══════════════════════════════════════════════════════════
 function salvar(){
@@ -1153,7 +1200,14 @@ function carregar(){
         categoria: c.categoria ? normalizarCategoria(c.categoria) : c.categoria
       })):[];
       
-      state.acoes=Array.isArray(d.acoes)?d.acoes.map(a=>({...a})):[];
+      state.acoes=Array.isArray(d.acoes)?d.acoes.map(a=>{
+        // Migração: se não tem previstoMensalArr, cria a partir de previstoMensal ou previsto
+        if(!Array.isArray(a.previstoMensalArr)){
+          const pm=a.previstoMensal||((a.previsto||0)/12);
+          a.previstoMensalArr=Array(12).fill(+pm.toFixed(2));
+        }
+        return {...a};
+      }):[];
       state.auditLog=Array.isArray(d.auditLog)?[...d.auditLog]:[];
       state.fornecedores=Array.isArray(d.fornecedores)?d.fornecedores.map(f=>({...f})):[];
       
@@ -1346,21 +1400,10 @@ function openModal(title,sub,cb){
   document.getElementById('modal-sub').textContent=sub;
   document.getElementById('modal-form-area').innerHTML='';
   _modalCb=cb;
-  const btn=document.getElementById('modal-confirm-btn');
-  btn.onclick=()=>{
-    if(_modalCb){
-      const fn=_modalCb;
-      _modalCb=null;
-      fn();
-      // Fechar apenas se o modal ainda estiver visível (callback pode ter feito algo)
-      if(document.getElementById('modal-bg').classList.contains('show')){
-        closeModal();
-      }
-    }
-  };
   document.getElementById('modal-bg').classList.add('show');
 }
 function closeModal(){document.getElementById('modal-bg').classList.remove('show');_modalCb=null;document.getElementById('modal-form-area').innerHTML='';}
+document.getElementById('modal-confirm-btn').onclick=()=>{if(_modalCb){const r=_modalCb();if(r!==false)closeModal();}}
 document.getElementById('modal-bg').onclick=e=>{if(e.target===document.getElementById('modal-bg'))closeModal();}
 
 // ═══════════════════════════════════════════════════════════
@@ -1430,6 +1473,16 @@ function renderDashboard(){
       <div class="kpi-label">Contratos / Ações AE <span class="kpi-badge badge-purple">Entidades</span></div>
       <div class="kpi-value" style="color:var(--purple)">${nContratos} / ${nAcoes}</div>
       <div class="kpi-sub">${nLancs} lançamentos ativos</div>
+    </div>
+    <div class="kpi accent-teal" style="border-color:rgba(0,207,255,.4);background:rgba(0,207,255,.06)">
+      <div class="kpi-label">Taxa de Execução Orçamentária <span class="kpi-badge" style="background:rgba(0,207,255,.15);color:var(--cyan)">EXEC %</span></div>
+      <div class="kpi-value" style="color:var(--cyan)">${totCred>0?clamp(Math.round(totEmp/totCred*100),0,100):0}%</div>
+      <div class="kpi-sub">(Empenhado ÷ Crédito) × 100 — ${totCred>0?clamp(Math.round(totEmp/totCred*100),0,100)<50?'⚠ Execução baixa':clamp(Math.round(totEmp/totCred*100),0,100)<80?'Execução regular':'✓ Boa execução':'Sem créditos'}</div>
+    </div>
+    <div class="kpi ${(totCred>0&&totEmp/totCred>=0.9)?'accent-red':totCred>0&&totEmp/totCred>=0.7?'accent-amber':'accent-green'}">
+      <div class="kpi-label">Índice de Comprometimento <span class="kpi-badge ${(totCred>0&&totEmp/totCred>=0.9)?'badge-danger':totCred>0&&totEmp/totCred>=0.7?'badge-warn':'badge-ok'}">${(totCred>0&&totEmp/totCred>=0.9)?'⚠ ALTO':totCred>0&&totEmp/totCred>=0.7?'MÉDIO':'OK'}</span></div>
+      <div class="kpi-value ${(totCred>0&&totEmp/totCred>=0.9)?'text-red':totCred>0&&totEmp/totCred>=0.7?'text-amber':'text-green'}">${totCred>0?clamp(Math.round(totEmp/totCred*100),0,999):0}%</div>
+      <div class="kpi-sub">(Despesas Empenhadas ÷ Crédito) × 100 — Saldo livre: ${fmtBR(saldoDisp)}</div>
     </div>
   `;
 
@@ -1600,11 +1653,14 @@ function limparFormCredito(){
   const d=document.getElementById('c-data');if(d)d.value=new Date().toISOString().slice(0,10);
 }
 function renderEntradas(){
-  const l=state.lancamentos.filter(l=>l.tipo==='Entrada'&&l.status==='Ativo').slice().reverse();
-  document.getElementById('credito-count').textContent=l.length+' registros';
-  document.getElementById('credito-table').innerHTML=l.length?l.map(l=>`
+  const all=state.lancamentos.filter(l=>l.tipo==='Entrada'&&l.status==='Ativo').slice().reverse();
+  const {slice,pg,totalPgs,total}=paginar(all,'entradas');
+  document.getElementById('credito-count').textContent=total+' registros';
+  document.getElementById('credito-table').innerHTML=slice.length?slice.map(l=>`
     <tr><td><code style="font-size:10px">${l.id}</code></td><td>${fmtData(l.data)}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td>${l.descricao}</td><td style="font-size:11px;color:var(--text3)">${(l.fonte||'').split('–')[0].trim()}</td><td style="font-size:11px;color:var(--text3)">${l.ptres||'—'}</td><td class="r text-green fw6">${fmtBR(l.valor)}</td><td style="white-space:nowrap"><button class="btn btn-sec btn-xs" onclick="editarCredito('${l.id}')">✎</button> <button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>
   `).join(''):'<tr class="empty-row"><td colspan="8">Nenhum crédito registrado</td></tr>';
+  const wrap=document.querySelector('#credito-table')?.closest('.tbl-wrap');
+  if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();wrap.insertAdjacentHTML('beforeend',renderPagination('entradas',totalPgs,pg,total,"renderEntradas()"));}
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2238,19 +2294,17 @@ function renderAeAcoes(){
 }
 function renderAeMensal(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
-  // Determinar o ano com mais lançamentos de AE para exibição
-  const acoesIds=new Set(acoes.map(a=>a.id));
-  const lancsAE=state.lancamentos.filter(l=>l.status==='Ativo'&&acoesIds.has(l.referenciaId)&&l.data);
-  const anoContagens={};
-  lancsAE.forEach(l=>{const y=l.data.slice(0,4);anoContagens[y]=(anoContagens[y]||0)+1;});
-  const anos=Object.keys(anoContagens).sort((a,b)=>anoContagens[b]-anoContagens[a]);
-  const anoRef=anos.length?parseInt(anos[0]):new Date().getFullYear();
+  const anoAtual=new Date().getFullYear();
+  // Resumo mensal consolidado (todas as ações)
   const dadosMensais=MESES.map((_,mi)=>{
-    const filtMes=l=>l.status==='Ativo'&&(()=>{const d=new Date((l.data||'')+'T12:00:00');return d.getFullYear()===anoRef&&d.getMonth()===mi;})();
-    const prev=acoes.reduce((s,a)=>{const pm=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:(a.previstoMensal?Array(12).fill(+(a.previstoMensal/12).toFixed(2)):Array(12).fill(0));return s+(pm[mi]||0);},0);
-    const emp=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Empenho'&&acoesIds.has(l.referenciaId)));
-    const liq=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Liquidação'&&acoesIds.has(l.referenciaId)));
-    const pag=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Pagamento'&&acoesIds.has(l.referenciaId)));
+    const filtMes=l=>l.status==='Ativo'&&(()=>{const d=new Date((l.data||'')+'T12:00:00');return d.getFullYear()===anoAtual&&d.getMonth()===mi;})();
+    const prev=acoes.reduce((s,a)=>{
+      const arr=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
+      return s+(arr[mi]||0);
+    },0);
+    const emp=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Empenho'&&(state.acoes.some(a=>a.id===l.referenciaId))));
+    const liq=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Liquidação'&&(state.acoes.some(a=>a.id===l.referenciaId))));
+    const pag=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Pagamento'&&(state.acoes.some(a=>a.id===l.referenciaId))));
     return{prev,emp,liq,pag};
   });
   const totPrev=dadosMensais.reduce((s,d)=>s+d.prev,0);
@@ -2276,7 +2330,7 @@ function renderAeMensal(){
     return`<tr><td>${a.nome}</td><td class="r text-green">${fmtBR(prev2)}</td><td class="r text-blue">${fmtBR(emp2)}</td><td class="r" style="color:var(--amber)">${fmtBR(liq2)}</td><td class="r text-green">${fmtBR(pag2)}</td><td class="r">${prev2>0?semaforo(pEmp):'—'}</td><td class="r">${emp2>0?semaforo(pPag):'—'}</td></tr>`;
   });
   document.getElementById('ae-mensal').innerHTML=`
-    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo Mensal Consolidado — ${anoRef}</div></div>
+    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo Mensal Consolidado — ${anoAtual}</div></div>
     <div class="scroll-h"><table class="month-table"><thead><tr><th>Fase</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead><tbody>${mensalHtml}</tbody></table></div></div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo por Ação</div></div>
     <table><thead><tr><th>Ação</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Liquidado</th><th class="r">Pago</th><th class="r">% Emp.</th><th class="r">% Pago</th></tr></thead>
@@ -2315,24 +2369,27 @@ function openModalAcao(id){
       const el=document.getElementById('ma-m'+i);return el?parseFloat(el.value)||0:0;
     });
     const prevAnual=pm12.reduce((s,v)=>s+v,0);
+    const nomeVal=get('nome');
+    if(!nomeVal){toast('Nome obrigatório','warn');return false;}
     const ac={
-      id:a?a.id:shortId('AE'),nome:get('nome'),tipo:get('tipo'),
+      id:a?a.id:shortId('AE'),nome:nomeVal,tipo:get('tipo'),
       previsto:prevAnual,previstoMensalArr:pm12,
       descricao:get('descricao'),status:'Ativo',
       ts:a?a.ts:new Date().toISOString(),tsModif:new Date().toISOString()
     };
-    if(!ac.nome){toast('Nome obrigatório','warn');return;}
-    if(a){const idx=state.acoes.findIndex(x=>x.id===id);state.acoes[idx]=ac;auditLog('UPDATE','ACAO',ac.id,'Ação atualizada',ac);}
+    if(a){const idx=state.acoes.findIndex(x=>x.id===id);if(idx>=0)state.acoes[idx]=ac;auditLog('UPDATE','ACAO',ac.id,'Ação atualizada',ac);}
     else{state.acoes.push(ac);auditLog('CREATE','ACAO',ac.id,'Ação criada: '+ac.nome,ac);}
-    salvar();setAeTab('acoes');toast((a?'Ação atualizada':'Ação criada')+'!','success');
+    salvar();
+    renderAeAcoes();
+    toast((a?'Ação atualizada':'Ação criada')+'!','success');
   });
   document.getElementById('modal-inner').className='modal modal-lg';
-  const pm=Array.isArray(a?.previstoMensalArr)?a.previstoMensalArr:(a?.previstoMensal?Array(12).fill(+(a.previstoMensal/12).toFixed(2)):Array(12).fill(0));
-  document.getElementById('modal-form-area').innerHTML=`
+  const pm=Array.isArray(a?.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
+  document.getElementById('modal-form-area').innerHTML=`<div class="modal-form">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div class="field"><label>Nome da Ação<span class="required-mark">*</span></label><input id="ma-nome" value="${a?a.nome||'':''}" placeholder="Ex: Auxílio Moradia"></div>
       <div class="field"><label>Tipo</label><select id="ma-tipo">
-        ${['Bolsa de Estudo','Auxílio Financeiro','Assistência Social','Benefício','Monitoria','Eventos/Outros'].map(t=>`<option ${a&&a.tipo===t?'selected':''}>${t}</option>`).join('')}
+        ${['Benefício','Monitoria','Eventos/Outros'].map(t=>`<option ${a&&a.tipo===t?'selected':''}>${t}</option>`).join('')}
       </select></div>
     </div>
     <div class="card-title" style="margin:12px 0 8px;font-size:9.5px;letter-spacing:.08em">DISTRIBUIÇÃO MENSAL PREVISTA (R$)</div>
@@ -2344,17 +2401,18 @@ function openModalAcao(id){
         </div>`).join('')}
     </div>
     <div class="field" style="margin-top:8px"><label>Descrição</label><textarea id="ma-descricao" rows="2">${a?a.descricao||'':''}</textarea></div>
-  `;
+  </div>`;
 }
 function editarAcao(id){openModalAcao(id);}
 function excluirAcao(id){
   openModal('Excluir ação?','A ação será marcada como excluída.',()=>{
-    const a=state.acoes.find(x=>x.id===id);if(!a)return;
-    a.status='Excluído';a.tsModif=new Date().toISOString();
+    const a=state.acoes.find(x=>x.id===id);
+    if(!a)return;
+    a.status='Excluído';
+    a.tsModif=new Date().toISOString();
     auditLog('DELETE','ACAO',id,'Ação excluída',a);
     salvar();
-    setAeTab('acoes');
-    renderDashboard();
+    renderAeAcoes();
     toast('Ação excluída','warn');
   });
 }
@@ -2380,18 +2438,19 @@ function renderHistorico(){
   const ate=document.getElementById('f-ate').value;
   const fonte=document.getElementById('f-fonte').value;
   const ptres=document.getElementById('f-ptres').value;
-  let l=[...state.lancamentos];
-  if(tipo)l=l.filter(x=>x.tipo===tipo);
-  if(cat)l=l.filter(x=>x.categoria===cat);
-  if(status)l=l.filter(x=>x.status===status);
-  if(de)l=l.filter(x=>x.data>=de);
-  if(ate)l=l.filter(x=>x.data<=ate);
-  if(fonte)l=l.filter(x=>x.fonte===fonte);
-  if(ptres)l=l.filter(x=>x.ptres===ptres);
-  if(busca)l=l.filter(x=>(x.id+x.descricao+x.categoria+x.subcategoria+(x.ptres||'')).toLowerCase().includes(busca));
-  l=l.slice().reverse();
-  document.getElementById('hist-count').textContent=l.length+' registros';
-  document.getElementById('hist-body').innerHTML=l.length?l.map(x=>`
+  let all=[...state.lancamentos];
+  if(tipo)all=all.filter(x=>x.tipo===tipo);
+  if(cat)all=all.filter(x=>x.categoria===cat);
+  if(status)all=all.filter(x=>x.status===status);
+  if(de)all=all.filter(x=>x.data>=de);
+  if(ate)all=all.filter(x=>x.data<=ate);
+  if(fonte)all=all.filter(x=>x.fonte===fonte);
+  if(ptres)all=all.filter(x=>x.ptres===ptres);
+  if(busca)all=all.filter(x=>(x.id+x.descricao+x.categoria+x.subcategoria+(x.ptres||'')).toLowerCase().includes(busca));
+  all=all.slice().reverse();
+  const {slice,pg,totalPgs,total}=paginar(all,'historico');
+  document.getElementById('hist-count').textContent=total+' registros';
+  document.getElementById('hist-body').innerHTML=slice.length?slice.map(x=>`
     <tr style="${x.status==='Excluído'?'opacity:.45;text-decoration:line-through':''}">
       <td><code style="font-size:10px">${x.id}</code></td>
       <td>${fmtData(x.data)}</td>
@@ -2406,6 +2465,8 @@ function renderHistorico(){
       <td>${x.status==='Excluído'?`<button class="btn btn-green btn-xs" onclick="restaurarLancamento('${x.id}')">↩</button>`:`<button class="btn btn-red btn-xs" onclick="excluirLancamento('${x.id}')">✕</button>`}</td>
     </tr>
   `).join(''):'<tr class="empty-row"><td colspan="11">Nenhum resultado</td></tr>';
+  const wrap=document.getElementById('hist-body')?.closest('.tbl-wrap');
+  if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();wrap.insertAdjacentHTML('beforeend',renderPagination('historico',totalPgs,pg,total,"renderHistorico()"));}
 }
 function restaurarLancamento(id){
   const l=state.lancamentos.find(x=>x.id===id);if(!l)return;
@@ -2637,9 +2698,9 @@ function seedDataDez2025(){
   ]);
   // Ações de Assistência Estudantil
   state.acoes.push(...[
-    {id:'AE001',nome:'Bolsas de Estudo no País',tipo:'Bolsa de Estudo',previsto:286012.13,previstoMensal:23834.34,descricao:'Bolsas de estudo para estudantes do campus (33901801)',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
-    {id:'AE002',nome:'Outros Auxílios Financeiros a Estudantes',tipo:'Auxílio Financeiro',previsto:2340.00,previstoMensal:195.00,descricao:'Auxílios financeiros a estudantes (33901899)',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
-    {id:'AE003',nome:'Assistência Social – Material',tipo:'Assistência Social',previsto:46227.72,previstoMensal:3852.31,descricao:'Material destinado à assistência social (33903203)',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
+    {id:'AE001',nome:'Bolsas de Estudo no País',tipo:'Bolsa de Estudo',previsto:286012.13,previstoMensal:23834.34,previstoMensalArr:Array(12).fill(+(286012.13/12).toFixed(2)),descricao:'Bolsas de estudo para estudantes do campus (33901801)',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
+    {id:'AE002',nome:'Outros Auxílios Financeiros a Estudantes',tipo:'Auxílio Financeiro',previsto:2340.00,previstoMensal:195.00,previstoMensalArr:Array(12).fill(195.00),descricao:'Auxílios financeiros a estudantes (33901899)',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
+    {id:'AE003',nome:'Assistência Social – Material',tipo:'Assistência Social',previsto:46227.72,previstoMensal:3852.31,previstoMensalArr:Array(12).fill(+(46227.72/12).toFixed(2)),descricao:'Material destinado à assistência social (33903203)',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
   ]);
   // Vincular empenhos às ações
   ['S015','L002','P002'].forEach(id=>{const l=state.lancamentos.find(x=>x.id===id);if(l)l.referenciaId='AE001';});
@@ -2682,7 +2743,9 @@ function renderAeDetalhe(){
     return;
   }
   const selId='ae-detalhe-sel';
-  const curSel=el.querySelector('#'+selId)?.value||acoes[0].id;
+  // Captura o valor atual ANTES de reescrever o DOM
+  const prevSel=el.querySelector('#'+selId);
+  const curSel=(prevSel&&prevSel.value&&acoes.some(a=>a.id===prevSel.value))?prevSel.value:acoes[0].id;
   el.innerHTML=`
     <div class="card">
       <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Selecionar Ação</div>
@@ -2694,7 +2757,7 @@ function renderAeDetalhe(){
     </div>`;
   const a=acoes.find(x=>x.id===curSel)||acoes[0];
   if(!a)return;
-  const pm=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:(a.previstoMensal?Array(12).fill(+(a.previstoMensal/12).toFixed(2)):Array(12).fill(0));
+  const pm=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
   const totPrev=pm.reduce((s,v)=>s+v,0)||a.previsto||0;
   const emp=sum(getLancsAtivos('Empenho',null,a.id));
   const liq=sum(getLancsAtivos('Liquidação',null,a.id));
@@ -2714,12 +2777,8 @@ function renderAeDetalhe(){
       <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Valores Mensais Previstos vs Executados</div>
       <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
         ${pm.map((v,i)=>{
-          // Usar o ano com mais lançamentos desta ação, não necessariamente o ano atual
-          const lancsAcao=state.lancamentos.filter(l=>l.status==='Ativo'&&l.referenciaId===a.id&&l.data);
-          const anoContag={};lancsAcao.forEach(l=>{const y=l.data.slice(0,4);anoContag[y]=(anoContag[y]||0)+1;});
-          const anosOrd=Object.keys(anoContag).sort((x,y)=>anoContag[y]-anoContag[x]);
-          const anoRef=anosOrd.length?parseInt(anosOrd[0]):new Date().getFullYear();
-          const prefix=anoRef+'-'+String(i+1).padStart(2,'0');
+          const anoAtual=new Date().getFullYear();
+          const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
           const lancsM=state.lancamentos.filter(l=>l.status==='Ativo'&&l.referenciaId===a.id&&l.data&&l.data.startsWith(prefix));
           const empM=sum(lancsM.filter(l=>l.tipo==='Empenho'));
           const liqM=sum(lancsM.filter(l=>l.tipo==='Liquidação'||l.tipo==='Pagamento'));
@@ -3028,14 +3087,16 @@ function renderFornecedores(){
   const filtCat=document.getElementById('forn-filtro-cat')?.value||'';
   const filtTipo=document.getElementById('forn-filtro-tipo')?.value||'';
   const filtSimp=document.getElementById('forn-filtro-simples')?.value||'';
-  let lista=state.fornecedores.filter(f=>f.status!=='Excluído');
-  if(busca)lista=lista.filter(f=>(f.documento+f.nome).toLowerCase().includes(busca));
-  if(filtCat)lista=lista.filter(f=>(f.categorias||[]).includes(filtCat));
-  if(filtTipo)lista=lista.filter(f=>f.tipoDoc===filtTipo);
-  if(filtSimp)lista=lista.filter(f=>f.simplesNacional===filtSimp);
-  const el=document.getElementById('forn-count');if(el)el.textContent=lista.length+' fornecedor(es)';
+  let all=state.fornecedores.filter(f=>f.status!=='Excluído');
+  if(busca)all=all.filter(f=>(f.documento+f.nome).toLowerCase().includes(busca));
+  if(filtCat)all=all.filter(f=>(f.categorias||[]).includes(filtCat));
+  if(filtTipo)all=all.filter(f=>f.tipoDoc===filtTipo);
+  if(filtSimp)all=all.filter(f=>f.simplesNacional===filtSimp);
+  all=all.slice().reverse();
+  const {slice,pg,totalPgs,total}=paginar(all,'fornecedores');
+  const el=document.getElementById('forn-count');if(el)el.textContent=total+' fornecedor(es)';
   const tbody=document.getElementById('forn-tbody');if(!tbody)return;
-  tbody.innerHTML=lista.length?lista.slice().reverse().map(f=>`
+  tbody.innerHTML=slice.length?slice.map(f=>`
     <tr>
       <td><code style="font-size:11px;font-family:'IBM Plex Mono',monospace">${f.documento||'—'}</code></td>
       <td><strong style="font-size:12px">${f.nome||'—'}</strong></td>
@@ -3049,6 +3110,8 @@ function renderFornecedores(){
         <button class="btn btn-red btn-xs" onclick="excluirFornecedor('${f.id}')">✕</button>
       </td>
     </tr>`).join(''):'<tr class="empty-row"><td colspan="8">Nenhum fornecedor cadastrado.</td></tr>';
+  const wrap=tbody.closest('.tbl-wrap');
+  if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();wrap.insertAdjacentHTML('beforeend',renderPagination('fornecedores',totalPgs,pg,total,"renderFornecedores()"));}
 }
 function abrirModalFornecedor(id){
   const f=id?state.fornecedores.find(x=>x.id===id):null;
@@ -3690,7 +3753,7 @@ function liqCalcContratos(){
   const iss=Math.round(nf*5)/100;
   const total=tribFed+inss+iss+cv;
   const liquido=nf-total;
-  const aPagar=nf-inss-iss-cv;
+  const aPagar=Math.round((nf-inss-tribFed)*100)/100;
   const el=document.getElementById('liq-calc-preview');
   if(!el)return;
   el.innerHTML=`
@@ -4018,10 +4081,11 @@ function registrarLiquidacao(grupo){
 
 function renderLiquidacoes(){
   if(!state.liquidacoes)state.liquidacoes=[];
-  const lista=state.liquidacoes.filter(l=>l.status!=='Excluído');
-  const el=document.getElementById('liq-count');if(el)el.textContent=lista.length+' liquidação(ões)';
+  const all=state.liquidacoes.filter(l=>l.status!=='Excluído').slice().reverse();
+  const {slice,pg,totalPgs,total}=paginar(all,'liquidacoes');
+  const el=document.getElementById('liq-count');if(el)el.textContent=total+' liquidação(ões)';
   const tbody=document.getElementById('liq-tbody');if(!tbody)return;
-  tbody.innerHTML=lista.length?lista.slice().reverse().map(l=>`
+  tbody.innerHTML=slice.length?slice.map(l=>`
     <tr>
       <td>${fmtData(l.data)}</td>
       <td>${catIcon(l.categoria)} <span style="font-size:11px">${l.categoria}</span></td>
@@ -4044,6 +4108,8 @@ function renderLiquidacoes(){
         <button class="btn btn-red btn-xs" onclick="excluirLiquidacao('${l.id}')" title="Excluir">✕</button>
       </td>
     </tr>`).join(''):'<tr class="empty-row"><td colspan="10">Nenhuma liquidação registrada.</td></tr>';
+  const wrap=tbody.closest('.tbl-wrap');
+  if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();wrap.insertAdjacentHTML('beforeend',renderPagination('liquidacoes',totalPgs,pg,total,"renderLiquidacoes()"));}
 }
 
 function togglePagoLiquidacao(id,valor){
@@ -4319,53 +4385,87 @@ function abrirDetalheLiquidacao(id){
     const descObsAbrev=descObs.length>120?descObs.slice(0,117)+'...':descObs;
     const nContrato=ct?ct.nContrato||'':'';
 
-    // Seção 2 — Valores (Erro 002)
+    // Seção 1 — Dados da Liquidação (ADICIONADO - spec obrigatório)
+    sec1=`<div style="background:linear-gradient(135deg,rgba(68,138,255,.12),rgba(68,138,255,.04));border:2px solid var(--blue-border);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:800;color:var(--blue);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--blue-border)">📋 SEÇÃO 1 — DADOS DA LIQUIDAÇÃO</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${[
+          ['CNPJ',l.cnpj||'—'],
+          ['Empresa / Fornecedor',l.fornNome||forn?.nome||'—'],
+          ['Número da NF',l.nf||'—'],
+          ['Data de Emissão',dataEmissaoBR],
+          ['Mês de Referência',l.mesRef||'—'],
+          ['NP/DH',l.npDh||'—'],
+          ['Mês de Pagamento',l.mesPag||'—'],
+          ['Número do Empenho',l.nEmpenho||'—'],
+        ].map(([label,valor])=>`<div style="background:rgba(68,138,255,.06);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">${label}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace">${valor}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+
+    // Seção 2 — Valores
     const tribFed=l.tribFed||0;
     const inss=l.inss||0;
     const iss=l.iss||0;
     const cv=l.contaVinculada||0;
     const totalRet=l.totalRetencoes||0;
     const aPagar=l.aPagar||Math.round((l.valorBruto-inss-tribFed)*100)/100;
-    sec2=secCard('Seção 2 — Valores',
-      sec2Row('Valor Total NF',fmtBR(l.valorBruto))+
-      sec2Row('Base de Cálculo INSS',fmtBR(l.bcInss||0))+
-      (!isSimples?sec2Row('Tributos Federais (9,45%)',fmtBR(tribFed),'var(--red)'):'')+
-      sec2Row('INSS (11% s/ BC)',fmtBR(inss),'var(--red)')+
-      sec2Row('ISS (5%)',fmtBR(iss),'var(--red)')+
-      sec2Row('Conta Vinculada',fmtBR(cv),'var(--red)')+
-      sec2Row('Total de Retenções',fmtBR(totalRet),'var(--red)')+
-      sec2Row('Valor Líquido',fmtBR(l.valorLiquido),'var(--green)')+
-      sec2Row('Valor a Pagar Campus',fmtBR(aPagar),'var(--blue)')
-    );
+    sec2=`<div style="background:linear-gradient(135deg,rgba(255,171,64,.12),rgba(255,171,64,.04));border:2px solid var(--amber-border);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:800;color:var(--amber);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--amber-border)">💰 SEÇÃO 2 — VALORES</div>
+      ${[
+        ['Valor Total NF',fmtBR(l.valorBruto),'var(--text)'],
+        ['Base de Cálculo INSS',fmtBR(l.bcInss||0),'var(--text)'],
+        ...(!isSimples?[['Tributos Federais (9,45%)',fmtBR(tribFed),'var(--red)']]:[[null,null,null]]),
+        ['INSS (11% s/ BC)',fmtBR(inss),'var(--red)'],
+        ['ISS (5%)',fmtBR(iss),'var(--red)'],
+        ['Conta Vinculada',fmtBR(cv),'var(--red)'],
+        ['Total de Retenções',fmtBR(totalRet),'var(--red)'],
+        ['Valor Líquido',fmtBR(l.valorLiquido),'var(--green)'],
+        ['Valor a Pagar Campus',fmtBR(aPagar),'var(--blue)'],
+      ].filter(([l])=>l).map(([label,valor,cor])=>`<div style="display:flex;justify-content:space-between;padding:7px 4px;border-bottom:1px solid rgba(255,171,64,.15)">
+        <span style="font-size:13px;color:var(--text3)">${label}</span>
+        <strong style="font-size:14px;color:${cor}">${valor}</strong>
+      </div>`).join('')}
+    </div>`;
 
-    // Seção 3 — Dados Bancários (Erro 002)
-    sec3=secCard('Seção 3 — Dados Bancários',
-      infoRow('Agência',forn?forn.agencia||'—':'—')+
-      infoRow('Conta',forn?forn.conta||'—':'—')+
-      infoRow('Último RC',ct?ct.ultimoRC||'—':'—')+
-      infoRow('Número da Conta Vinculada',ct?ct.contaVinculada||'—':'—')+
-      infoRow('Processo SUAP',l.suap||'—')+
-      infoRow('Situação','DSP001')
-    );
+    // Seção 3 — Dados Bancários
+    sec3=`<div style="background:linear-gradient(135deg,rgba(0,230,118,.12),rgba(0,230,118,.04));border:2px solid var(--green-border);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:800;color:var(--green);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--green-border)">🏦 SEÇÃO 3 — DADOS BANCÁRIOS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${[
+          ['Agência',forn?forn.agencia||'—':'—'],
+          ['Conta',forn?forn.conta||'—':'—'],
+          ['Processo SUAP',l.suap||'—'],
+          ['Último RC',ct?ct.ultimoRC||'—':'—'],
+          ['Número Conta Vinculada',ct?ct.contaVinculada||'—':'—'],
+          ['Situação','DSP001'],
+        ].map(([label,valor])=>`<div style="background:rgba(0,230,118,.06);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">${label}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace">${valor}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
 
     // Descrições (Erros 003, 004, 005, 006, 018)
     // Código DARF IR e Natureza de Rendimentos (Erro 004)
     const darfIR=ct?ct.codigoDarf||'——':ct?ct.darfIr||'——':'——';
     const natRend=ct?ct.natRendimentos||'——':'——';
-    const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE A ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
+    const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
     const d2=isSimples?null:`RETENÇÃO DE TRIB FEDERAIS CONF IN 1234/2012 SOBRE PAGAMENTO DA NF Nº ${l.nf} DE ${dataEmissaoBR} - REF. À ${descObsAbrev}, NO MÊS DE ${l.mesRef}, CONF CONTRATO ${nContrato}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     const d3=`RETENÇÃO DE INSS SOBRE PAGAMENTO DA NF Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REF À ${descObsAbrev}, NO MÊS DE ${l.mesRef}, CONF CONTRATO ${nContrato}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
-    const d4=`RETENÇÃO DE ISS SOBRE PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE A ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
-    const d5=`DEPÓSITO EM GARANTIA CONTA VINCULADA SOBRE PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE A ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
+    const d4=`RETENÇÃO DE ISS SOBRE PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
+    const d5=`DEPÓSITO EM GARANTIA CONTA VINCULADA SOBRE PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
     const d6=`RETENÇÃO INSS PAGTO DA NF Nº ${l.nf} DE ${dataEmissaoBR} - REF À ${descObsAbrev} - NO IFPI-CAMPUS SÃO JOÃO/PI - NP ${l.npDh} - PROC SUAP ${l.suap}`;
     descricoes=
       descBlock('Descrição 1 — SIAFI (Liquidação)',d1)+
-      (d2?descBlock(`Descrição 2 — DDF055 Tributos Federais<br><small style="color:var(--text3);font-size:11px">Código DARF IR: <strong style="color:var(--gold)">${darfIR}</strong> &nbsp;·&nbsp; Natureza de Rendimentos: <strong style="color:var(--gold)">${natRend}</strong></small>`,d2):'')+
-      descBlock('Descrição 3 — DDF050 INSS <small style="color:var(--text3);font-size:11px">· Código: 1162</small>',d3)+
-      descBlock('Descrição 4 — ISS <small style="color:var(--text3);font-size:11px">· FAVORECIDO ISS: 06553655000173</small>',d4)+
-      descBlock('Descrição 5 — DOB039 Conta Vinculada <small style="color:var(--text3);font-size:11px">· CNPJ BB: 00000000000191 · 154704J</small>',d5)+
-      descBlock('Descrição 6 — REINF',d6);
-    rodape=`<div style="margin-top:10px;padding:8px 12px;background:var(--bg4);border-radius:6px;font-size:12px;font-weight:600;color:var(--text3)">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</div>`;
+      (d2?descBlock(`Descrição 2 — DDF055 Tributos Federais<br><div style="margin-top:6px;padding:6px 10px;background:rgba(245,200,66,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--gold)">Código DARF IR: ${darfIR} &nbsp;·&nbsp; Natureza de Rendimentos: ${natRend}</div>`,d2):'')+
+      descBlock(`Descrição 3 — DDF050 INSS<br><div style="margin-top:6px;padding:6px 10px;background:rgba(0,230,118,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--green)">Código: 1162 &nbsp;·&nbsp; Data Emissão: ${dataEmissaoBR}</div>`,d3)+
+      descBlock(`Descrição 4 — ISS<br><div style="margin-top:6px;padding:6px 10px;background:rgba(0,207,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--cyan)">FAVORECIDO ISS: 06553655000173</div>`,d4)+
+      descBlock(`Descrição 5 — DOB039 Conta Vinculada<br><div style="margin-top:6px;padding:6px 10px;background:rgba(170,102,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--purple)">CNPJ BB: 00000000000191 &nbsp;·&nbsp; 154704J</div>`,d5)+
+      descBlock(`Descrição 6 — REINF<br><div style="margin-top:6px;padding:6px 10px;background:rgba(255,68,68,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--red)">Mês de Pagamento: ${l.mesPag||'—'}</div>`,d6);
+    rodape=`<div style="margin-top:14px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px;font-size:15px;font-weight:700;color:var(--gold);text-align:center;letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</div>`;
 
   } else if(l.grupo==='pnae'){
     const pnaeCt=(state.contratosPnae||[]).find(c=>c.id===emp?.pnaeContratoId);
@@ -4555,10 +4655,15 @@ function abrirDetalheLiquidacao(id){
 }
 
 function descBlock(label,texto){
-  return `<div style="margin-bottom:12px">
-    <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:5px;letter-spacing:.02em">${label}</div>
-    <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:8px 10px;font-size:11px;line-height:1.7;color:var(--text2)">${texto}</div>
-    <button class="btn btn-sec btn-xs" style="margin-top:4px" onclick="navigator.clipboard.writeText('${texto.replace(/'/g,"\\'")}').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+  const safeText=texto.replace(/'/g,"\\'").replace(/\n/g,' ');
+  return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;overflow:hidden">
+    <div style="padding:8px 12px;background:rgba(245,200,66,.08);border-bottom:1px solid var(--border2)">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.02em">${label}</div>
+    </div>
+    <div style="padding:10px 12px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word">${texto}</div>
+    <div style="padding:6px 12px;border-top:1px solid var(--border)">
+      <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('${safeText}').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+    </div>
   </div>`;
 }
 
@@ -4964,7 +5069,7 @@ function initNovosModulos() {
 
 document.addEventListener('DOMContentLoaded',()=>{
   const loaded=carregar();
-  if(!loaded||state.lancamentos.length===0||state.acoes.length===0){
+  if(!loaded||state.lancamentos.length===0){
     seedDataDez2025();
   }
   init();
