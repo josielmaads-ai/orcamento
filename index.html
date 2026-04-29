@@ -703,12 +703,59 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   </div>
   <div class="card">
     <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Novo Empenho</div>
-    <!-- EXE / RAP -->
-    <div class="field" style="margin-bottom:14px">
+    <!-- EXE / RAP — CARDS SELECIONÁVEIS -->
+    <div class="field" style="margin-bottom:18px">
       <label>Tipo de Empenho<span class="required-mark">*</span></label>
-      <div style="display:flex;gap:16px;margin-top:4px">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="radio" name="cemp-exe-rap" id="cemp-exe" value="EXE" checked onchange="cempValidarAno();cempAtualizarSaldoInfo()"> <strong>EXE</strong> — Ano corrente</label>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="radio" name="cemp-exe-rap" id="cemp-rap" value="RAP" onchange="cempValidarAno();cempAtualizarSaldoInfo()"> <strong>RAP</strong> — Anos anteriores</label>
+      <!-- Inputs ocultos para manter compatibilidade com lógica existente -->
+      <input type="radio" name="cemp-exe-rap" id="cemp-exe" value="EXE" checked style="display:none" onchange="cempValidarAno();cempAtualizarSaldoInfo()">
+      <input type="radio" name="cemp-exe-rap" id="cemp-rap" value="RAP" style="display:none" onchange="cempValidarAno();cempAtualizarSaldoInfo()">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+        <!-- Card EXE -->
+        <div id="card-tipo-exe" onclick="selecionarTipoEmpenho('EXE')" style="
+          cursor:pointer;border-radius:12px;padding:16px 18px;
+          border:2px solid var(--blue-border);
+          background:var(--blue-bg);
+          box-shadow:0 0 0 3px rgba(68,138,255,.18),0 4px 18px rgba(0,0,0,.35);
+          transition:all .18s cubic-bezier(.34,1.2,.64,1);
+          position:relative;overflow:hidden;
+        ">
+          <div style="position:absolute;top:-18px;right:-18px;width:64px;height:64px;border-radius:50%;background:var(--blue);opacity:.07;filter:blur(14px);pointer-events:none"></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <div style="font-size:26px;line-height:1">📅</div>
+            <div>
+              <div id="card-exe-title" style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--blue);letter-spacing:.04em">EXE</div>
+              <div style="font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-top:1px">Exercício Corrente</div>
+            </div>
+            <div id="card-exe-check" style="margin-left:auto;width:20px;height:20px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700;flex-shrink:0">✓</div>
+          </div>
+          <div style="font-size:11.5px;color:var(--text2);line-height:1.55">Empenho vinculado ao <strong style="color:var(--blue)">ano corrente</strong>. Impacta normalmente créditos, saldo e indicadores do exercício.</div>
+          <div style="margin-top:8px;font-size:10px;color:var(--blue);background:rgba(68,138,255,.1);border-radius:6px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px">
+            ✦ Computa no Dashboard EXE
+          </div>
+        </div>
+        <!-- Card RAP -->
+        <div id="card-tipo-rap" onclick="selecionarTipoEmpenho('RAP')" style="
+          cursor:pointer;border-radius:12px;padding:16px 18px;
+          border:2px solid var(--border2);
+          background:var(--bg4);
+          box-shadow:0 4px 18px rgba(0,0,0,.25);
+          transition:all .18s cubic-bezier(.34,1.2,.64,1);
+          position:relative;overflow:hidden;
+        ">
+          <div style="position:absolute;top:-18px;right:-18px;width:64px;height:64px;border-radius:50%;background:var(--purple);opacity:.05;filter:blur(14px);pointer-events:none"></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <div style="font-size:26px;line-height:1">🗂️</div>
+            <div>
+              <div id="card-rap-title" style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--text3);letter-spacing:.04em">RAP</div>
+              <div style="font-size:10px;color:var(--text4);letter-spacing:.06em;text-transform:uppercase;margin-top:1px">Restos a Pagar</div>
+            </div>
+            <div id="card-rap-check" style="margin-left:auto;width:20px;height:20px;border-radius:50%;background:var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text4);font-weight:700;flex-shrink:0">○</div>
+          </div>
+          <div style="font-size:11.5px;color:var(--text3);line-height:1.55">Pendências de <strong style="color:var(--text2)">anos anteriores</strong>. Não afeta créditos do exercício — controle e saldo segregados.</div>
+          <div style="margin-top:8px;font-size:10px;color:var(--purple);background:var(--purple-bg);border-radius:6px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px">
+            🗃 Painel RAP independente
+          </div>
+        </div>
       </div>
     </div>
     <!-- Categoria grid -->
@@ -1417,20 +1464,66 @@ function totalEmpenhos(cat,refId){
   if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&(cat?l.categoria===cat:true)&&l.referenciaId===refId));
   return sum(getLancsAtivos('Empenho',cat||null));
 }
+// ── RAP-SEGREGATED: somente EXE (para dashboard do exercício corrente) ──
+function totalEmpenhosEXE(cat){
+  return sum(state.lancamentos.filter(l=>
+    l.status==='Ativo' && l.tipo==='Empenho' &&
+    (cat ? l.categoria===cat : true) &&
+    (l.tipoRecurso||'EXE') === 'EXE'
+  ));
+}
+function totalEmpenhosRAP(cat){
+  return sum(state.lancamentos.filter(l=>
+    l.status==='Ativo' && l.tipo==='Empenho' &&
+    (cat ? l.categoria===cat : true) &&
+    l.tipoRecurso === 'RAP'
+  ));
+}
 function totalLiquidacoes(cat,refId){
   if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Liquidação'&&(cat?l.categoria===cat:true)&&l.referenciaId===refId));
   return sum(getLancsAtivos('Liquidação',cat||null));
+}
+// Liquidações vinculadas apenas a empenhos EXE
+function totalLiquidacoesEXE(cat){
+  return sum(state.lancamentos.filter(l=>
+    l.status==='Ativo' && l.tipo==='Liquidação' &&
+    (cat ? l.categoria===cat : true) &&
+    (l.tipoRecurso||'EXE')==='EXE'
+  ));
+}
+function totalLiquidacoesRAP(cat){
+  return sum(state.lancamentos.filter(l=>
+    l.status==='Ativo' && l.tipo==='Liquidação' &&
+    (cat ? l.categoria===cat : true) &&
+    l.tipoRecurso==='RAP'
+  ));
 }
 function totalPagamentos(cat,refId){
   if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Pagamento'&&(cat?l.categoria===cat:true)&&l.referenciaId===refId));
   return sum(getLancsAtivos('Pagamento',cat||null));
 }
+function totalPagamentosEXE(cat){
+  return sum(state.lancamentos.filter(l=>
+    l.status==='Ativo' && l.tipo==='Pagamento' &&
+    (cat ? l.categoria===cat : true) &&
+    (l.tipoRecurso||'EXE')==='EXE'
+  ));
+}
+function totalPagamentosRAP(cat){
+  return sum(state.lancamentos.filter(l=>
+    l.status==='Ativo' && l.tipo==='Pagamento' &&
+    (cat ? l.categoria===cat : true) &&
+    l.tipoRecurso==='RAP'
+  ));
+}
 function totalTransfSaidas(cat){return sum(getLancsAtivos('Transferência Saída',cat||null))}
-// Saldo disponível de categoria = Créditos + Transferências Recebidas + Anulações - Empenhos - Transferências Enviadas
+// Saldo disponível de categoria = Créditos + Transferências Recebidas + Anulações - Empenhos EXE - Transferências Enviadas
+// RAP NÃO consome saldo de crédito do exercício corrente
 function saldoCat(cat){
   const creditos=sum(getLancsAtivos('Entrada',cat))+sum(getLancsAtivos('Anulação',cat));
   const transfE=sum(getLancsAtivos('Transferência Entrada',cat));
-  const empenhos=sum(getLancsAtivos('Empenho',cat));
+  // Somente empenhos EXE consomem saldo de crédito
+  const empenhos=totalEmpenhosEXE(cat);
   const transfS=sum(getLancsAtivos('Transferência Saída',cat));
   return creditos+transfE-empenhos-transfS;
 }
@@ -1525,11 +1618,11 @@ function _onModalConfirm(e){
 // ═══════════════════════════════════════════════════════════
 function renderSidebar(){
   const el=document.getElementById('sidebar-saldo');
-  const cats=DEFAULT_CATS.filter(c=>totalEntradas(c)>0||totalEmpenhos(c)>0);
+  const cats=DEFAULT_CATS.filter(c=>totalEntradas(c)>0||totalEmpenhosEXE(c)>0);
   if(!cats.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">Sem dados</div>';return;}
   const colors={ok:'var(--green)',warn:'var(--amber)',danger:'var(--red)'};
   el.innerHTML=cats.slice(0,7).map(c=>{
-    const te=totalEntradas(c),emp=totalEmpenhos(c);
+    const te=totalEntradas(c),emp=totalEmpenhosEXE(c);
     const p=te>0?clamp(Math.round(emp/te*100),0,100):0;
     const st=statusCor(p);const s=saldoCat(c);
     return`<div class="sw-row"><div class="sw-cat" title="${c}">${catIcon(c)} ${c}</div><div class="sw-val" style="color:${colors[st]}">${fmtBR(s)}</div></div><div class="sw-bar"><div class="sw-bar-fill" style="width:${p}%;background:${colors[st]}"></div></div>`;
@@ -1541,11 +1634,20 @@ function renderSidebar(){
 // ═══════════════════════════════════════════════════════════
 function renderDashboard(){
   const totCred=totalCreditosOriginais();
-  const totEmp=totalEmpenhos();
-  const totLiq=totalLiquidacoes();
-  const totPag=totalPagamentos();
+  // ── SEGREGAÇÃO RAP/EXE: Dashboard reflete APENAS exercício corrente (EXE) ──
+  const totEmp=totalEmpenhosEXE();          // apenas EXE
+  const totLiq=totalLiquidacoesEXE();       // apenas EXE (módulo lancamentos)
+  const totPag=totalPagamentosEXE();        // apenas EXE
+  // Para saldo disponível: créditos - empenhos EXE (RAP não consome crédito corrente)
   const saldoDisp=totCred-totEmp;
-  const liqPagas=(state.liquidacoes||[]).filter(l=>l.status!=='Excluído'&&l.pago==='Sim');
+  // Totais RAP (para badge informativo no dashboard)
+  const totEmpRapGlobal=totalEmpenhosRAP();
+  const liqPagas=(state.liquidacoes||[]).filter(l=>{
+    if(l.status==='Excluído'||l.pago!=='Sim') return false;
+    // Somente liquidações vinculadas a empenhos EXE
+    const empCad=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
+    return !empCad || empCad.tipoEmp!=='RAP';
+  });
   const totLiqPago=liqPagas.reduce((s,l)=>s+(l.valorLiquido||l.valorBruto||0),0);
   const totLiqQtd=liqPagas.length;
   const nContratos=state.contratos.filter(c=>c.status!=='Excluído').length;
@@ -1561,25 +1663,25 @@ function renderDashboard(){
     <div class="kpi ${saldoDisp<0?'accent-red':'accent-gold'}">
       <div class="kpi-label">Saldo Disponível Geral <span class="kpi-badge ${saldoDisp<0?'badge-danger':'badge-gold'}">${saldoDisp<0?'⚠ NEGATIVO':'OK'}</span></div>
       <div class="kpi-value ${saldoDisp<0?'text-red':'text-gold'}">${fmtBR(saldoDisp)}</div>
-      <div class="kpi-sub">Créditos − Empenhado</div>
+      <div class="kpi-sub">Créditos − Empenhado <span style="color:var(--blue);font-size:9px;margin-left:4px">EXE</span></div>
     </div>
     <div class="kpi accent-blue">
-      <div class="kpi-label">Total Empenhado <span class="kpi-badge badge-blue">Empenho</span></div>
+      <div class="kpi-label">Total Empenhado <span class="kpi-badge badge-blue">EXE</span></div>
       <div class="kpi-value text-blue">${fmtBR(totEmp)}</div>
-      <div class="kpi-sub">${pctBar(totEmp,totCred)}% do crédito empenhado</div>
+      <div class="kpi-sub">${pctBar(totEmp,totCred)}% do crédito empenhado${totEmpRapGlobal>0?` · <span style="color:var(--purple);font-size:9px">+ ${fmtBR(totEmpRapGlobal)} RAP (segregado)</span>`:''}</div>
     </div>
     <div class="kpi accent-amber">
-      <div class="kpi-label">Total Liquidado <span class="kpi-badge badge-warn">Liquidação</span></div>
+      <div class="kpi-label">Total Liquidado <span class="kpi-badge badge-warn">EXE</span></div>
       <div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiq)}</div>
       <div class="kpi-sub">${pctBar(totLiq,totEmp)}% do empenhado liquidado</div>
     </div>
     <div class="kpi accent-green">
-      <div class="kpi-label">Total Pago <span class="kpi-badge badge-ok">Pagamento</span></div>
+      <div class="kpi-label">Total Pago <span class="kpi-badge badge-ok">EXE</span></div>
       <div class="kpi-value text-green">${fmtBR(totPag)}</div>
       <div class="kpi-sub">${pctBar(totPag,totLiq)}% do liquidado pago</div>
     </div>
     <div class="kpi accent-teal" style="border-color:var(--teal);background:rgba(0,229,204,.06)">
-      <div class="kpi-label">Liquidações Pagas <span class="kpi-badge" style="background:rgba(0,229,204,.15);color:var(--teal)">Liq. Módulo</span></div>
+      <div class="kpi-label">Liquidações Pagas <span class="kpi-badge" style="background:rgba(0,229,204,.15);color:var(--teal)">Liq. Módulo EXE</span></div>
       <div class="kpi-value" style="color:var(--teal)">${fmtBR(totLiqPago)}</div>
       <div class="kpi-sub">${totLiqQtd} liquidação(ões) marcadas como pagas</div>
     </div>
@@ -1589,38 +1691,46 @@ function renderDashboard(){
       <div class="kpi-sub">${nLancs} lançamentos ativos</div>
     </div>
     <div class="kpi accent-teal" style="border-color:rgba(0,207,255,.4);background:rgba(0,207,255,.06)">
-      <div class="kpi-label">Taxa de Execução Orçamentária <span class="kpi-badge" style="background:rgba(0,207,255,.15);color:var(--cyan)">EXEC %</span></div>
+      <div class="kpi-label">Taxa de Execução Orçamentária <span class="kpi-badge" style="background:rgba(0,207,255,.15);color:var(--cyan)">EXEC % — EXE</span></div>
       <div class="kpi-value" style="color:var(--cyan)">${totCred>0?clamp(Math.round(totEmp/totCred*100),0,100):0}%</div>
       <div class="kpi-sub">(Empenhado ÷ Crédito) × 100 — ${totCred>0?clamp(Math.round(totEmp/totCred*100),0,100)<50?'⚠ Execução baixa':clamp(Math.round(totEmp/totCred*100),0,100)<80?'Execução regular':'✓ Boa execução':'Sem créditos'}</div>
     </div>
     <div class="kpi ${(totCred>0&&totEmp/totCred>=0.9)?'accent-red':totCred>0&&totEmp/totCred>=0.7?'accent-amber':'accent-green'}">
       <div class="kpi-label">Índice de Comprometimento <span class="kpi-badge ${(totCred>0&&totEmp/totCred>=0.9)?'badge-danger':totCred>0&&totEmp/totCred>=0.7?'badge-warn':'badge-ok'}">${(totCred>0&&totEmp/totCred>=0.9)?'⚠ ALTO':totCred>0&&totEmp/totCred>=0.7?'MÉDIO':'OK'}</span></div>
       <div class="kpi-value ${(totCred>0&&totEmp/totCred>=0.9)?'text-red':totCred>0&&totEmp/totCred>=0.7?'text-amber':'text-green'}">${totCred>0?clamp(Math.round(totEmp/totCred*100),0,999):0}%</div>
-      <div class="kpi-sub">(Despesas Empenhadas ÷ Crédito) × 100 — Saldo livre: ${fmtBR(saldoDisp)}</div>
+      <div class="kpi-sub">(Despesas Empenhadas EXE ÷ Crédito) × 100 — Saldo livre: ${fmtBR(saldoDisp)}</div>
     </div>
+    ${totEmpRapGlobal>0?`<div style="grid-column:1/-1;background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:22px">🗂️</span>
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:700;color:var(--purple);letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px">Restos a Pagar (RAP) — Segregado do Exercício Corrente</div>
+        <div style="font-size:12px;color:var(--text2)">Total empenhado RAP: <strong style="color:var(--purple)">${fmtBR(totEmpRapGlobal)}</strong> · Valores <strong>não incluídos</strong> nos indicadores acima · Ver painel RAP abaixo.</div>
+      </div>
+      <span class="kpi-badge badge-purple">RAP</span>
+    </div>`:''}
   `;
 
   const pEmpLiq=totEmp>0?clamp(Math.round(totLiq/totEmp*100),0,100):0;
   const pLiqPag=totLiq>0?clamp(Math.round(totPag/totLiq*100),0,100):0;
   document.getElementById('dash-fases').innerHTML=`
-    <div class="fase-item emp"><div class="fase-val text-blue">${fmtBR(totEmp)}</div><div class="fase-lbl">Empenhado</div><div class="fase-pct" style="color:var(--blue)">${pctBar(totEmp,totCred)}% do crédito</div></div>
+    <div class="fase-item emp"><div class="fase-val text-blue">${fmtBR(totEmp)}</div><div class="fase-lbl">Empenhado <span style="font-size:9px;color:var(--blue);opacity:.8">EXE</span></div><div class="fase-pct" style="color:var(--blue)">${pctBar(totEmp,totCred)}% do crédito</div></div>
     <div class="fase-arrow">→</div>
-    <div class="fase-item liq"><div class="fase-val" style="color:var(--amber)">${fmtBR(totLiq)}</div><div class="fase-lbl">Liquidado</div><div class="fase-pct" style="color:var(--amber)">${pEmpLiq}% do emp.</div></div>
+    <div class="fase-item liq"><div class="fase-val" style="color:var(--amber)">${fmtBR(totLiq)}</div><div class="fase-lbl">Liquidado <span style="font-size:9px;color:var(--amber);opacity:.8">EXE</span></div><div class="fase-pct" style="color:var(--amber)">${pEmpLiq}% do emp.</div></div>
     <div class="fase-arrow">→</div>
-    <div class="fase-item pag"><div class="fase-val text-green">${fmtBR(totPag)}</div><div class="fase-lbl">Pago</div><div class="fase-pct text-green">${pLiqPag}% do liq.</div></div>
+    <div class="fase-item pag"><div class="fase-val text-green">${fmtBR(totPag)}</div><div class="fase-lbl">Pago <span style="font-size:9px;color:var(--green);opacity:.8">EXE</span></div><div class="fase-pct text-green">${pLiqPag}% do liq.</div></div>
   `;
 
-  // Saldo por Fonte e PTRES (somente créditos originais)
+  // Saldo por Fonte e PTRES — apenas empenhos EXE
   const saldoFonteRows=state.fontes.map(f=>{
     const e=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.fonte===f));
-    const emp=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.fonte===f));
+    const emp=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.fonte===f&&(l.tipoRecurso||'EXE')==='EXE'));
     if(!e&&!emp)return '';
     const s=e-emp;
     return`<tr><td style="font-size:11px">${f||'—'}</td><td class="r text-green" style="font-size:11px">${fmtBR(e)}</td><td class="r text-blue" style="font-size:11px">${fmtBR(emp)}</td><td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px;font-weight:700">${fmtBR(s)}</td></tr>`;
   }).filter(Boolean);
   const saldoPtresRows=state.ptres.map(p=>{
     const e=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.ptres===p));
-    const emp=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.ptres===p));
+    const emp=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.ptres===p&&(l.tipoRecurso||'EXE')==='EXE'));
     if(!e&&!emp)return '';
     const s=e-emp;
     return`<tr><td style="font-size:11px">${p||'—'}</td><td class="r text-green" style="font-size:11px">${fmtBR(e)}</td><td class="r text-blue" style="font-size:11px">${fmtBR(emp)}</td><td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px;font-weight:700">${fmtBR(s)}</td></tr>`;
@@ -1630,7 +1740,7 @@ function renderDashboard(){
   const elSP=document.getElementById('dash-saldo-ptres');
   if(elSP)elSP.innerHTML=saldoPtresRows.length?saldoPtresRows.join(''):'<tr class="empty-row"><td colspan="4">Sem dados por PTRES</td></tr>';
 
-  // Tabelas mensais (formato colunar: linha=fase, coluna=mês)
+  // Tabelas mensais — APENAS EXE (RAP excluído)
   const anoAtual=new Date().getFullYear();
   const dadosMensais=MESES.map((_,mi)=>{
     const lancsDoMes=state.lancamentos.filter(l=>{
@@ -1640,9 +1750,11 @@ function renderDashboard(){
     });
     return{
       e:sum(lancsDoMes.filter(l=>l.tipo==='Entrada')),
-      emp:sum(lancsDoMes.filter(l=>l.tipo==='Empenho')),
-      liq:sum(lancsDoMes.filter(l=>l.tipo==='Liquidação')),
-      pag:sum(lancsDoMes.filter(l=>l.tipo==='Pagamento'))
+      // Empenho mensal: somente EXE
+      emp:sum(lancsDoMes.filter(l=>l.tipo==='Empenho'&&(l.tipoRecurso||'EXE')==='EXE')),
+      // Liquidação/Pagamento mensal: somente EXE
+      liq:sum(lancsDoMes.filter(l=>l.tipo==='Liquidação'&&(l.tipoRecurso||'EXE')==='EXE')),
+      pag:sum(lancsDoMes.filter(l=>l.tipo==='Pagamento'&&(l.tipoRecurso||'EXE')==='EXE'))
     };
   });
 
@@ -1652,28 +1764,25 @@ function renderDashboard(){
   const fmtCell=(v,cls)=>v>0?`<td class="r ${cls}" style="font-size:11px">${fmtBR(v)}</td>`:`<td class="r" style="color:var(--text4);font-size:11px">—</td>`;
   document.getElementById('dash-mensal1-body').innerHTML=`
     <tr><td style="color:var(--green);font-weight:600;font-size:11px">Entradas</td>${dadosMensais.map(d=>fmtCell(d.e,'text-green')).join('')}<td class="r text-green fw7" style="font-size:11px">${fmtBR(totM1E)}</td></tr>
-    <tr><td style="color:var(--blue);font-weight:600;font-size:11px">Empenhado</td>${dadosMensais.map(d=>fmtCell(d.emp,'text-blue')).join('')}<td class="r text-blue fw7" style="font-size:11px">${fmtBR(totM1Emp)}</td></tr>
-    <tr class="total-row"><td>Saldo (Ent.−Emp.)</td>${dadosMensais.map(d=>{const s=d.e-d.emp;return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${totM1Saldo<0?'text-red':'text-gold'} fw7" style="font-size:11px">${fmtBR(totM1Saldo)}</td></tr>
+    <tr><td style="color:var(--blue);font-weight:600;font-size:11px">Empenhado (EXE)</td>${dadosMensais.map(d=>fmtCell(d.emp,'text-blue')).join('')}<td class="r text-blue fw7" style="font-size:11px">${fmtBR(totM1Emp)}</td></tr>
+    <tr class="total-row"><td>Saldo (Ent.−Emp. EXE)</td>${dadosMensais.map(d=>{const s=d.e-d.emp;return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${totM1Saldo<0?'text-red':'text-gold'} fw7" style="font-size:11px">${fmtBR(totM1Saldo)}</td></tr>
   `;
   document.getElementById('dash-mensal1-count').textContent=anoAtual;
 
   const totM2Emp=dadosMensais.reduce((s,d)=>s+d.emp,0);
   const totM2Liq=dadosMensais.reduce((s,d)=>s+d.liq,0);
   const totM2Pag=dadosMensais.reduce((s,d)=>s+d.pag,0);
-  // NOTA: Este cálculo soma Liq+Pag pois considera lançamentos de ambos os módulos (Saída antigo + Liquidação novo)
-  // Se um valor foi pago via módulo Saída (lançamento tipo 'Pagamento'), ele não tem liquidação correspondente
-  // Se um valor foi liquidado via módulo Liquidação, ele tem apenas registro de liquidação (pago é um flag)
   const totM2Saldo=totM2Emp-(totM2Liq+totM2Pag);
   document.getElementById('dash-mensal2-body').innerHTML=`
-    <tr><td style="color:var(--blue);font-weight:600;font-size:11px">Empenhado</td>${dadosMensais.map(d=>fmtCell(d.emp,'text-blue')).join('')}<td class="r text-blue fw7" style="font-size:11px">${fmtBR(totM2Emp)}</td></tr>
-    <tr><td style="color:var(--amber);font-weight:600;font-size:11px">Liquidado</td>${dadosMensais.map(d=>fmtCell(d.liq,'text-amber')).join('')}<td class="r text-amber fw7" style="font-size:11px">${fmtBR(totM2Liq)}</td></tr>
-    <tr><td style="color:var(--green);font-weight:600;font-size:11px">Pago</td>${dadosMensais.map(d=>fmtCell(d.pag,'text-green')).join('')}<td class="r text-green fw7" style="font-size:11px">${fmtBR(totM2Pag)}</td></tr>
-    <tr class="total-row"><td>Saldo (Emp.−Liq./Pag.)</td>${dadosMensais.map(d=>{const s=d.emp-(d.liq+d.pag);return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${totM2Saldo<0?'text-red':'text-gold'} fw7" style="font-size:11px">${fmtBR(totM2Saldo)}</td></tr>
+    <tr><td style="color:var(--blue);font-weight:600;font-size:11px">Empenhado (EXE)</td>${dadosMensais.map(d=>fmtCell(d.emp,'text-blue')).join('')}<td class="r text-blue fw7" style="font-size:11px">${fmtBR(totM2Emp)}</td></tr>
+    <tr><td style="color:var(--amber);font-weight:600;font-size:11px">Liquidado (EXE)</td>${dadosMensais.map(d=>fmtCell(d.liq,'text-amber')).join('')}<td class="r text-amber fw7" style="font-size:11px">${fmtBR(totM2Liq)}</td></tr>
+    <tr><td style="color:var(--green);font-weight:600;font-size:11px">Pago (EXE)</td>${dadosMensais.map(d=>fmtCell(d.pag,'text-green')).join('')}<td class="r text-green fw7" style="font-size:11px">${fmtBR(totM2Pag)}</td></tr>
+    <tr class="total-row"><td>Saldo (Emp.−Liq./Pag.) EXE</td>${dadosMensais.map(d=>{const s=d.emp-(d.liq+d.pag);return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${totM2Saldo<0?'text-red':'text-gold'} fw7" style="font-size:11px">${fmtBR(totM2Saldo)}</td></tr>
   `;
 
-  // Execução por categoria (com semáforo)
-  const catRows=DEFAULT_CATS.filter(c=>totalCreditosOriginais(c)>0||totalEmpenhos(c)>0).map(c=>{
-    const te=totalCreditosOriginais(c),tem=totalEmpenhos(c),tl=totalLiquidacoes(c),tp=totalPagamentos(c);
+  // Execução por categoria — apenas EXE
+  const catRows=DEFAULT_CATS.filter(c=>totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0).map(c=>{
+    const te=totalCreditosOriginais(c),tem=totalEmpenhosEXE(c),tl=totalLiquidacoesEXE(c),tp=totalPagamentosEXE(c);
     const saldoEmp=te-tem;
     const pe=te>0?Math.round(tem/te*100):0;
     return`<tr>
@@ -1728,7 +1837,7 @@ function renderCatGrid(){
 function selCat(c){state.catSelecionadaE=c;renderCatGrid();}
 function updateSaldoBar(){
   const c=state.catSelecionadaE;if(!c)return;
-  const te=totalCreditosOriginais(c),emp=totalEmpenhos(c),s=saldoCat(c);
+  const te=totalCreditosOriginais(c),emp=totalEmpenhosEXE(c),s=saldoCat(c);
   const p=te>0?clamp(Math.round(emp/te*100),0,100):0;
   const st=statusCor(p);
   document.getElementById('credito-saldo-bar').innerHTML=`
@@ -1883,10 +1992,10 @@ function updateAcaoRef(){
 function _orig_updateSaldoSaida(){
   const cat=document.getElementById('s-cat').value;
   if(!cat){document.getElementById('s-saldo-bar').innerHTML='';return;}
-  const te=totalCreditosOriginais(cat),s=saldoCat(cat),emp=totalEmpenhos(cat);
+  const te=totalCreditosOriginais(cat),s=saldoCat(cat),emp=totalEmpenhosEXE(cat);
   const p=te>0?clamp(Math.round(emp/te*100),0,100):0;
   const st=statusCor(p);
-  document.getElementById('s-saldo-bar').innerHTML=`<div class="saldo-bar-card" style="margin-top:10px"><div class="sb-top"><span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para empenho</span><span class="sb-val ${st}">${fmtBR(s)}</span></div><div class="sb-bar"><div class="sb-fill ${st}" style="width:${p}%"></div></div><div class="sb-caption">Crédito: ${fmtBR(te)} · Empenhado: ${fmtBR(emp)} · ${p}% comprometido</div></div>`;
+  document.getElementById('s-saldo-bar').innerHTML=`<div class="saldo-bar-card" style="margin-top:10px"><div class="sb-top"><span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para empenho</span><span class="sb-val ${st}">${fmtBR(s)}</span></div><div class="sb-bar"><div class="sb-fill ${st}" style="width:${p}%"></div></div><div class="sb-caption">Crédito: ${fmtBR(te)} · Empenhado EXE: ${fmtBR(emp)} · ${p}% comprometido</div></div>`;
 }
 function _orig_registrarSaida(){
   const cat=document.getElementById('s-cat').value;
@@ -3833,6 +3942,10 @@ function limparCadastroEmpenho(){
   document.getElementById('cemp-campos-area').style.display='none';
   document.getElementById('cemp-ano-alerta').style.display='none';
   document.getElementById('cemp-data').value=new Date().toISOString().slice(0,10);
+  // Resetar o seletor de tipo para EXE (estado padrão)
+  const exeRadio=document.getElementById('cemp-exe');
+  if(exeRadio) exeRadio.checked=true;
+  selecionarTipoEmpenho('EXE');
 }
 
 function renderCadastroEmpenhos(){
@@ -5019,8 +5132,49 @@ function editarCredito(id){
 }
 
 // ═══════════════════════════════════════════════════════════
-//  RAP — LÓGICA EXE/RAP INTEGRADA (REGISTRAR SAÍDA)
+//  CADASTRO EMPENHO — SELEÇÃO DE TIPO (CARDS UI)
 // ═══════════════════════════════════════════════════════════
+function selecionarTipoEmpenho(tipo){
+  // Atualiza os radio buttons ocultos
+  const exeRadio = document.getElementById('cemp-exe');
+  const rapRadio = document.getElementById('cemp-rap');
+  if(!exeRadio || !rapRadio) return;
+  exeRadio.checked = (tipo === 'EXE');
+  rapRadio.checked = (tipo === 'RAP');
+
+  const cardExe  = document.getElementById('card-tipo-exe');
+  const cardRap  = document.getElementById('card-tipo-rap');
+  const checkExe = document.getElementById('card-exe-check');
+  const checkRap = document.getElementById('card-rap-check');
+  const titleExe = document.getElementById('card-exe-title');
+  const titleRap = document.getElementById('card-rap-title');
+
+  if(tipo === 'EXE'){
+    // Card EXE → ativo
+    Object.assign(cardExe.style,{borderColor:'var(--blue-border)',background:'var(--blue-bg)',boxShadow:'0 0 0 3px rgba(68,138,255,.18),0 4px 18px rgba(0,0,0,.35)'});
+    if(checkExe){checkExe.style.background='var(--blue)';checkExe.style.color='#fff';checkExe.textContent='✓';}
+    if(titleExe) titleExe.style.color='var(--blue)';
+    // Card RAP → inativo
+    Object.assign(cardRap.style,{borderColor:'var(--border2)',background:'var(--bg4)',boxShadow:'0 4px 18px rgba(0,0,0,.25)'});
+    if(checkRap){checkRap.style.background='var(--border2)';checkRap.style.color='var(--text4)';checkRap.textContent='○';}
+    if(titleRap) titleRap.style.color='var(--text3)';
+  } else {
+    // Card RAP → ativo
+    Object.assign(cardRap.style,{borderColor:'var(--purple-border)',background:'var(--purple-bg)',boxShadow:'0 0 0 3px rgba(170,102,255,.18),0 4px 18px rgba(0,0,0,.35)'});
+    if(checkRap){checkRap.style.background='var(--purple)';checkRap.style.color='#fff';checkRap.textContent='✓';}
+    if(titleRap) titleRap.style.color='var(--purple)';
+    // Card EXE → inativo
+    Object.assign(cardExe.style,{borderColor:'var(--border2)',background:'var(--bg4)',boxShadow:'0 4px 18px rgba(0,0,0,.25)'});
+    if(checkExe){checkExe.style.background='var(--border2)';checkExe.style.color='var(--text4)';checkExe.textContent='○';}
+    if(titleExe) titleExe.style.color='var(--text3)';
+  }
+
+  // Dispara handlers existentes
+  cempValidarAno();
+  cempAtualizarSaldoInfo();
+}
+
+
 
 // Chamado quando o seletor EXE/RAP muda
 // ═══════════════════════════════════════════════════════════
@@ -5140,11 +5294,11 @@ function updateSaldoSaida(){
     return;
   }
   // EXE: exibe saldo real da categoria
-  const te=totalCreditosOriginais(cat), s=saldoCat(cat), emp2=totalEmpenhos(cat);
+  const te=totalCreditosOriginais(cat), s=saldoCat(cat), emp2=totalEmpenhosEXE(cat);
   const p=te>0?clamp(Math.round(emp2/te*100),0,100):0;
   const st=statusCor(p);
   document.getElementById('s-saldo-bar').innerHTML=
-    `<div class="saldo-bar-card" style="margin-top:10px"><div class="sb-top"><span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para empenho</span><span class="sb-val ${st}">${fmtBR(s)}</span></div><div class="sb-bar"><div class="sb-fill ${st}" style="width:${p}%"></div></div><div class="sb-caption">Crédito: ${fmtBR(te)} · Empenhado: ${fmtBR(emp2)} · ${p}% comprometido</div></div>`;
+    `<div class="saldo-bar-card" style="margin-top:10px"><div class="sb-top"><span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para empenho</span><span class="sb-val ${st}">${fmtBR(s)}</span></div><div class="sb-bar"><div class="sb-fill ${st}" style="width:${p}%"></div></div><div class="sb-caption">Crédito: ${fmtBR(te)} · Empenhado EXE: ${fmtBR(emp2)} · ${p}% comprometido</div></div>`;
 }
 
 // Registrar Saída — tipo e categoria SEMPRE derivados do empenho cadastrado
