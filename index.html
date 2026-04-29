@@ -1402,9 +1402,29 @@ function openModal(title,sub,cb){
   _modalCb=cb;
   document.getElementById('modal-bg').classList.add('show');
 }
-function closeModal(){document.getElementById('modal-bg').classList.remove('show');_modalCb=null;document.getElementById('modal-form-area').innerHTML='';}
-document.getElementById('modal-confirm-btn').onclick=()=>{if(_modalCb){const r=_modalCb();if(r!==false)closeModal();}}
-document.getElementById('modal-bg').onclick=e=>{if(e.target===document.getElementById('modal-bg'))closeModal();}
+function closeModal(){
+  document.getElementById('modal-bg').classList.remove('show');
+  _modalCb=null;
+  document.getElementById('modal-form-area').innerHTML='';
+}
+function _onModalConfirm(e){
+  e.stopPropagation();
+  if(!_modalCb)return;
+  const cb=_modalCb;
+  _modalCb=null; // neutraliza antes de executar para prevenir duplo disparo
+  const r=cb();
+  if(r!==false)closeModal();
+}
+(function(){
+  const btn=document.getElementById('modal-confirm-btn');
+  // Clona o botão para remover qualquer listener anterior acumulado (problema no GitHub Pages)
+  const newBtn=btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn,btn);
+  newBtn.addEventListener('click',_onModalConfirm);
+  document.getElementById('modal-bg').addEventListener('click',function(e){
+    if(e.target===document.getElementById('modal-bg'))closeModal();
+  });
+})();
 
 // ═══════════════════════════════════════════════════════════
 //  SIDEBAR
@@ -2406,13 +2426,14 @@ function openModalAcao(id){
 function editarAcao(id){openModalAcao(id);}
 function excluirAcao(id){
   openModal('Excluir ação?','A ação será marcada como excluída.',()=>{
-    const a=state.acoes.find(x=>x.id===id);
-    if(!a)return;
-    a.status='Excluído';
-    a.tsModif=new Date().toISOString();
-    auditLog('DELETE','ACAO',id,'Ação excluída',a);
+    const idx=state.acoes.findIndex(x=>x.id===id);
+    if(idx<0)return;
+    state.acoes[idx].status='Excluído';
+    state.acoes[idx].tsModif=new Date().toISOString();
+    auditLog('DELETE','ACAO',id,'Ação excluída: '+state.acoes[idx].nome,state.acoes[idx]);
     salvar();
-    renderAeAcoes();
+    // Pequeno delay para garantir que o modal fechou antes de re-renderizar
+    setTimeout(()=>{ renderAeAcoes(); },50);
     toast('Ação excluída','warn');
   });
 }
