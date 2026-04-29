@@ -957,6 +957,19 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 <!-- TOAST -->
 <div class="toast" id="toast"><span id="toast-icon"></span><span id="toast-msg"></span></div>
 
+<!-- MODAL EXCLUSÃO AÇÃO AE (fixo no body, independente do render dinâmico) -->
+<div id="gae-confirm-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:600;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--red-border);border-radius:14px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.7)">
+    <div style="font-size:28px;text-align:center;margin-bottom:12px">🗑</div>
+    <div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:6px">Excluir Ação?</div>
+    <div id="gae-confirm-msg" style="font-size:13px;color:var(--text3);text-align:center;margin-bottom:20px;line-height:1.5"></div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-sec" onclick="gae_fecharConfirm()">Cancelar</button>
+      <button class="btn btn-red" onclick="gae_confirmarExclusao()">✕ Excluir</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL GENÉRICO -->
 <div class="modal-bg" id="modal-bg">
   <div class="modal" id="modal-inner">
