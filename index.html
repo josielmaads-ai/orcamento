@@ -1241,6 +1241,41 @@ function carregar(){
       
       state.contratosPnae=Array.isArray(d.contratosPnae)?d.contratosPnae.map(c=>({...c})):[];
       
+      // ── Migração v6→v7: corrige referenciaId de lançamentos que apontam para
+      // ações do seed legado (AE001/AE002/AE003) que foram removidas.
+      // Essas referências eram inválidas e causavam dados fantasma no módulo AE.
+      const _legacyAeIds = new Set(['AE001','AE002','AE003']);
+      let _migCount = 0;
+      state.lancamentos.forEach(l=>{
+        if(l.referenciaId && _legacyAeIds.has(l.referenciaId)){
+          l.referenciaId = null;
+          _migCount++;
+        }
+      });
+      if(_migCount > 0)
+        console.info('Migração: '+_migCount+' lançamento(s) com referenciaId legado (AE001/2/3) corrigido(s) para null.');
+
+      // ── Migração de datas: atualiza lançamentos do seed com datas de ano
+      // diferente do atual para o mês/ano corrente, garantindo que o dashboard
+      // mensal exiba os dados corretamente.
+      const _anoAtual = new Date().getFullYear();
+      const _mesAtual = String(new Date().getMonth()+1).padStart(2,'0');
+      const _prefAtual = _anoAtual+'-'+_mesAtual;
+      let _dateCount = 0;
+      state.lancamentos.forEach(l=>{
+        if(l.data && l.observacoes && l.observacoes.includes('IFPI Campus SJP')){
+          const _lAno = parseInt((l.data||'').slice(0,4));
+          if(_lAno < _anoAtual){
+            const _dia = (l.data||'').slice(8,10) || '15';
+            l.data = _prefAtual+'-'+_dia;
+            l.competencia = _prefAtual;
+            _dateCount++;
+          }
+        }
+      });
+      if(_dateCount > 0)
+        console.info('Migração: '+_dateCount+' lançamento(s) com data de ano anterior atualizados para '+_prefAtual+'.');
+
       // Log de migração automática
       console.log('✅ Categorias normalizadas automaticamente ao carregar');
       console.log('✅ Usando DEFAULT_CATS em todos os módulos para garantir consistência');
@@ -2962,45 +2997,45 @@ function seedDataDez2025(){
     {id:'P023',tipo:'Pagamento',categoria:'OUTROS',descricao:'Pagamento – Exerc. Anteriores',valor:31497.95,referencia:'2025NE009998',referenciaId:'S021'},
     {id:'P024',tipo:'Pagamento',categoria:'DIÁRIAS E PASSAGENS',descricao:'Pagamento – Ressarcimento Passagens',valor:2572.87,referencia:'2025NE001415',referenciaId:'S022'},
   ];
+  // Usa o ano e mês atual para que os dados apareçam no dashboard
+  const _anoSeed = new Date().getFullYear();
+  const _mesSeed = String(new Date().getMonth()+1).padStart(2,'0');
+  const _prefSeed = _anoSeed+'-'+_mesSeed;
+  const _tsSeed   = _anoSeed+'-'+_mesSeed+'-28T10:00:00.000Z';
   lancs.forEach(l=>{
     state.lancamentos.push({
       ...l,
       fonte:'Fonte 0100 – Tesouro',ptres:'231705 – Ensino Técnico',
       nd:l.nd||'',pi:'PI-001 – Ensino',
-      competencia:'2025-12',
-      data:'2025-12-'+String(Math.floor(Math.random()*28)+1).padStart(2,'0'),
+      competencia:_prefSeed,
+      data:_prefSeed+'-'+String(Math.floor(Math.random()*27)+1).padStart(2,'0'),
       referenciaId:l.referenciaId||null,
       subcategoria:l.subcategoria||'',
-      observacoes:'Dados importados — Dezembro 2025 · IFPI Campus SJP',
-      status:'Ativo',ts:'2025-12-31T10:00:00.000Z'
+      observacoes:'Dados de referência — '+_prefSeed+' · IFPI Campus SJP',
+      status:'Ativo',ts:_tsSeed
     });
   });
   // Contratos pré-carregados
+  const _anoStr = String(_anoSeed);
   state.contratos.push(...[
-    {id:'CT001',tipo:'Serviço',nome:'Limpeza e Conservação das Instalações',empresa:'ABC Serviços Terceirizados Ltda',cnpj:'12.345.678/0001-90',tipoServico:'Limpeza e Conservação',nContrato:'CT-001/2025',nEmpenho:'2025NE003702',ptres:'231705',nd:'33903702 – Limpeza',valorTotal:459507.79,dataInicio:'2025-01-01',dataFim:'2025-12-31',descricao:'Prestação de serviços de limpeza e conservação das instalações do campus',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
-    {id:'CT002',tipo:'Serviço',nome:'Vigilância Ostensiva',empresa:'Segurança Total Ltda',cnpj:'98.765.432/0001-11',tipoServico:'Vigilância Ostensiva',nContrato:'CT-002/2025',nEmpenho:'2025NE003703',ptres:'231705',nd:'33903703 – Vigilância',valorTotal:298360.90,dataInicio:'2025-01-01',dataFim:'2025-12-31',descricao:'Serviços de vigilância ostensiva 24h',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
-    {id:'CT003',tipo:'Serviço',nome:'Serviços de Copa e Cozinha',empresa:'Alimentação Saudável S.A.',cnpj:'11.222.333/0001-44',tipoServico:'Copa e Cozinha',nContrato:'CT-003/2025',nEmpenho:'2025NE003705',ptres:'231705',nd:'33903705 – Copa/Cozinha',valorTotal:238969.33,dataInicio:'2025-01-01',dataFim:'2025-12-31',descricao:'Serviços de copa e cozinha para o campus',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
-    {id:'CT004',tipo:'Serviço',nome:'Apoio Administrativo, Técnico e Operacional',empresa:'Multi Serviços do Brasil Ltda',cnpj:'55.444.333/0001-22',tipoServico:'Apoio Administrativo',nContrato:'CT-004/2025',nEmpenho:'2025NE003701',ptres:'231705',nd:'33903701 – Apoio Adm.',valorTotal:110553.94,dataInicio:'2025-01-01',dataFim:'2025-12-31',descricao:'Apoio administrativo técnico e operacional',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
+    {id:'CT001',tipo:'Serviço',nome:'Limpeza e Conservação das Instalações',empresa:'ABC Serviços Terceirizados Ltda',cnpj:'12.345.678/0001-90',tipoServico:'Limpeza e Conservação',nContrato:'CT-001/'+_anoStr,nEmpenho:_anoStr+'NE003702',ptres:'231705',nd:'33903702 – Limpeza',valorTotal:459507.79,dataInicio:_anoStr+'-01-01',dataFim:_anoStr+'-12-31',descricao:'Prestação de serviços de limpeza e conservação das instalações do campus',status:'Ativo',ts:_anoStr+'-01-01T08:00:00Z'},
+    {id:'CT002',tipo:'Serviço',nome:'Vigilância Ostensiva',empresa:'Segurança Total Ltda',cnpj:'98.765.432/0001-11',tipoServico:'Vigilância Ostensiva',nContrato:'CT-002/'+_anoStr,nEmpenho:_anoStr+'NE003703',ptres:'231705',nd:'33903703 – Vigilância',valorTotal:298360.90,dataInicio:_anoStr+'-01-01',dataFim:_anoStr+'-12-31',descricao:'Serviços de vigilância ostensiva 24h',status:'Ativo',ts:_anoStr+'-01-01T08:00:00Z'},
+    {id:'CT003',tipo:'Serviço',nome:'Serviços de Copa e Cozinha',empresa:'Alimentação Saudável S.A.',cnpj:'11.222.333/0001-44',tipoServico:'Copa e Cozinha',nContrato:'CT-003/'+_anoStr,nEmpenho:_anoStr+'NE003705',ptres:'231705',nd:'33903705 – Copa/Cozinha',valorTotal:238969.33,dataInicio:_anoStr+'-01-01',dataFim:_anoStr+'-12-31',descricao:'Serviços de copa e cozinha para o campus',status:'Ativo',ts:_anoStr+'-01-01T08:00:00Z'},
+    {id:'CT004',tipo:'Serviço',nome:'Apoio Administrativo, Técnico e Operacional',empresa:'Multi Serviços do Brasil Ltda',cnpj:'55.444.333/0001-22',tipoServico:'Apoio Administrativo',nContrato:'CT-004/'+_anoStr,nEmpenho:_anoStr+'NE003701',ptres:'231705',nd:'33903701 – Apoio Adm.',valorTotal:110553.94,dataInicio:_anoStr+'-01-01',dataFim:_anoStr+'-12-31',descricao:'Apoio administrativo técnico e operacional',status:'Ativo',ts:_anoStr+'-01-01T08:00:00Z'},
   ]);
-  // Ações de Assistência Estudantil
-  state.acoes.push(...[
-    {id:'AE001',nome:'Bolsas de Estudo no País',tipo:'Bolsa de Estudo',previsto:286012.13,previstoMensal:23834.34,previstoMensalArr:Array(12).fill(+(286012.13/12).toFixed(2)),descricao:'Bolsas de estudo para estudantes do campus (33901801)',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
-    {id:'AE002',nome:'Outros Auxílios Financeiros a Estudantes',tipo:'Auxílio Financeiro',previsto:2340.00,previstoMensal:195.00,previstoMensalArr:Array(12).fill(195.00),descricao:'Auxílios financeiros a estudantes (33901899)',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
-    {id:'AE003',nome:'Assistência Social – Material',tipo:'Assistência Social',previsto:46227.72,previstoMensal:3852.31,previstoMensalArr:Array(12).fill(+(46227.72/12).toFixed(2)),descricao:'Material destinado à assistência social (33903203)',status:'Ativo',ts:'2025-01-01T08:00:00Z'},
-  ]);
-  // Vincular empenhos às ações
-  ['S015','L002','P002'].forEach(id=>{const l=state.lancamentos.find(x=>x.id===id);if(l)l.referenciaId='AE001';});
-  ['S016','L003','P003'].forEach(id=>{const l=state.lancamentos.find(x=>x.id===id);if(l)l.referenciaId='AE002';});
-  ['S020','L007','P007'].forEach(id=>{const l=state.lancamentos.find(x=>x.id===id);if(l)l.referenciaId='AE003';});
+  // NOTA: Ações de Assistência Estudantil não são pré-carregadas automaticamente.
+  // Devem ser cadastradas manualmente pelo usuário no módulo Assistência Estudantil.
+  // state.acoes inicia vazio — nenhuma ação padrão é injetada aqui.
+
   // Vincular empenhos aos contratos
   ['S001','L008','P008'].forEach(id=>{const l=state.lancamentos.find(x=>x.id===id);if(l)l.referenciaId='CT004';});
   ['S002','L009','P009'].forEach(id=>{const l=state.lancamentos.find(x=>x.id===id);if(l)l.referenciaId='CT001';});
   ['S003','L010','P010'].forEach(id=>{const l=state.lancamentos.find(x=>x.id===id);if(l)l.referenciaId='CT002';});
   ['S005','L012','P012'].forEach(id=>{const l=state.lancamentos.find(x=>x.id===id);if(l)l.referenciaId='CT003';});
 
-  auditLog('IMPORT','SISTEMA','SEED','Dados iniciais carregados — Dezembro 2025 · IFPI Campus SJP',{total:lancs.length});
+  auditLog('IMPORT','SISTEMA','SEED','Dados de referência carregados — '+_prefSeed+' · IFPI Campus SJP',{total:lancs.length});
   salvar();
-  toast('✓ Dados de Dezembro/2025 carregados!','success');
+  toast('✓ Dados de referência '+_prefSeed+' carregados!','success');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -5355,9 +5390,20 @@ function initNovosModulos() {
 
 document.addEventListener('DOMContentLoaded',()=>{
   const loaded=carregar();
+  // Seed de lançamentos financeiros apenas quando não há dados orçamentários salvos.
+  // Ações de Assistência Estudantil NUNCA são pré-carregadas automaticamente.
   if(!loaded||state.lancamentos.length===0){
     seedDataDez2025();
   }
+  // Limpeza de ações legadas: remove ações pré-carregadas pelo seed em versões anteriores.
+  // IDs fixos AE001/AE002/AE003 nunca devem existir como ações automáticas.
+  const LEGACY_SEED_IDS=['AE001','AE002','AE003'];
+  if(state.acoes.some(a=>LEGACY_SEED_IDS.includes(a.id))){
+    state.acoes=state.acoes.filter(a=>!LEGACY_SEED_IDS.includes(a.id));
+    console.info('Acoes legadas do seed removidas. state.acoes iniciado vazio.');
+  }
+  // Persiste o estado final (com migrações e limpeza aplicadas) antes de renderizar.
+  salvar();
   init();
   initNovosModulos();
   window.addEventListener('load',()=>setTimeout(showDriveWelcome,1500));
