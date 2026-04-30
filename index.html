@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FinSight — v10.0 PRO · IFPI Campus SJP</title>
+<title>FinSight — v10.1 PRO · IFPI Campus SJP</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23111118'/><path d='M8 22 L13 14 L18 18 L23 10' stroke='%23f5c842' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='23' cy='10' r='2.5' fill='%2300e676'/></svg>" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
@@ -435,7 +435,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div id="sidebar-saldo"><div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">Sem dados</div></div>
   </div>
   <div class="sidebar-footer">
-    <div class="sf-text">IFPI Campus São João do Piauí · FinSight v10.0 PRO<br>localStorage · Soft-delete · Auditoria</div>
+    <div class="sf-text">IFPI Campus São João do Piauí · FinSight v10.1 PRO<br>localStorage · Soft-delete · Auditoria</div>
   </div>
 </aside>
 
@@ -596,7 +596,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 
   <!-- 3.2 ANULAÇÃO DE EMPENHO -->
   <div id="saida-pane-anulacao" style="display:none">
-    <div class="info-box warn"><span class="info-icon">⚠</span><div>Somente empenhos <strong>não liquidados/pagos</strong> podem ser anulados. O valor anulado retorna ao saldo disponível da categoria.</div></div>
+    <div class="info-box warn"><span class="info-icon">⚠</span><div>Somente empenhos <strong>EXE (Exercício Corrente) não liquidados/pagos</strong> podem ser anulados. O valor anulado retorna ao saldo disponível da categoria. <strong style="color:var(--purple)">Empenhos RAP (Restos a Pagar) não podem ser anulados</strong> — exercício anterior.</div></div>
     <div class="card">
       <div class="card-title"><span class="card-title-dot" style="background:var(--red)"></span>Anulação de Empenho</div>
       <div class="form-grid cols2">
@@ -1449,6 +1449,61 @@ function getLancsAtivos(tipo,cat,refId){
     return true;
   });
 }
+
+// ── Helper: soma lançamentos vinculados a um CONTRATO (por contratoId ou empenho cadastrado) ──
+function sumLancsByContrato(tipo, contratoId){
+  // Método 1: referenciaId direto
+  const porRef = state.lancamentos.filter(l=>
+    l.status==='Ativo' && l.tipo===tipo && l.referenciaId===contratoId
+  );
+  // Método 2: via empenho cadastrado vinculado ao contrato
+  const empsDoContrato = (state.empenhosCad||[]).filter(e=>e.contratoId===contratoId&&e.status!=='Excluído').map(e=>e.id);
+  const porEmpCad = empsDoContrato.length ? state.lancamentos.filter(l=>{
+    if(l.status!=='Ativo'||l.tipo!==tipo) return false;
+    if(tipo==='Empenho') return empsDoContrato.includes(l.empenhoCadId);
+    // Para Liquidação: via empenho cadastrado
+    if(tipo==='Liquidação'||tipo==='Pagamento') return empsDoContrato.includes(l.referenciaId)||
+      empsDoContrado_via_liq(l, empsDoContrato);
+    return false;
+  }) : [];
+  // Unificar sem duplicatas
+  const ids = new Set([...porRef.map(x=>x.id), ...porEmpCad.map(x=>x.id)]);
+  return state.lancamentos.filter(l=>ids.has(l.id));
+}
+function empsDoContrado_via_liq(l, empsCadIds){
+  // Para pagamentos vinculados a liquidações de empenhos do contrato
+  if(l.tipo==='Pagamento' && l.liquidacaoId){
+    const liq=(state.liquidacoes||[]).find(x=>x.id===l.liquidacaoId);
+    if(liq){
+      const empCad=(state.empenhosCad||[]).find(e=>e.numero===liq.nEmpenho);
+      return empCad && empsCadIds.includes(empCad.id);
+    }
+  }
+  if(l.tipo==='Liquidação' && l.referenciaId){
+    return empsCadIds.includes(l.referenciaId);
+  }
+  return false;
+}
+
+// ── Helper: soma lançamentos vinculados a uma AÇÃO de AE ──
+function sumLancsByAcao(tipo, acaoId){
+  return state.lancamentos.filter(l=>{
+    if(l.status!=='Ativo'||l.tipo!==tipo) return false;
+    // referenciaId aponta para acaoId
+    if(l.referenciaId===acaoId) return true;
+    // Para empenhos: empenhoCadId pode ter acaoId
+    if(tipo==='Empenho'){
+      const empCad=(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId);
+      return empCad && empCad.acaoId===acaoId;
+    }
+    // Para liquidações: via empenho cadastrado
+    if(tipo==='Liquidação'){
+      const empCad=(state.empenhosCad||[]).find(e=>e.id===l.referenciaId);
+      return empCad && empCad.acaoId===acaoId;
+    }
+    return false;
+  });
+}
 function sum(arr){return arr.reduce((s,l)=>s+(l.valor||0),0)}
 // Créditos originais (não incluem transferências)
 function totalCreditosOriginais(cat){
@@ -1710,14 +1765,23 @@ function renderDashboard(){
     </div>`:''}
   `;
 
-  const pEmpLiq=totEmp>0?clamp(Math.round(totLiq/totEmp*100),0,100):0;
-  const pLiqPag=totLiq>0?clamp(Math.round(totPag/totLiq*100),0,100):0;
+  // ── FLUXO DE EXECUÇÃO: EXE + RAP (visão consolidada) ──
+  const totEmpConsolid = totalEmpenhos();         // EXE + RAP
+  const totLiqConsolid = totalLiquidacoes();      // EXE + RAP (lançamentos)
+  const totPagConsolid = totalPagamentos();       // EXE + RAP
+  const totLiqModConsolid = (state.liquidacoes||[])
+    .filter(l=>l.status!=='Excluído')
+    .reduce((s,l)=>s+(l.valorLiquido||l.valorBruto||0),0); // módulo liquidações
+
+  const pEmpLiq=totEmpConsolid>0?clamp(Math.round(totLiqConsolid/totEmpConsolid*100),0,100):0;
+  const pLiqPag=totLiqConsolid>0?clamp(Math.round(totPagConsolid/totLiqConsolid*100),0,100):0;
+  const pEmpCred=totCred>0?clamp(Math.round(totEmpConsolid/totCred*100),0,100):0;
   document.getElementById('dash-fases').innerHTML=`
-    <div class="fase-item emp"><div class="fase-val text-blue">${fmtBR(totEmp)}</div><div class="fase-lbl">Empenhado <span style="font-size:9px;color:var(--blue);opacity:.8">EXE</span></div><div class="fase-pct" style="color:var(--blue)">${pctBar(totEmp,totCred)}% do crédito</div></div>
+    <div class="fase-item emp"><div class="fase-val text-blue">${fmtBR(totEmpConsolid)}</div><div class="fase-lbl">Empenhado <span style="font-size:9px;color:var(--blue);opacity:.9">EXE+RAP</span></div><div class="fase-pct" style="color:var(--blue)">${pEmpCred}% do crédito</div></div>
     <div class="fase-arrow">→</div>
-    <div class="fase-item liq"><div class="fase-val" style="color:var(--amber)">${fmtBR(totLiq)}</div><div class="fase-lbl">Liquidado <span style="font-size:9px;color:var(--amber);opacity:.8">EXE</span></div><div class="fase-pct" style="color:var(--amber)">${pEmpLiq}% do emp.</div></div>
+    <div class="fase-item liq"><div class="fase-val" style="color:var(--amber)">${fmtBR(totLiqConsolid)}</div><div class="fase-lbl">Liquidado <span style="font-size:9px;color:var(--amber);opacity:.9">EXE+RAP</span></div><div class="fase-pct" style="color:var(--amber)">${pEmpLiq}% do emp.</div></div>
     <div class="fase-arrow">→</div>
-    <div class="fase-item pag"><div class="fase-val text-green">${fmtBR(totPag)}</div><div class="fase-lbl">Pago <span style="font-size:9px;color:var(--green);opacity:.8">EXE</span></div><div class="fase-pct text-green">${pLiqPag}% do liq.</div></div>
+    <div class="fase-item pag"><div class="fase-val text-green">${fmtBR(totPagConsolid)}</div><div class="fase-lbl">Pago <span style="font-size:9px;color:var(--green);opacity:.9">EXE+RAP</span></div><div class="fase-pct text-green">${pLiqPag}% do liq.</div></div>
   `;
 
   // Saldo por Fonte e PTRES — apenas empenhos EXE
@@ -2050,9 +2114,11 @@ function _orig_renderSaidas(){
 
 // ─── ABA 2: ANULAÇÃO ───
 function renderAnulacaoForm(){
-  // CORREÇÃO: Buscar empenhos do módulo Cadastro Empenho que tenham saldo disponível > 0
+  // CORREÇÃO: Buscar apenas empenhos EXE (RAP não pode ser anulado — exercício anterior)
+  // RAP NÃO pode ser anulado — regra orçamentária. Filtra apenas tipo EXE com saldo > 0.
   const empenhos=(state.empenhosCad||[]).filter(e=>{
     if(e.status!=='Ativo')return false;
+    if(e.tipoEmp==='RAP')return false; // RAP excluído da anulação
     const saldo=calcSaldoEmpenho(e.numero);
     return saldo>0.001;
   });
@@ -2114,11 +2180,14 @@ function limparFormAnulacao(){
 }
 function renderAnulacoes(){
   const l=state.lancamentos.filter(l=>l.tipo==='Anulação'&&l.status==='Ativo').slice().reverse();
-  const el=document.getElementById('an-count');if(el)el.textContent=l.length+' registros';
+  const {slice,pg,totalPgs,total}=paginar(l,'anulacoes');
+  const el=document.getElementById('an-count');if(el)el.textContent=total+' registros';
   const tbody=document.getElementById('an-table');if(!tbody)return;
-  tbody.innerHTML=l.length?l.map(l=>`
+  tbody.innerHTML=slice.length?slice.map(l=>`
     <tr><td><code style="font-size:10px">${l.id}</code></td><td>${fmtData(l.data)}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="font-size:11px;color:var(--text3)">${l.referenciaId||'—'}</td><td><span class="kpi-badge badge-warn">${l.motivo||'—'}</span></td><td>${l.descricao}</td><td class="r text-amber fw6">${fmtBR(l.valor)}</td><td><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>
   `).join(''):'<tr class="empty-row"><td colspan="8">Nenhuma anulação registrada</td></tr>';
+  const wrap=tbody.closest('.tbl-wrap');
+  if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();wrap.insertAdjacentHTML('beforeend',renderPagination('anulacoes',totalPgs,pg,total,"renderAnulacoes()"));}
 }
 
 // ─── ABA 3: TRANSFERÊNCIA ───
@@ -2312,9 +2381,9 @@ function renderContratoLista(){
       else if(diasVenc<=30)alertaHtml=`<span class="ct-alerta vencendo">⏰ Vence em ${diasVenc}d</span>`;
       else alertaHtml=`<span class="ct-alerta ok">✓ ${diasVenc}d</span>`;
     }
-    const empC=sum(getLancsAtivos('Empenho',null,c.id));
-    const liqC=sum(getLancsAtivos('Liquidação',null,c.id));
-    const pagC=sum(getLancsAtivos('Pagamento',null,c.id));
+    const empC=sum(sumLancsByContrato('Empenho',c.id));
+    const liqC=sum(sumLancsByContrato('Liquidação',c.id));
+    const pagC=sum(sumLancsByContrato('Pagamento',c.id));
     const pExec=c.valorTotal>0?Math.round(empC/c.valorTotal*100):0;
     const pLiq=empC>0?Math.round((liqC+pagC)/empC*100):0;
     return`<div class="ct-card">
@@ -2339,9 +2408,9 @@ function renderContratoLista(){
 function renderContratoExec(){
   const cts=state.contratos.filter(c=>c.status!=='Excluído');
   const rows=cts.map(c=>{
-    const empC=sum(getLancsAtivos('Empenho',null,c.id));
-    const liqC=sum(getLancsAtivos('Liquidação',null,c.id));
-    const pagC=sum(getLancsAtivos('Pagamento',null,c.id));
+    const empC=sum(sumLancsByContrato('Empenho',c.id));
+    const liqC=sum(sumLancsByContrato('Liquidação',c.id));
+    const pagC=sum(sumLancsByContrato('Pagamento',c.id));
     const saldo=(c.valorTotal||0)-empC;
     const pExec=c.valorTotal>0?Math.round(empC/c.valorTotal*100):0;
     const pLiqEmp=empC>0?Math.round((liqC+pagC)/empC*100):0;
@@ -2364,9 +2433,9 @@ function renderContratoDash(){
   const vencendo=cts.filter(c=>{if(!c.dataFim)return false;const d=Math.round((new Date(c.dataFim+'T12:00:00')-hoje)/86400000);return d>=0&&d<=30;});
   const vencidos=cts.filter(c=>{if(!c.dataFim)return false;return new Date(c.dataFim+'T12:00:00')<hoje;});
   const totContratado=cts.reduce((s,c)=>s+(c.valorTotal||0),0);
-  const totEmpContratos=cts.reduce((s,c)=>s+sum(getLancsAtivos('Empenho',null,c.id)),0);
-  const totPagContratos=cts.reduce((s,c)=>s+sum(getLancsAtivos('Pagamento',null,c.id)),0);
-  const totLiqContratos=cts.reduce((s,c)=>s+sum(getLancsAtivos('Liquidação',null,c.id)),0);
+  const totEmpContratos=cts.reduce((s,c)=>s+sum(sumLancsByContrato('Empenho',c.id)),0);
+  const totPagContratos=cts.reduce((s,c)=>s+sum(sumLancsByContrato('Pagamento',c.id)),0);
+  const totLiqContratos=cts.reduce((s,c)=>s+sum(sumLancsByContrato('Liquidação',c.id)),0);
   const pctExecGeral=totContratado>0?Math.round(totEmpContratos/totContratado*100):0;
   document.getElementById('contratos-dash').innerHTML=`
     <div class="kpi-grid">
@@ -2381,7 +2450,7 @@ function renderContratoDash(){
     ${vencendo.length?`<div class="info-box warn"><span class="info-icon">⏰</span><div>Contratos vencendo em 30 dias: <strong>${vencendo.map(c=>(c.nContrato||c.nome)+' ('+fmtData(c.dataFim)+')').join(', ')}</strong></div></div>`:''}
     ${vencidos.length?`<div class="info-box danger"><span class="info-icon">⚠</span><div>Contratos vencidos: <strong>${vencidos.map(c=>(c.nContrato||c.nome)+' ('+fmtData(c.dataFim)+')').join(', ')}</strong></div></div>`:''}
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Situação dos Contratos</div></div><table><thead><tr><th>Empresa</th><th>N° Contrato</th><th class="r">% Execução</th><th class="r">Saldo Disponível</th><th>Situação</th></tr></thead><tbody>${cts.map(c=>{
-      const emp=sum(getLancsAtivos('Empenho',null,c.id));
+      const emp=sum(sumLancsByContrato('Empenho',c.id));
       const saldo=(c.valorTotal||0)-emp;
       const pct=c.valorTotal>0?Math.round(emp/c.valorTotal*100):0;
       const sit=pct>=80?'<span class="ct-alerta ok">🟢 Normal</span>':pct>=50?'<span class="ct-alerta vencendo">🟡 Atenção</span>':'<span class="ct-alerta vencido" style="background:transparent;border:none">🔴 Crítico</span>';
@@ -2566,8 +2635,8 @@ function renderAeGerenciar(){
         </thead>
         <tbody>
           ${acoes.length?acoes.map(a=>{
-            const emp=sum(getLancsAtivos('Empenho',null,a.id));
-            const pag=sum(getLancsAtivos('Pagamento',null,a.id));
+            const emp=sum(sumLancsByAcao('Empenho',a.id));
+            const pag=sum(sumLancsByAcao('Pagamento',a.id));
             const prev=a.previsto||0;
             const pct=prev>0?Math.round(emp/prev*100):0;
             const isEditing=_aeEditId===a.id;
@@ -2698,9 +2767,9 @@ function gae_confirmarExclusao(){
 function renderAeAcoes(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
   document.getElementById('ae-acoes').innerHTML=acoes.length?acoes.map(a=>{
-    const emp=sum(getLancsAtivos('Empenho',null,a.id));
-    const liq=sum(getLancsAtivos('Liquidação',null,a.id));
-    const pag=sum(getLancsAtivos('Pagamento',null,a.id));
+    const emp=sum(sumLancsByAcao('Empenho',a.id));
+    const liq=sum(sumLancsByAcao('Liquidação',a.id));
+    const pag=sum(sumLancsByAcao('Pagamento',a.id));
     const prev=a.previsto||0;
     const pEmp=prev>0?Math.round(emp/prev*100):0;
     const pExec=emp>0?Math.round((liq+pag)/emp*100):0;
@@ -2734,9 +2803,9 @@ function renderAeMensal(){
       const arr=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
       return s+(arr[mi]||0);
     },0);
-    const emp=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Empenho'&&(state.acoes.some(a=>a.id===l.referenciaId))));
-    const liq=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Liquidação'&&(state.acoes.some(a=>a.id===l.referenciaId))));
-    const pag=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Pagamento'&&(state.acoes.some(a=>a.id===l.referenciaId))));
+    const emp=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Empenho'&&(state.acoes.some(a=>a.status!=='Excluído'&&(l.referenciaId===a.id||(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId)?.acaoId===a.id)))));
+    const liq=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Liquidação'&&(state.acoes.some(a=>a.status!=='Excluído'&&(l.referenciaId===a.id||((state.empenhosCad||[]).find(e=>e.id===l.referenciaId)?.acaoId===a.id))))));
+    const pag=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Pagamento'&&(state.acoes.some(a=>a.status!=='Excluído'&&l.referenciaId===a.id))));
     return{prev,emp,liq,pag};
   });
   const totPrev=dadosMensais.reduce((s,d)=>s+d.prev,0);
@@ -2753,9 +2822,9 @@ function renderAeMensal(){
   `;
   // Resumo por ação
   const porAcaoRows=acoes.map(a=>{
-    const emp2=sum(getLancsAtivos('Empenho',null,a.id));
-    const liq2=sum(getLancsAtivos('Liquidação',null,a.id));
-    const pag2=sum(getLancsAtivos('Pagamento',null,a.id));
+    const emp2=sum(sumLancsByAcao('Empenho',a.id));
+    const liq2=sum(sumLancsByAcao('Liquidação',a.id));
+    const pag2=sum(sumLancsByAcao('Pagamento',a.id));
     const prev2=a.previsto||0;
     const pEmp=prev2>0?Math.round(emp2/prev2*100):0;
     const pPag=emp2>0?Math.round(pag2/emp2*100):0;
@@ -2772,8 +2841,8 @@ function renderAeMensal(){
 function renderAeDash(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
   const totPrev=acoes.reduce((s,a)=>s+(a.previsto||0),0);
-  const totEmp=acoes.reduce((s,a)=>s+sum(getLancsAtivos('Empenho',null,a.id)),0);
-  const totPag=acoes.reduce((s,a)=>s+sum(getLancsAtivos('Pagamento',null,a.id)),0);
+  const totEmp=acoes.reduce((s,a)=>s+sum(sumLancsByAcao('Empenho',a.id)),0);
+  const totPag=acoes.reduce((s,a)=>s+sum(sumLancsByAcao('Pagamento',a.id)),0);
   const pGeral=totPrev>0?Math.round(totEmp/totPrev*100):0;
   document.getElementById('ae-dashboard').innerHTML=`
     <div class="kpi-grid">
@@ -2785,8 +2854,8 @@ function renderAeDash(){
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Ações — Indicadores</div></div>
     <table><thead><tr><th>Ação</th><th>Tipo</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Pago</th><th class="r">Saldo Não Emp.</th><th class="r">% Emp.</th></tr></thead>
     <tbody>${acoes.map(a=>{
-      const emp=sum(getLancsAtivos('Empenho',null,a.id));
-      const pag=sum(getLancsAtivos('Pagamento',null,a.id));
+      const emp=sum(sumLancsByAcao('Empenho',a.id));
+      const pag=sum(sumLancsByAcao('Pagamento',a.id));
       const prev=a.previsto||0;
       const pct=prev>0?Math.round(emp/prev*100):0;
       return`<tr><td><strong>${a.nome}</strong></td><td><span class="kpi-badge badge-blue">${a.tipo}</span></td><td class="r text-green">${fmtBR(prev)}</td><td class="r text-blue">${fmtBR(emp)}</td><td class="r text-green">${fmtBR(pag)}</td><td class="r ${(prev-emp)<0?'text-red':'text-gold'}">${fmtBR(prev-emp)}</td><td class="r">${prev>0?semaforo(pct):'—'}</td></tr>`;
@@ -2934,30 +3003,46 @@ function gerarRelatorio(){
   if(fonte)l=l.filter(x=>x.fonte===fonte);
   if(ptres)l=l.filter(x=>x.ptres===ptres);
   if(nd)l=l.filter(x=>x.nd===nd);
-  // Para créditos, usar apenas tipo Entrada (não transferências)
+  // Totais EXE
   const totE=sum(l.filter(x=>x.tipo==='Entrada'));
-  const totEmp=sum(l.filter(x=>x.tipo==='Empenho'));
-  const totLiq=sum(l.filter(x=>x.tipo==='Liquidação'));
+  const totEmpEXE=sum(l.filter(x=>x.tipo==='Empenho'&&(x.tipoRecurso||'EXE')==='EXE'));
+  const totEmpRAP=sum(l.filter(x=>x.tipo==='Empenho'&&x.tipoRecurso==='RAP'));
+  const totEmp=totEmpEXE+totEmpRAP;
+  const totLiqEXE=sum(l.filter(x=>x.tipo==='Liquidação'&&(x.tipoRecurso||'EXE')==='EXE'));
+  const totLiqRAP=sum(l.filter(x=>x.tipo==='Liquidação'&&x.tipoRecurso==='RAP'));
+  const totLiq=totLiqEXE+totLiqRAP;
   const totPag=sum(l.filter(x=>x.tipo==='Pagamento'));
   const totAnul=sum(l.filter(x=>x.tipo==='Anulação'));
   const totTransf=sum(l.filter(x=>x.tipo==='Transferência Saída'));
   const periodo=(de?fmtData(de):'início')+' a '+(ate?fmtData(ate):'hoje');
-  const pExec=totE>0?Math.round(totEmp/totE*100):0;
+  const pExecEXE=totE>0?Math.round(totEmpEXE/totE*100):0;
+  const pExecGeral=totE>0?Math.round(totEmp/totE*100):0;
   document.getElementById('rel-resultado').innerHTML=`
     <div class="card">
       <div class="card-title">Relatório — ${periodo}${cat?' · '+cat:''}${tipo?' · '+tipo:''}</div>
-      <div class="kpi-grid" style="margin-bottom:14px">
+      <div class="kpi-grid" style="margin-bottom:10px">
         <div class="kpi accent-green"><div class="kpi-label">Créditos Originais</div><div class="kpi-value text-green">${fmtBR(totE)}</div></div>
-        <div class="kpi accent-blue"><div class="kpi-label">Empenhos</div><div class="kpi-value text-blue">${fmtBR(totEmp)}</div></div>
-        <div class="kpi accent-amber"><div class="kpi-label">Liquidações</div><div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiq)}</div></div>
+        <div class="kpi accent-blue">
+          <div class="kpi-label">Empenhos <span class="kpi-badge badge-blue" style="font-size:9px">EXE</span></div>
+          <div class="kpi-value text-blue">${fmtBR(totEmpEXE)}</div>
+          ${totEmpRAP>0?`<div class="kpi-sub" style="color:var(--purple)">+ ${fmtBR(totEmpRAP)} RAP</div>`:''}
+        </div>
+        <div class="kpi accent-amber">
+          <div class="kpi-label">Liquidações <span class="kpi-badge badge-warn" style="font-size:9px">EXE</span></div>
+          <div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiqEXE)}</div>
+          ${totLiqRAP>0?`<div class="kpi-sub" style="color:var(--purple)">+ ${fmtBR(totLiqRAP)} RAP</div>`:''}
+        </div>
         <div class="kpi accent-green"><div class="kpi-label">Pagamentos</div><div class="kpi-value text-green">${fmtBR(totPag)}</div></div>
         <div class="kpi accent-red"><div class="kpi-label">Anulações</div><div class="kpi-value text-red">${fmtBR(totAnul)}</div></div>
-        <div class="kpi accent-purple"><div class="kpi-label">% Execução</div><div class="kpi-value">${semaforo(pExec)}</div></div>
+        <div class="kpi accent-purple"><div class="kpi-label">% Exec. EXE / Geral</div><div class="kpi-value">${semaforo(pExecEXE)}</div><div class="kpi-sub">${pExecGeral}% geral (EXE+RAP)</div></div>
       </div>
-      ${totTransf>0?`<div class="info-box info"><span class="info-icon">⇄</span><div>Transferências internas no período: <strong>${fmtBR(totTransf)}</strong> — Não incluídas no total de créditos (Reclassificação/Remanejamento).</div></div>`:''}
+      ${totTransf>0?`<div class="info-box info"><span class="info-icon">⇄</span><div>Transferências internas no período: <strong>${fmtBR(totTransf)}</strong> — Não incluídas no total de créditos.</div></div>`:''}
       <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Lançamentos filtrados — ${l.length} registros</div></div>
-      <div class="scroll-h"><table><thead><tr><th>ID</th><th>Data</th><th>Fase</th><th>Categoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th></tr></thead>
-      <tbody>${l.length?l.slice().reverse().map(x=>`<tr><td><code style="font-size:10px">${x.id}</code></td><td>${fmtData(x.data)}</td><td>${tagFase(x.tipo)}</td><td>${catIcon(x.categoria)} ${x.categoria}</td><td style="font-size:11px;color:var(--text3)">${(x.fonte||'').split('–')[0]||'—'}</td><td style="font-size:11px;color:var(--text3)">${x.ptres||'—'}</td><td>${x.descricao}</td><td class="r ${x.tipo==='Entrada'?'text-green':'text-red'}">${fmtBR(x.valor)}</td></tr>`).join(''):'<tr class="empty-row"><td colspan="8">Nenhum registro encontrado</td></tr>'}
+      <div class="scroll-h"><table><thead><tr><th>ID</th><th>Data</th><th>Fase</th><th>Tipo</th><th>Categoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th></tr></thead>
+      <tbody>${l.length?l.slice().reverse().map(x=>{
+        const tipoTag=x.tipo==='Empenho'?(x.tipoRecurso==='RAP'?'<span class="kpi-badge badge-purple" style="font-size:9px">RAP</span>':'<span class="kpi-badge badge-blue" style="font-size:9px">EXE</span>'):'';
+        return`<tr><td><code style="font-size:10px">${x.id}</code></td><td>${fmtData(x.data)}</td><td>${tagFase(x.tipo)}</td><td>${tipoTag}</td><td>${catIcon(x.categoria)} ${x.categoria}</td><td style="font-size:11px;color:var(--text3)">${(x.fonte||'').split('–')[0]||'—'}</td><td style="font-size:11px;color:var(--text3)">${x.ptres||'—'}</td><td>${x.descricao}</td><td class="r ${x.tipo==='Entrada'?'text-green':'text-red'}">${fmtBR(x.valor)}</td></tr>`;
+      }).join(''):'<tr class="empty-row"><td colspan="9">Nenhum registro encontrado</td></tr>'}
       </tbody></table></div></div>
     </div>`;
 }
@@ -3189,9 +3274,9 @@ function renderAeDetalhe(){
   if(!a)return;
   const pm=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
   const totPrev=pm.reduce((s,v)=>s+v,0)||a.previsto||0;
-  const emp=sum(getLancsAtivos('Empenho',null,a.id));
-  const liq=sum(getLancsAtivos('Liquidação',null,a.id));
-  const pag=sum(getLancsAtivos('Pagamento',null,a.id));
+  const emp=sum(sumLancsByAcao('Empenho',a.id));
+  const liq=sum(sumLancsByAcao('Liquidação',a.id));
+  const pag=sum(sumLancsByAcao('Pagamento',a.id));
   const liqPag=liq+pag;
   const saldoNEmp=totPrev-emp;
   const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -3209,9 +3294,8 @@ function renderAeDetalhe(){
         ${pm.map((v,i)=>{
           const anoAtual=new Date().getFullYear();
           const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
-          const lancsM=state.lancamentos.filter(l=>l.status==='Ativo'&&l.referenciaId===a.id&&l.data&&l.data.startsWith(prefix));
-          const empM=sum(lancsM.filter(l=>l.tipo==='Empenho'));
-          const liqM=sum(lancsM.filter(l=>l.tipo==='Liquidação'||l.tipo==='Pagamento'));
+          const empM=sum(sumLancsByAcao('Empenho',a.id).filter(l=>l.data&&l.data.startsWith(prefix)));
+          const liqM=sum([...sumLancsByAcao('Liquidação',a.id),...sumLancsByAcao('Pagamento',a.id)].filter(l=>l.data&&l.data.startsWith(prefix)));
           return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;text-align:center">
             <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px">${MESES_ABR[i]}</div>
             <div style="font-size:11px;color:var(--gold);font-family:'IBM Plex Mono',monospace">${v>0?fmtBR(v).replace('R$ ',''):'—'}</div>
@@ -3249,9 +3333,9 @@ function renderContratoDetalhe(){
   if(!c)return;
   const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
   const totPrevMensal=pm.reduce((s,v)=>s+v,0);
-  const emp=sum(getLancsAtivos('Empenho',c.id));
-  const liq=sum(getLancsAtivos('Liquidação',c.id));
-  const pag=sum(getLancsAtivos('Pagamento',c.id));
+  const emp=sum(sumLancsByContrato('Empenho',c.id));
+  const liq=sum(sumLancsByContrato('Liquidação',c.id));
+  const pag=sum(sumLancsByContrato('Pagamento',c.id));
   const liqPag=liq+pag;
   const valorRef=c.valorTotal||totPrevMensal||0;
   const saldoNEmp=valorRef-emp;
@@ -3275,9 +3359,9 @@ function renderContratoDetalhe(){
         ${pm.map((v,i)=>{
           const anoAtual=new Date().getFullYear();
           const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
-          const lancsM=state.lancamentos.filter(l=>l.status==='Ativo'&&l.contratoId===c.id&&l.data&&l.data.startsWith(prefix));
-          const empM=sum(lancsM.filter(l=>l.tipo==='Empenho'));
-          const liqM=sum(lancsM.filter(l=>l.tipo==='Liquidação'||l.tipo==='Pagamento'));
+          // Busca lançamentos do contrato no mês (via sumLancsByContrato + filtro de data)
+          const empM=sum(sumLancsByContrato('Empenho',c.id).filter(l=>l.data&&l.data.startsWith(prefix)));
+          const liqM=sum([...sumLancsByContrato('Liquidação',c.id),...sumLancsByContrato('Pagamento',c.id)].filter(l=>l.data&&l.data.startsWith(prefix)));
           return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;text-align:center">
             <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px">${MESES_ABR[i]}</div>
             <div style="font-size:11px;color:var(--gold);font-family:'IBM Plex Mono',monospace">${v>0?fmtBR(v).replace('R$ ',''):'—'}</div>
@@ -3323,8 +3407,8 @@ function gerarRelatorioContratos(){
         <tbody>
           ${cts.map(c=>{
             const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
-            const empC=sum(getLancsAtivos('Empenho',c.id));
-            const liqC=sum(getLancsAtivos('Liquidação',c.id))+sum(getLancsAtivos('Pagamento',c.id));
+            const empC=sum(sumLancsByContrato('Empenho',c.id));
+            const liqC=sum(sumLancsByContrato('Liquidação',c.id))+sum(sumLancsByContrato('Pagamento',c.id));
             const mesesCells=mesFiltro
               ?`<td class="r">${fmtBR(pm[parseInt(mesFiltro)-1])}</td>`
               :pm.map(v=>`<td class="r" style="font-size:10px;color:${v>0?'var(--gold)':'var(--text4)'}">${v>0?fmtBR(v).replace('R$ ',''):'-'}</td>`).join('');
@@ -3950,10 +4034,11 @@ function limparCadastroEmpenho(){
 
 function renderCadastroEmpenhos(){
   if(!state.empenhosCad)state.empenhosCad=[];
-  const lista=state.empenhosCad.filter(e=>e.status!=='Excluído');
-  const el=document.getElementById('cemp-count');if(el)el.textContent=lista.length+' empenho(s)';
+  const listaAll=state.empenhosCad.filter(e=>e.status!=='Excluído').slice().reverse();
+  const {slice,pg,totalPgs,total}=paginar(listaAll,'empenhosCad');
+  const el=document.getElementById('cemp-count');if(el)el.textContent=total+' empenho(s)';
   const tbody=document.getElementById('cemp-tbody');if(!tbody)return;
-  tbody.innerHTML=lista.length?lista.slice().reverse().map(e=>{
+  tbody.innerHTML=total?slice.map(e=>{
     return`<tr>
       <td><span class="tag ${e.tipoEmp==='RAP'?'tag-transf':'tag-ent'}" style="font-size:10px">${e.tipoEmp}</span></td>
       <td><code style="font-size:11px">${e.numero||'—'}</code></td>
@@ -3967,6 +4052,8 @@ function renderCadastroEmpenhos(){
       <td><button class="btn btn-sec btn-xs" onclick="editarCadastroEmpenho('${e.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirCadastroEmpenho('${e.id}')">✕</button></td>
     </tr>`;
   }).join(''):'<tr class="empty-row"><td colspan="10">Nenhum empenho cadastrado.</td></tr>';
+  const wrap=tbody.closest('.tbl-wrap');
+  if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();if(totalPgs>1)wrap.insertAdjacentHTML('beforeend',renderPagination('empenhosCad',totalPgs,pg,total,"renderCadastroEmpenhos()"));}
 }
 
 function excluirCadastroEmpenho(id){
@@ -5368,16 +5455,52 @@ function limparFormSaida(){
   _saidaClearDerivedFields();
 }
 
-// Adicionar coluna Tipo na tabela de saídas
 function renderSaidas(){
   const l=state.lancamentos.filter(l=>l.tipo==='Empenho'&&l.status==='Ativo').slice().reverse();
-  document.getElementById('saida-count').textContent=l.length+' registros';
-  document.getElementById('saida-table').innerHTML=l.length?l.map(l=>{
+  const {slice,pg,totalPgs,total}=paginar(l,'saidas');
+  document.getElementById('saida-count').textContent=total+' registros';
+  document.getElementById('saida-table').innerHTML=slice.length?slice.map(l=>{
     const badge = l.tipoRecurso==='RAP'
       ? '<span class="kpi-badge badge-purple" style="font-size:9px">RAP</span>'
       : '<span class="kpi-badge badge-blue" style="font-size:9px">EXE</span>';
-    return `<tr><td><code style="font-size:10px">${l.id}</code></td><td>${badge}</td><td>${fmtData(l.data)}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="font-size:11px;color:var(--text3)">${l.numeroEmpenho||l.referencia||'—'}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.descricao||'—'}</td><td style="font-size:11px;color:var(--text3)">${l.subcategoria||'—'}</td><td class="r text-red fw6">${fmtBR(l.valor)}</td><td><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>`;
+    return `<tr><td><code style="font-size:10px">${l.id}</code></td><td>${badge}</td><td>${fmtData(l.data)}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="font-size:11px;color:var(--text3)">${l.numeroEmpenho||l.referencia||'—'}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.descricao||'—'}</td><td style="font-size:11px;color:var(--text3)">${l.subcategoria||'—'}</td><td class="r text-red fw6">${fmtBR(l.valor)}</td><td style="white-space:nowrap"><button class="btn btn-sec btn-xs" onclick="editarSaida('${l.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>`;
   }).join(''):'<tr class="empty-row"><td colspan="9">Nenhuma saída registrada</td></tr>';
+  const wrap=document.getElementById('saida-table')?.closest('.tbl-wrap');
+  if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();wrap.insertAdjacentHTML('beforeend',renderPagination('saidas',totalPgs,pg,total,"renderSaidas()"));}
+}
+
+// ─── EDITAR SAÍDA (Registrar Saída — Empenho) ───
+function editarSaida(id){
+  const l=state.lancamentos.find(x=>x.id===id);
+  if(!l){toast('Lançamento não encontrado','error');return;}
+  openModal('Editar Saída / Empenho','Altere os dados permitidos. Categoria e tipo não podem ser alterados.',()=>{
+    const novoValor=parseFloat(document.getElementById('edit-saida-valor')?.value)||0;
+    const novaData=document.getElementById('edit-saida-data')?.value;
+    const novaSubcat=document.getElementById('edit-saida-subcat')?.value.trim()||'';
+    const novaDesc=document.getElementById('edit-saida-desc')?.value.trim()||'';
+    if(novoValor<=0){toast('Valor deve ser maior que zero','warn');return false;}
+    if(!novaData){toast('Data obrigatória','warn');return false;}
+    // Para EXE, verificar se o novo valor não excede o saldo disponível da categoria
+    if((l.tipoRecurso||'EXE')==='EXE'){
+      const diferencaValor=novoValor-l.valor;
+      const saldoAtual=saldoCat(l.categoria);
+      if(diferencaValor>0 && diferencaValor>saldoAtual+0.01){
+        toast('Aumento de valor excede o saldo disponível da categoria: '+fmtBR(saldoAtual),'warn');
+        return false;
+      }
+    }
+    auditLog('UPDATE','LANCAMENTO',id,'Saída editada',{antes:{valor:l.valor,data:l.data,subcategoria:l.subcategoria,descricao:l.descricao},depois:{valor:novoValor,data:novaData,subcategoria:novaSubcat,descricao:novaDesc}});
+    l.valor=novoValor;l.data=novaData;l.subcategoria=novaSubcat;l.descricao=novaDesc;
+    l.tsModif=new Date().toISOString();
+    salvar();closeModal();renderSaidas();renderSidebar();renderDashboard();
+    toast('Saída atualizada com sucesso!','success');
+  });
+  document.getElementById('modal-form-area').innerHTML=`
+    <div class="field"><label>Valor (R$)</label><input type="number" id="edit-saida-valor" value="${l.valor}" min="0" step="0.01"></div>
+    <div class="field" style="margin-top:8px"><label>Data</label><input type="date" id="edit-saida-data" value="${l.data}"></div>
+    <div class="field" style="margin-top:8px"><label>Subcategoria</label><input type="text" id="edit-saida-subcat" value="${l.subcategoria||''}"></div>
+    <div class="field" style="margin-top:8px"><label>Descrição</label><input type="text" id="edit-saida-desc" value="${l.descricao||''}"></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text3)">Categoria: <strong style="color:var(--gold)">${l.categoria}</strong> · Tipo: <strong style="color:${(l.tipoRecurso||'EXE')==='RAP'?'var(--purple)':'var(--blue)'}">${l.tipoRecurso||'EXE'}</strong> (não editáveis)</div>`;
 }
 
 // ═══════════════════════════════════════════════════════════
