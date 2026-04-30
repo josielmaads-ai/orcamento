@@ -578,10 +578,13 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <div id="s-empenho-info" style="margin-top:8px;margin-bottom:8px"></div>
       <div class="form-grid cols3 mt4">
         <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="s-data"></div>
+        <div class="field"><label>Competência (Mês)<span class="required-mark">*</span></label><select id="s-comp"><option value="">Selecione</option></select><div class="field-hint">Mês de referência do empenho — obrigatório</div></div>
         <div class="field"><label>Valor (R$)<span class="required-mark">*</span></label><input type="number" id="s-valor" min="0" step="0.01" placeholder="0,00" oninput="updateSaldoSaida()"></div>
-        <div class="field"><label>Subcategoria<span class="required-mark">*</span></label><input type="text" id="s-subcat" placeholder="Ex: 33903702"></div>
       </div>
-      <div class="field mt4"><label>Descrição</label><input type="text" id="s-desc" placeholder="Descrição adicional (opcional)"></div>
+      <div class="form-grid cols2 mt4">
+        <div class="field"><label>Subcategoria<span class="required-mark">*</span></label><input type="text" id="s-subcat" placeholder="Ex: 33903702"></div>
+        <div class="field"><label>Descrição</label><input type="text" id="s-desc" placeholder="Descrição adicional (opcional)"></div>
+      </div>
       <div id="s-saldo-bar"></div>
       <div class="btn-row" style="margin-top:12px">
         <button class="btn btn-primary" onclick="registrarSaida()">✓ Registrar Saída</button>
@@ -590,7 +593,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     </div>
     <div class="tbl-wrap">
       <div class="tbl-head"><div class="tbl-title">Saídas registradas (Inclusão de Saldo)</div><div class="tbl-count" id="saida-count"></div></div>
-      <table><thead><tr><th>ID</th><th>Tipo</th><th>Data</th><th>Categoria</th><th>Nº Empenho</th><th>Descrição</th><th>Subcategoria</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="saida-table"></tbody></table>
+      <table><thead><tr><th>ID</th><th>Tipo</th><th>Data</th><th>Competência</th><th>Categoria</th><th>Nº Empenho</th><th>Descrição</th><th>Subcategoria</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="saida-table"></tbody></table>
     </div>
   </div>
 
@@ -892,10 +895,13 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <div class="field"><label>Fonte</label><select id="f-fonte" onchange="renderHistorico()"><option value="">Todas</option></select></div>
       <div class="field"><label>PTRES</label><select id="f-ptres" onchange="renderHistorico()"><option value="">Todos</option></select></div>
     </div>
+    <div class="form-grid cols4" style="margin-top:10px">
+      <div class="field"><label>Competência (Mês)</label><select id="f-comp" onchange="renderHistorico()"><option value="">Todas as competências</option></select></div>
+    </div>
   </div>
   <div class="tbl-wrap">
     <div class="tbl-head"><div class="tbl-title">Movimentações</div><div style="display:flex;gap:8px;align-items:center"><div class="tbl-count" id="hist-count"></div><button class="btn btn-sec btn-xs" onclick="exportarHistoricoCSV()">↓ CSV</button></div></div>
-    <table><thead><tr><th>ID</th><th>Data</th><th>Fase</th><th>Categoria</th><th>Subcategoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th><th>Status</th><th>Ações</th></tr></thead><tbody id="hist-body"></tbody></table>
+    <table><thead><tr><th>ID</th><th>Data</th><th>Competência</th><th>Fase</th><th>Categoria</th><th>Subcategoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th><th>Status</th><th>Ações</th></tr></thead><tbody id="hist-body"></tbody></table>
   </div>
 </div>
 
@@ -1807,8 +1813,18 @@ function renderDashboard(){
   // Tabelas mensais — APENAS EXE (RAP excluído)
   const anoAtual=new Date().getFullYear();
   const dadosMensais=MESES.map((_,mi)=>{
+    const mesIdx=mi+1;
+    const prefixo=anoAtual+'-'+String(mesIdx).padStart(2,'0');
     const lancsDoMes=state.lancamentos.filter(l=>{
       if(l.status!=='Ativo')return false;
+      if(l.tipo==='Empenho'){
+        // Para empenhos: usar competência se disponível; fallback para data
+        if(l.competencia) return l.competencia===prefixo;
+        const d=new Date((l.data||'')+'T12:00:00');
+        return d.getFullYear()===anoAtual&&d.getMonth()===mi;
+      }
+      // Para demais tipos: usar competência se disponível; fallback para data
+      if(l.competencia) return l.competencia===prefixo;
       const d=new Date((l.data||'')+'T12:00:00');
       return d.getFullYear()===anoAtual&&d.getMonth()===mi;
     });
@@ -1973,6 +1989,14 @@ function setSaidaTab(t){
 function renderSaidaForms(){
   // s-cat agora é campo hidden — valor sincronizado automaticamente via carregarDadosEmpenhoCadastrado
   if(!document.getElementById('s-data').value) document.getElementById('s-data').value=new Date().toISOString().slice(0,10);
+  populateMesesSelect('s-comp');
+  // Pré-selecionar mês corrente se nenhum selecionado
+  const sComp=document.getElementById('s-comp');
+  if(sComp&&!sComp.value){
+    const now=new Date();
+    const prefAtual=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+    sComp.value=prefAtual;
+  }
   updateEmpenhosCadastrados();
   renderSaidas();
 }
@@ -2798,7 +2822,14 @@ function renderAeMensal(){
   const anoAtual=new Date().getFullYear();
   // Resumo mensal consolidado (todas as ações)
   const dadosMensais=MESES.map((_,mi)=>{
-    const filtMes=l=>l.status==='Ativo'&&(()=>{const d=new Date((l.data||'')+'T12:00:00');return d.getFullYear()===anoAtual&&d.getMonth()===mi;})();
+    const mesIdx=mi+1;
+    const prefixo=anoAtual+'-'+String(mesIdx).padStart(2,'0');
+    const filtMes=l=>{
+      if(l.status!=='Ativo')return false;
+      if(l.tipo==='Empenho'&&l.competencia) return l.competencia===prefixo;
+      const d=new Date((l.data||'')+'T12:00:00');
+      return d.getFullYear()===anoAtual&&d.getMonth()===mi;
+    };
     const prev=acoes.reduce((s,a)=>{
       const arr=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
       return s+(arr[mi]||0);
@@ -2937,6 +2968,18 @@ function renderHistorico(){
   const ate=document.getElementById('f-ate').value;
   const fonte=document.getElementById('f-fonte').value;
   const ptres=document.getElementById('f-ptres').value;
+  const compFiltro=document.getElementById('f-comp')?.value||'';
+  // Populate f-comp with distinct competencias
+  const fComp=document.getElementById('f-comp');
+  if(fComp){
+    const comps=[...new Set(state.lancamentos.filter(l=>l.competencia).map(l=>l.competencia))].sort();
+    const curComp=fComp.value;
+    fComp.innerHTML='<option value="">Todas as competências</option>'+comps.map(c=>{
+      const p=c.split('-');
+      const lbl=p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:c;
+      return`<option value="${c}" ${c===curComp?'selected':''}>${lbl}</option>`;
+    }).join('');
+  }
   let all=[...state.lancamentos];
   if(tipo)all=all.filter(x=>x.tipo===tipo);
   if(cat)all=all.filter(x=>x.categoria===cat);
@@ -2945,14 +2988,18 @@ function renderHistorico(){
   if(ate)all=all.filter(x=>x.data<=ate);
   if(fonte)all=all.filter(x=>x.fonte===fonte);
   if(ptres)all=all.filter(x=>x.ptres===ptres);
+  // Filtro de competência: filtra registros que têm a competência selecionada
+  if(compFiltro)all=all.filter(x=>x.competencia===compFiltro);
   if(busca)all=all.filter(x=>(x.id+x.descricao+x.categoria+x.subcategoria+(x.ptres||'')).toLowerCase().includes(busca));
   all=all.slice().reverse();
   const {slice,pg,totalPgs,total}=paginar(all,'historico');
   document.getElementById('hist-count').textContent=total+' registros';
-  document.getElementById('hist-body').innerHTML=slice.length?slice.map(x=>`
-    <tr style="${x.status==='Excluído'?'opacity:.45;text-decoration:line-through':''}">
+  document.getElementById('hist-body').innerHTML=slice.length?slice.map(x=>{
+    const compLabel=x.competencia?(()=>{const p=x.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:x.competencia;})():'—';
+    return`<tr style="${x.status==='Excluído'?'opacity:.45;text-decoration:line-through':''}">
       <td><code style="font-size:10px">${x.id}</code></td>
       <td>${fmtData(x.data)}</td>
+      <td style="font-size:11px;color:var(--gold);white-space:nowrap">${compLabel}</td>
       <td>${tagFase(x.tipo)}</td>
       <td>${catIcon(x.categoria)} ${x.categoria||'—'}</td>
       <td style="font-size:11px;color:var(--text3)">${x.subcategoria||'—'}</td>
@@ -2962,8 +3009,8 @@ function renderHistorico(){
       <td class="r ${x.tipo==='Entrada'||x.tipo==='Anulação'||x.tipo==='Transferência Entrada'?'text-green':'text-red'}">${fmtBR(x.valor)}</td>
       <td><span class="${x.status==='Ativo'?'status-ativo':'status-excluido'}">${x.status}</span></td>
       <td>${x.status==='Excluído'?`<button class="btn btn-green btn-xs" onclick="restaurarLancamento('${x.id}')">↩</button>`:`<button class="btn btn-red btn-xs" onclick="excluirLancamento('${x.id}')">✕</button>`}</td>
-    </tr>
-  `).join(''):'<tr class="empty-row"><td colspan="11">Nenhum resultado</td></tr>';
+    </tr>`;
+  }).join(''):'<tr class="empty-row"><td colspan="12">Nenhum resultado</td></tr>';
   const wrap=document.getElementById('hist-body')?.closest('.tbl-wrap');
   if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();wrap.insertAdjacentHTML('beforeend',renderPagination('historico',totalPgs,pg,total,"renderHistorico()"));}
 }
@@ -5407,9 +5454,12 @@ function registrarSaida(){
   const data  = document.getElementById('s-data')?.value||'';
   const subcat= document.getElementById('s-subcat')?.value.trim()||'';
   const desc  = document.getElementById('s-desc')?.value.trim()||'';
+  // ── COMPETÊNCIA: leitura e validação obrigatória ──
+  const competencia = document.getElementById('s-comp')?.value||'';
 
   if(!valor||valor<=0){ toast('Valor deve ser maior que zero','warn'); return; }
   if(!data){ toast('Data obrigatória','warn'); return; }
+  if(!competencia){ toast('Competência (mês) é obrigatória — selecione o mês de referência do empenho','warn'); return; }
   if(!subcat){ toast('Subcategoria obrigatória','warn'); return; }
 
   // ── Verificação de saldo: EXE verifica, RAP não ──
@@ -5429,6 +5479,7 @@ function registrarSaida(){
     subcategoria: subcat,
     descricao: desc || 'Inclusão de saldo no empenho ' + empCad.numero,
     valor, data,
+    competencia,          // ← mês de competência obrigatório
     empenhoCadId: empCadId,
     numeroEmpenho: empCad.numero,
     fonte: empCad.fonte||'',
@@ -5441,7 +5492,7 @@ function registrarSaida(){
   };
   state.lancamentos.push(l);
   auditLog('CREATE','LANCAMENTO',l.id,
-    '['+tipoRecurso+'] Saída registrada: '+empCad.numero+' · '+cat, l);
+    '['+tipoRecurso+'] Saída registrada: '+empCad.numero+' · '+cat+' · competência '+competencia, l);
   salvar();
   renderSaidaForms(); renderSaidas(); renderSidebar(); renderDashboard(); renderEntradas(); renderCatGrid();
   toast('['+tipoRecurso+'] Saída registrada no empenho '+empCad.numero+' · '+cat+'!','success');
@@ -5452,6 +5503,13 @@ function registrarSaida(){
 function limparFormSaida(){
   ['s-valor','s-subcat','s-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const sel=document.getElementById('s-empenho-cad');if(sel)sel.value='';
+  // Resetar competência para o mês corrente
+  const sComp=document.getElementById('s-comp');
+  if(sComp){
+    const now=new Date();
+    const prefAtual=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+    sComp.value=prefAtual;
+  }
   _saidaClearDerivedFields();
 }
 
@@ -5463,8 +5521,12 @@ function renderSaidas(){
     const badge = l.tipoRecurso==='RAP'
       ? '<span class="kpi-badge badge-purple" style="font-size:9px">RAP</span>'
       : '<span class="kpi-badge badge-blue" style="font-size:9px">EXE</span>';
-    return `<tr><td><code style="font-size:10px">${l.id}</code></td><td>${badge}</td><td>${fmtData(l.data)}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="font-size:11px;color:var(--text3)">${l.numeroEmpenho||l.referencia||'—'}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.descricao||'—'}</td><td style="font-size:11px;color:var(--text3)">${l.subcategoria||'—'}</td><td class="r text-red fw6">${fmtBR(l.valor)}</td><td style="white-space:nowrap"><button class="btn btn-sec btn-xs" onclick="editarSaida('${l.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>`;
-  }).join(''):'<tr class="empty-row"><td colspan="9">Nenhuma saída registrada</td></tr>';
+    // Formatar competência para exibição amigável
+    const compLabel = l.competencia
+      ? (()=>{const p=l.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:l.competencia;})()
+      : '<span style="color:var(--amber);font-size:10px">sem comp.</span>';
+    return `<tr><td><code style="font-size:10px">${l.id}</code></td><td>${badge}</td><td>${fmtData(l.data)}</td><td style="font-size:11px;color:var(--gold);font-weight:600;white-space:nowrap">${compLabel}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="font-size:11px;color:var(--text3)">${l.numeroEmpenho||l.referencia||'—'}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.descricao||'—'}</td><td style="font-size:11px;color:var(--text3)">${l.subcategoria||'—'}</td><td class="r text-red fw6">${fmtBR(l.valor)}</td><td style="white-space:nowrap"><button class="btn btn-sec btn-xs" onclick="editarSaida('${l.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>`;
+  }).join(''):'<tr class="empty-row"><td colspan="10">Nenhuma saída registrada</td></tr>';
   const wrap=document.getElementById('saida-table')?.closest('.tbl-wrap');
   if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();wrap.insertAdjacentHTML('beforeend',renderPagination('saidas',totalPgs,pg,total,"renderSaidas()"));}
 }
@@ -5678,6 +5740,26 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(state.acoes.some(a=>LEGACY_SEED_IDS.includes(a.id))){
     state.acoes=state.acoes.filter(a=>!LEGACY_SEED_IDS.includes(a.id));
     console.info('Acoes legadas do seed removidas. state.acoes iniciado vazio.');
+  }
+  // ── MIGRAÇÃO: preencher competência ausente em empenhos legados ──
+  // Garante que empenhos anteriores à implementação do campo tenham competência definida
+  let migCount=0;
+  state.lancamentos.forEach(l=>{
+    if(l.tipo==='Empenho'&&l.status==='Ativo'&&!l.competencia){
+      // Derivar competência a partir da data do lançamento (melhor aproximação possível)
+      const d=new Date((l.data||'')+'T12:00:00');
+      if(!isNaN(d.getTime())){
+        l.competencia=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      } else {
+        // Fallback: mês corrente
+        const now=new Date();
+        l.competencia=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+      }
+      migCount++;
+    }
+  });
+  if(migCount>0){
+    console.info('[MIGRAÇÃO] Competência preenchida em '+migCount+' empenho(s) legado(s).');
   }
   // Persiste o estado final (com migrações e limpeza aplicadas) antes de renderizar.
   salvar();
