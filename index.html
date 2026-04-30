@@ -5532,37 +5532,179 @@ function renderSaidas(){
 }
 
 // ─── EDITAR SAÍDA (Registrar Saída — Empenho) ───
+// Verifica se um empenho possui liquidações vinculadas
+function _empenhoTemLiquidacao(lancamentoId, lancamento){
+  // 1) Verifica em state.liquidacoes (módulo de liquidação principal)
+  const nEmp = lancamento.numeroEmpenho || lancamento.referencia || '';
+  const empCadId = lancamento.empenhoCadId || '';
+  if(nEmp && (state.liquidacoes||[]).some(lq => lq.status !== 'Excluído' && lq.nEmpenho === nEmp)){
+    return true;
+  }
+  // 2) Verifica em lançamentos do tipo Liquidação com referenciaId apontando para este lançamento
+  if(state.lancamentos.some(lq => lq.status === 'Ativo' && lq.tipo === 'Liquidação' && lq.referenciaId === lancamentoId)){
+    return true;
+  }
+  return false;
+}
+
+// Gera as options do select de competência com o mês atual pré-selecionado
+function _buildCompetenciaOptions(valorAtual){
+  const now = new Date();
+  const anoAtual = now.getFullYear();
+  const anos = [anoAtual - 1, anoAtual, anoAtual + 1];
+  const MESES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                       'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let opts = '<option value="">Selecione</option>';
+  anos.forEach(ano => {
+    MESES_NOMES.forEach((nome, i) => {
+      const val = ano + '-' + String(i+1).padStart(2,'0');
+      const sel = val === valorAtual ? ' selected' : '';
+      opts += `<option value="${val}"${sel}>${nome}/${ano}</option>`;
+    });
+  });
+  return opts;
+}
+
+// Recalcula tudo que depende de competência após uma alteração
+function _recalcularAposAlteracaoCompetencia(){
+  renderSaidas();
+  renderSidebar();
+  renderDashboard();
+  renderEntradas();
+  // Se o módulo de relatórios estiver visível, regenerar
+  const relPage = document.getElementById('page-relatorios');
+  if(relPage && relPage.classList.contains('active')){
+    if(typeof gerarRelatorio === 'function') try{ gerarRelatorio(); }catch(e){}
+  }
+  // Atualiza aba contratos se aberta
+  const ctPage = document.getElementById('page-contratos');
+  if(ctPage && ctPage.classList.contains('active')){
+    if(typeof renderContratoDetalhe === 'function') try{ renderContratoDetalhe(); }catch(e){}
+    if(typeof renderContratoDash === 'function') try{ renderContratoDash(); }catch(e){}
+  }
+  // Atualiza aba AE se aberta
+  const aePage = document.getElementById('page-ae');
+  if(aePage && aePage.classList.contains('active')){
+    if(typeof renderAeDetalhe === 'function') try{ renderAeDetalhe(); }catch(e){}
+  }
+}
+
 function editarSaida(id){
-  const l=state.lancamentos.find(x=>x.id===id);
-  if(!l){toast('Lançamento não encontrado','error');return;}
-  openModal('Editar Saída / Empenho','Altere os dados permitidos. Categoria e tipo não podem ser alterados.',()=>{
-    const novoValor=parseFloat(document.getElementById('edit-saida-valor')?.value)||0;
-    const novaData=document.getElementById('edit-saida-data')?.value;
-    const novaSubcat=document.getElementById('edit-saida-subcat')?.value.trim()||'';
-    const novaDesc=document.getElementById('edit-saida-desc')?.value.trim()||'';
-    if(novoValor<=0){toast('Valor deve ser maior que zero','warn');return false;}
-    if(!novaData){toast('Data obrigatória','warn');return false;}
-    // Para EXE, verificar se o novo valor não excede o saldo disponível da categoria
-    if((l.tipoRecurso||'EXE')==='EXE'){
-      const diferencaValor=novoValor-l.valor;
-      const saldoAtual=saldoCat(l.categoria);
-      if(diferencaValor>0 && diferencaValor>saldoAtual+0.01){
-        toast('Aumento de valor excede o saldo disponível da categoria: '+fmtBR(saldoAtual),'warn');
-        return false;
+  const l = state.lancamentos.find(x => x.id === id);
+  if(!l){ toast('Lançamento não encontrado','error'); return; }
+
+  // ── Verificar liquidação vinculada ──
+  const temLiquidacao = _empenhoTemLiquidacao(id, l);
+  const tipoColor = (l.tipoRecurso||'EXE') === 'RAP' ? 'var(--purple)' : 'var(--blue)';
+  const compAtual = l.competencia || '';
+
+  // Formatar competência atual para exibição
+  const _compDisplay = compAtual
+    ? (()=>{ const p=compAtual.split('-'); return p.length===2 ? (MESES_FULL[parseInt(p[1])-1]||p[1])+'/'+p[0] : compAtual; })()
+    : '<em style="color:var(--amber)">Não definida</em>';
+
+  // ── Aviso de liquidação vinculada ──
+  const alertaLiq = temLiquidacao
+    ? `<div class="info-box warn" style="margin-bottom:10px">
+        <span class="info-icon">⚠</span>
+        <div><strong>Liquidação vinculada detectada.</strong><br>
+        Este empenho possui liquidação registrada. A alteração de competência será permitida, 
+        mas a liquidação continuará com sua data original. Verifique a consistência no módulo de Liquidação após salvar.</div>
+       </div>`
+    : '';
+
+  document.getElementById('modal-inner').className = 'modal';
+
+  openModal('Editar Saída / Empenho', 'Altere os dados permitidos. Categoria e tipo não podem ser alterados.', () => {
+    const novoValor  = parseFloat(document.getElementById('edit-saida-valor')?.value) || 0;
+    const novaData   = document.getElementById('edit-saida-data')?.value || '';
+    const novaSubcat = document.getElementById('edit-saida-subcat')?.value.trim() || '';
+    const novaDesc   = document.getElementById('edit-saida-desc')?.value.trim() || '';
+    const novaComp   = document.getElementById('edit-saida-comp')?.value || '';
+
+    // ── Validações ──
+    if(novoValor <= 0){ toast('Valor deve ser maior que zero','warn'); return false; }
+    if(!novaData){ toast('Data obrigatória','warn'); return false; }
+    if(!novaComp){ toast('Competência (mês) é obrigatória — selecione o mês de referência','warn'); return false; }
+
+    // Para EXE, verificar saldo se valor aumentou
+    if((l.tipoRecurso||'EXE') === 'EXE'){
+      const diferencaValor = novoValor - l.valor;
+      if(diferencaValor > 0){
+        const saldoAtual = saldoCat(l.categoria);
+        if(diferencaValor > saldoAtual + 0.01){
+          toast('Aumento de valor excede o saldo disponível da categoria: ' + fmtBR(saldoAtual), 'warn');
+          return false;
+        }
       }
     }
-    auditLog('UPDATE','LANCAMENTO',id,'Saída editada',{antes:{valor:l.valor,data:l.data,subcategoria:l.subcategoria,descricao:l.descricao},depois:{valor:novoValor,data:novaData,subcategoria:novaSubcat,descricao:novaDesc}});
-    l.valor=novoValor;l.data=novaData;l.subcategoria=novaSubcat;l.descricao=novaDesc;
-    l.tsModif=new Date().toISOString();
-    salvar();closeModal();renderSaidas();renderSidebar();renderDashboard();
-    toast('Saída atualizada com sucesso!','success');
+
+    const competenciaAnterior = l.competencia || '';
+    const competenciaAlterada = novaComp !== competenciaAnterior;
+
+    // ── Registrar no audit log ──
+    auditLog('UPDATE','LANCAMENTO', id, 'Saída editada' + (competenciaAlterada ? ' [COMPETÊNCIA ALTERADA: '+competenciaAnterior+'→'+novaComp+']' : ''), {
+      antes: { valor: l.valor, data: l.data, subcategoria: l.subcategoria, descricao: l.descricao, competencia: competenciaAnterior },
+      depois: { valor: novoValor, data: novaData, subcategoria: novaSubcat, descricao: novaDesc, competencia: novaComp }
+    });
+
+    // ── Atualizar o lançamento (sem criar novo registro) ──
+    l.valor       = novoValor;
+    l.data        = novaData;
+    l.subcategoria= novaSubcat;
+    l.descricao   = novaDesc;
+    l.competencia = novaComp;   // ← campo de competência atualizado in-place
+    l.tsModif     = new Date().toISOString();
+
+    salvar();
+    closeModal();
+
+    // ── Recálculo global apenas dos módulos impactados ──
+    _recalcularAposAlteracaoCompetencia();
+
+    const msgComp = competenciaAlterada
+      ? ' · Competência atualizada: ' + (()=>{ const p=novaComp.split('-'); return p.length===2?(MESES_FULL[parseInt(p[1])-1]||p[1])+'/'+p[0]:novaComp; })()
+      : '';
+    toast('Saída atualizada com sucesso!' + msgComp, 'success');
   });
-  document.getElementById('modal-form-area').innerHTML=`
-    <div class="field"><label>Valor (R$)</label><input type="number" id="edit-saida-valor" value="${l.valor}" min="0" step="0.01"></div>
-    <div class="field" style="margin-top:8px"><label>Data</label><input type="date" id="edit-saida-data" value="${l.data}"></div>
-    <div class="field" style="margin-top:8px"><label>Subcategoria</label><input type="text" id="edit-saida-subcat" value="${l.subcategoria||''}"></div>
-    <div class="field" style="margin-top:8px"><label>Descrição</label><input type="text" id="edit-saida-desc" value="${l.descricao||''}"></div>
-    <div style="margin-top:8px;font-size:11px;color:var(--text3)">Categoria: <strong style="color:var(--gold)">${l.categoria}</strong> · Tipo: <strong style="color:${(l.tipoRecurso||'EXE')==='RAP'?'var(--purple)':'var(--blue)'}">${l.tipoRecurso||'EXE'}</strong> (não editáveis)</div>`;
+
+  // ── Montar formulário com campo de competência ──
+  document.getElementById('modal-form-area').innerHTML = `
+    ${alertaLiq}
+    <div class="form-grid cols2" style="gap:10px">
+      <div class="field">
+        <label>Valor (R$) <span class="required-mark">*</span></label>
+        <input type="number" id="edit-saida-valor" value="${l.valor}" min="0" step="0.01">
+      </div>
+      <div class="field">
+        <label>Data <span class="required-mark">*</span></label>
+        <input type="date" id="edit-saida-data" value="${l.data}">
+      </div>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label>📅 Competência (Mês) <span class="required-mark">*</span></label>
+      <select id="edit-saida-comp" style="border-color:var(--gold-border);background:var(--bg4)">
+        ${_buildCompetenciaOptions(compAtual)}
+      </select>
+      <div class="field-hint">Mês de referência orçamentária do empenho — obrigatório. Alterar este campo reprocessa todos os cálculos mensais.</div>
+    </div>
+    <div class="form-grid cols2" style="gap:10px;margin-top:10px">
+      <div class="field">
+        <label>Subcategoria</label>
+        <input type="text" id="edit-saida-subcat" value="${(l.subcategoria||'').replace(/"/g,'&quot;')}">
+      </div>
+      <div class="field">
+        <label>Descrição</label>
+        <input type="text" id="edit-saida-desc" value="${(l.descricao||'').replace(/"/g,'&quot;')}">
+      </div>
+    </div>
+    <div style="margin-top:12px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius);font-size:11px;color:var(--text3);display:flex;gap:16px;flex-wrap:wrap">
+      <span>Categoria: <strong style="color:var(--gold)">${l.categoria}</strong></span>
+      <span>Tipo: <strong style="color:${tipoColor}">${l.tipoRecurso||'EXE'}</strong></span>
+      <span>Nº Empenho: <strong style="color:var(--text2)">${l.numeroEmpenho||l.referencia||'—'}</strong></span>
+      <span style="color:var(--text4)">🔒 Categoria e Tipo não editáveis</span>
+    </div>
+    ${temLiquidacao ? `<div style="margin-top:8px;font-size:10.5px;color:var(--amber);display:flex;align-items:center;gap:6px"><span>⚠</span> Após salvar, verifique a consistência da liquidação vinculada.</div>` : ''}`;
 }
 
 // ═══════════════════════════════════════════════════════════
