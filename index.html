@@ -1339,7 +1339,23 @@ function carregar(){
   return false;
 }
 function exportarJSON(){
-  // CORREÇÃO: Garante que TODOS os módulos são incluídos no backup (full backup)
+  // ITEM 5 — COBERTURA DE BACKUP (inventário completo auditado):
+  // ✓ meta            — metadados do sistema (versão, instituição, datas)
+  // ✓ fontes          — Fontes de Recurso (configuração)
+  // ✓ ptres           — PTRES (configuração)
+  // ✓ cats            — Categorias (configuração)
+  // ✓ nd              — Natureza da Despesa (configuração)
+  // ✓ pi              — Plano Interno (configuração)
+  // ✓ ts              — Tipo de Serviço (configuração)
+  // ✓ lancamentos     — TODOS os lançamentos (entradas, empenhos, liquidações, pagamentos, anulações, transferências)
+  // ✓ contratos       — Contratos continuados
+  // ✓ acoes           — Ações de Assistência Estudantil
+  // ✓ auditLog        — Log imutável de auditoria
+  // ✓ fornecedores    — Cadastro de Fornecedores (PF e PJ)
+  // ✓ empenhosCad     — Empenhos Cadastrados (base do fluxo de execução)
+  // ✓ liquidacoes     — Liquidações do módulo especializado
+  // ✓ contratosPnae   — Contratos PNAE (Agricultura Familiar)
+  // GARANTIA: todos os módulos de state são incluídos neste backup.
   const backupCompleto = {
     meta: state.meta,
     fontes: state.fontes,
@@ -1400,6 +1416,27 @@ function importarJSON(evt){
       if(d.empenhosCad)state.empenhosCad=d.empenhosCad;
       if(d.liquidacoes)state.liquidacoes=d.liquidacoes;
       if(d.contratosPnae)state.contratosPnae=d.contratosPnae;
+      // ITEM 7 — Pós-importação: normalizar categorias e garantir integridade estrutural
+      // Sem normalização, categorias em Title Case causariam totalizadores zerados.
+      state.lancamentos=state.lancamentos.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
+      state.contratos=state.contratos.map(c=>({...c,categoria:c.categoria?normalizarCategoria(c.categoria):c.categoria}));
+      if(state.empenhosCad)state.empenhosCad=state.empenhosCad.map(e=>({...e,categoria:e.categoria?normalizarCategoria(e.categoria):e.categoria}));
+      if(state.liquidacoes)state.liquidacoes=state.liquidacoes.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
+      // Garantir arrays obrigatórios não sejam undefined após importação
+      if(!Array.isArray(state.fornecedores))state.fornecedores=[];
+      if(!Array.isArray(state.empenhosCad))state.empenhosCad=[];
+      if(!Array.isArray(state.liquidacoes))state.liquidacoes=[];
+      if(!Array.isArray(state.contratosPnae))state.contratosPnae=[];
+      if(!Array.isArray(state.acoes))state.acoes=[];
+      if(!Array.isArray(state.auditLog))state.auditLog=[];
+      // Migração de previstoMensalArr em ações (compatibilidade entre versões)
+      state.acoes=state.acoes.map(a=>{
+        if(!Array.isArray(a.previstoMensalArr)){
+          const pm=a.previstoMensal||((a.previsto||0)/12);
+          a.previstoMensalArr=Array(12).fill(+Number(pm).toFixed(2));
+        }
+        return a;
+      });
       const resumo = {
         lancamentos: state.lancamentos.length,
         contratos: state.contratos.length,
@@ -1511,15 +1548,15 @@ function sumLancsByAcao(tipo, acaoId){
   });
 }
 function sum(arr){return arr.reduce((s,l)=>s+(l.valor||0),0)}
-// Créditos originais (não incluem transferências)
+// Créditos originais (SOMENTE entradas — Anulação reduz empenho, não aumenta crédito)
 function totalCreditosOriginais(cat){
-  if(cat)return sum(getLancsAtivos('Entrada',cat))+sum(getLancsAtivos('Anulação',cat));
-  return sum(getLancsAtivos('Entrada',null))+sum(getLancsAtivos('Anulação',null));
+  if(cat)return sum(getLancsAtivos('Entrada',cat));
+  return sum(getLancsAtivos('Entrada',null));
 }
 // Total entradas incluindo transferências recebidas (para cálculo de saldo de categoria)
 function totalEntradas(cat){
-  if(cat)return sum(getLancsAtivos('Entrada',cat))+sum(getLancsAtivos('Transferência Entrada',cat))+sum(getLancsAtivos('Anulação',cat));
-  return sum(getLancsAtivos('Entrada',null))+sum(getLancsAtivos('Anulação',null));
+  if(cat)return sum(getLancsAtivos('Entrada',cat))+sum(getLancsAtivos('Transferência Entrada',cat));
+  return sum(getLancsAtivos('Entrada',null));
 }
 function totalEmpenhos(cat,refId){
   if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&(cat?l.categoria===cat:true)&&l.referenciaId===refId));
@@ -1578,15 +1615,18 @@ function totalPagamentosRAP(cat){
   ));
 }
 function totalTransfSaidas(cat){return sum(getLancsAtivos('Transferência Saída',cat||null))}
-// Saldo disponível de categoria = Créditos + Transferências Recebidas + Anulações - Empenhos EXE - Transferências Enviadas
-// RAP NÃO consome saldo de crédito do exercício corrente
+// Saldo disponível de categoria:
+// = Créditos (Entradas) + Transferências Recebidas + Anulações (devolvem saldo) - Empenhos EXE brutos - Transferências Enviadas
+// Anulação reduz o saldo comprometido por empenhos → devolvendo saldo disponível à categoria
 function saldoCat(cat){
-  const creditos=sum(getLancsAtivos('Entrada',cat))+sum(getLancsAtivos('Anulação',cat));
+  const creditos=sum(getLancsAtivos('Entrada',cat));
   const transfE=sum(getLancsAtivos('Transferência Entrada',cat));
-  // Somente empenhos EXE consomem saldo de crédito
+  // Empenhos EXE brutos (sem descontar anulações — anulações são tratadas separadamente)
   const empenhos=totalEmpenhosEXE(cat);
+  // Anulações devolvem saldo à categoria (reduzem o comprometido)
+  const anulacoes=sum(getLancsAtivos('Anulação',cat));
   const transfS=sum(getLancsAtivos('Transferência Saída',cat));
-  return creditos+transfE-empenhos-transfS;
+  return creditos+transfE+anulacoes-empenhos-transfS;
 }
 // Saldo empenhado disponível para liquidação (empenhado - liquidado)
 // IMPORTANTE: Pagamento NÃO é subtraído pois já foi liquidado antes
@@ -1669,21 +1709,79 @@ function _onModalConfirm(e){
   const newBtn=btn.cloneNode(true);
   btn.parentNode.replaceChild(newBtn,btn);
   newBtn.addEventListener('click',_onModalConfirm);
-  document.getElementById('modal-bg').addEventListener('click',function(e){
-    if(e.target===document.getElementById('modal-bg'))closeModal();
-  });
+  // ITEM 3 — Modal: NÃO fecha por clique externo (backdrop) nem por tecla Escape.
+  // O único vetor de fechamento é o botão "Cancelar" / "Sair" interno.
+  // REMOVIDO: listener de clique no modal-bg que chamava closeModal()
+  // Bloqueia tecla Escape em TODOS os modais do sistema
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'){
+      // Verifica se algum modal está visível; se sim, cancela o evento
+      const modalBg=document.getElementById('modal-bg');
+      const driveModal=document.getElementById('modal-drive-welcome');
+      const liqModal=document.getElementById('liq-detail-modal');
+      const gaeModal=document.getElementById('gae-confirm-overlay');
+      if((modalBg&&modalBg.classList.contains('show'))||
+         (driveModal&&driveModal.classList.contains('show'))||
+         (liqModal&&liqModal.style.display==='block')||
+         (gaeModal&&gaeModal.style.display==='flex')){
+        e.preventDefault();e.stopPropagation();
+      }
+    }
+  },true);
 })();
 
 // ═══════════════════════════════════════════════════════════
-//  SIDEBAR
+//  ITEM 4 — Formatação ao Colar em Campos Numéricos
+//  Intercepta evento 'paste' em todos os inputs type=number
+//  Sanitiza e formata automaticamente para o padrão do sistema.
+//  Exemplos: "1500.75" → 1500.75 | "R$ 1.500,75" → 1500.75
 // ═══════════════════════════════════════════════════════════
+(function(){
+  function parsePastedNumero(raw){
+    // Remove símbolo de moeda e espaços
+    let s=raw.replace(/R\$\s*/gi,'').trim();
+    // Detecta formato: se contém vírgula E ponto, identifica qual é decimal
+    const temPonto=s.includes('.');
+    const temVirgula=s.includes(',');
+    if(temPonto&&temVirgula){
+      // Ex: "1.500,75" — ponto = milhar, vírgula = decimal → remover ponto e trocar vírgula por ponto
+      s=s.replace(/\./g,'').replace(',','.');
+    } else if(temVirgula&&!temPonto){
+      // Ex: "1500,75" — vírgula = decimal
+      s=s.replace(',','.');
+    }
+    // Remove tudo exceto dígitos e ponto decimal
+    s=s.replace(/[^\d.]/g,'');
+    // Garante no máximo um ponto decimal
+    const parts=s.split('.');
+    if(parts.length>2)s=parts[0]+'.'+parts.slice(1).join('');
+    return parseFloat(s)||0;
+  }
+
+  document.addEventListener('paste',function(e){
+    const el=e.target;
+    if(!el||el.type!=='number')return;
+    e.preventDefault();
+    const raw=(e.clipboardData||window.clipboardData).getData('text');
+    const valor=parsePastedNumero(raw);
+    // Dispara input event para que handlers como updateSaldoBar sejam notificados
+    const nativeInputValueSetter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
+    nativeInputValueSetter.call(el,valor.toFixed(2));
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+  },true);
+})();
+
+
 function renderSidebar(){
   const el=document.getElementById('sidebar-saldo');
   const cats=DEFAULT_CATS.filter(c=>totalEntradas(c)>0||totalEmpenhosEXE(c)>0);
   if(!cats.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">Sem dados</div>';return;}
   const colors={ok:'var(--green)',warn:'var(--amber)',danger:'var(--red)'};
   el.innerHTML=cats.slice(0,7).map(c=>{
-    const te=totalEntradas(c),emp=totalEmpenhosEXE(c);
+    const te=totalEntradas(c);
+    const empBruto=totalEmpenhosEXE(c);
+    const anulCat=sum(getLancsAtivos('Anulação',c));
+    const emp=empBruto-anulCat; // líquido
     const p=te>0?clamp(Math.round(emp/te*100),0,100):0;
     const st=statusCor(p);const s=saldoCat(c);
     return`<div class="sw-row"><div class="sw-cat" title="${c}">${catIcon(c)} ${c}</div><div class="sw-val" style="color:${colors[st]}">${fmtBR(s)}</div></div><div class="sw-bar"><div class="sw-bar-fill" style="width:${p}%;background:${colors[st]}"></div></div>`;
@@ -1696,11 +1794,12 @@ function renderSidebar(){
 function renderDashboard(){
   const totCred=totalCreditosOriginais();
   // ── SEGREGAÇÃO RAP/EXE: Dashboard reflete APENAS exercício corrente (EXE) ──
-  const totEmp=totalEmpenhosEXE();          // apenas EXE
+  const totEmp=totalEmpenhosEXE();          // apenas EXE (empenhos brutos)
+  const totAnul=sum(getLancsAtivos('Anulação',null)); // anulações devolvem saldo
   const totLiq=totalLiquidacoesEXE();       // apenas EXE (módulo lancamentos)
   const totPag=totalPagamentosEXE();        // apenas EXE
-  // Para saldo disponível: créditos - empenhos EXE (RAP não consome crédito corrente)
-  const saldoDisp=totCred-totEmp;
+  // Saldo disponível: Créditos - Empenhos EXE brutos + Anulações (que reduzem comprometimento)
+  const saldoDisp=totCred-totEmp+totAnul;
   // Totais RAP (para badge informativo no dashboard)
   const totEmpRapGlobal=totalEmpenhosRAP();
   const liqPagas=(state.liquidacoes||[]).filter(l=>{
@@ -1724,17 +1823,17 @@ function renderDashboard(){
     <div class="kpi ${saldoDisp<0?'accent-red':'accent-gold'}">
       <div class="kpi-label">Saldo Disponível Geral <span class="kpi-badge ${saldoDisp<0?'badge-danger':'badge-gold'}">${saldoDisp<0?'⚠ NEGATIVO':'OK'}</span></div>
       <div class="kpi-value ${saldoDisp<0?'text-red':'text-gold'}">${fmtBR(saldoDisp)}</div>
-      <div class="kpi-sub">Créditos − Empenhado <span style="color:var(--blue);font-size:9px;margin-left:4px">EXE</span></div>
+      <div class="kpi-sub">Créditos − Empenhado + Anulações <span style="color:var(--blue);font-size:9px;margin-left:4px">EXE</span></div>
     </div>
     <div class="kpi accent-blue">
-      <div class="kpi-label">Total Empenhado <span class="kpi-badge badge-blue">EXE</span></div>
-      <div class="kpi-value text-blue">${fmtBR(totEmp)}</div>
-      <div class="kpi-sub">${pctBar(totEmp,totCred)}% do crédito empenhado${totEmpRapGlobal>0?` · <span style="color:var(--purple);font-size:9px">+ ${fmtBR(totEmpRapGlobal)} RAP (segregado)</span>`:''}</div>
+      <div class="kpi-label">Total Empenhado Líquido <span class="kpi-badge badge-blue">EXE</span></div>
+      <div class="kpi-value text-blue">${fmtBR(totEmp-totAnul)}</div>
+      <div class="kpi-sub">${pctBar(totEmp-totAnul,totCred)}% do crédito empenhado${totAnul>0?` · <span style="color:var(--amber);font-size:9px">−${fmtBR(totAnul)} anulado</span>`:''}${totEmpRapGlobal>0?` · <span style="color:var(--purple);font-size:9px">+ ${fmtBR(totEmpRapGlobal)} RAP (segregado)</span>`:''}</div>
     </div>
     <div class="kpi accent-amber">
       <div class="kpi-label">Total Liquidado <span class="kpi-badge badge-warn">EXE</span></div>
       <div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiq)}</div>
-      <div class="kpi-sub">${pctBar(totLiq,totEmp)}% do empenhado liquidado</div>
+      <div class="kpi-sub">${pctBar(totLiq,totEmp-totAnul)}% do empenhado liquidado</div>
     </div>
     <div class="kpi accent-green">
       <div class="kpi-label">Total Pago <span class="kpi-badge badge-ok">EXE</span></div>
@@ -1753,13 +1852,13 @@ function renderDashboard(){
     </div>
     <div class="kpi accent-teal" style="border-color:rgba(0,207,255,.4);background:rgba(0,207,255,.06)">
       <div class="kpi-label">Taxa de Execução Orçamentária <span class="kpi-badge" style="background:rgba(0,207,255,.15);color:var(--cyan)">EXEC % — EXE</span></div>
-      <div class="kpi-value" style="color:var(--cyan)">${totCred>0?clamp(Math.round(totEmp/totCred*100),0,100):0}%</div>
-      <div class="kpi-sub">(Empenhado ÷ Crédito) × 100 — ${totCred>0?clamp(Math.round(totEmp/totCred*100),0,100)<50?'⚠ Execução baixa':clamp(Math.round(totEmp/totCred*100),0,100)<80?'Execução regular':'✓ Boa execução':'Sem créditos'}</div>
+      <div class="kpi-value" style="color:var(--cyan)">${totCred>0?clamp(Math.round((totEmp-totAnul)/totCred*100),0,100):0}%</div>
+      <div class="kpi-sub">(Empenhado Líquido ÷ Crédito) × 100 — ${totCred>0?clamp(Math.round((totEmp-totAnul)/totCred*100),0,100)<50?'⚠ Execução baixa':clamp(Math.round((totEmp-totAnul)/totCred*100),0,100)<80?'Execução regular':'✓ Boa execução':'Sem créditos'}</div>
     </div>
-    <div class="kpi ${(totCred>0&&totEmp/totCred>=0.9)?'accent-red':totCred>0&&totEmp/totCred>=0.7?'accent-amber':'accent-green'}">
-      <div class="kpi-label">Índice de Comprometimento <span class="kpi-badge ${(totCred>0&&totEmp/totCred>=0.9)?'badge-danger':totCred>0&&totEmp/totCred>=0.7?'badge-warn':'badge-ok'}">${(totCred>0&&totEmp/totCred>=0.9)?'⚠ ALTO':totCred>0&&totEmp/totCred>=0.7?'MÉDIO':'OK'}</span></div>
-      <div class="kpi-value ${(totCred>0&&totEmp/totCred>=0.9)?'text-red':totCred>0&&totEmp/totCred>=0.7?'text-amber':'text-green'}">${totCred>0?clamp(Math.round(totEmp/totCred*100),0,999):0}%</div>
-      <div class="kpi-sub">(Despesas Empenhadas EXE ÷ Crédito) × 100 — Saldo livre: ${fmtBR(saldoDisp)}</div>
+    <div class="kpi ${(totCred>0&&(totEmp-totAnul)/totCred>=0.9)?'accent-red':totCred>0&&(totEmp-totAnul)/totCred>=0.7?'accent-amber':'accent-green'}">
+      <div class="kpi-label">Índice de Comprometimento <span class="kpi-badge ${(totCred>0&&(totEmp-totAnul)/totCred>=0.9)?'badge-danger':totCred>0&&(totEmp-totAnul)/totCred>=0.7?'badge-warn':'badge-ok'}">${(totCred>0&&(totEmp-totAnul)/totCred>=0.9)?'⚠ ALTO':totCred>0&&(totEmp-totAnul)/totCred>=0.7?'MÉDIO':'OK'}</span></div>
+      <div class="kpi-value ${(totCred>0&&(totEmp-totAnul)/totCred>=0.9)?'text-red':totCred>0&&(totEmp-totAnul)/totCred>=0.7?'text-amber':'text-green'}">${totCred>0?clamp(Math.round((totEmp-totAnul)/totCred*100),0,999):0}%</div>
+      <div class="kpi-sub">(Empenhado Líquido EXE ÷ Crédito) × 100 — Saldo livre: ${fmtBR(saldoDisp)}</div>
     </div>
     ${totEmpRapGlobal>0?`<div style="grid-column:1/-1;background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px">
       <span style="font-size:22px">🗂️</span>
@@ -1790,18 +1889,22 @@ function renderDashboard(){
     <div class="fase-item pag"><div class="fase-val text-green">${fmtBR(totPagConsolid)}</div><div class="fase-lbl">Pago <span style="font-size:9px;color:var(--green);opacity:.9">EXE+RAP</span></div><div class="fase-pct text-green">${pLiqPag}% do liq.</div></div>
   `;
 
-  // Saldo por Fonte e PTRES — apenas empenhos EXE
+  // Saldo por Fonte e PTRES — apenas empenhos EXE, descontando anulações
   const saldoFonteRows=state.fontes.map(f=>{
     const e=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.fonte===f));
-    const emp=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.fonte===f&&(l.tipoRecurso||'EXE')==='EXE'));
-    if(!e&&!emp)return '';
+    const empBruto=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.fonte===f&&(l.tipoRecurso||'EXE')==='EXE'));
+    const anul=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Anulação'&&l.fonte===f));
+    const emp=empBruto-anul;
+    if(!e&&!empBruto)return '';
     const s=e-emp;
     return`<tr><td style="font-size:11px">${f||'—'}</td><td class="r text-green" style="font-size:11px">${fmtBR(e)}</td><td class="r text-blue" style="font-size:11px">${fmtBR(emp)}</td><td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px;font-weight:700">${fmtBR(s)}</td></tr>`;
   }).filter(Boolean);
   const saldoPtresRows=state.ptres.map(p=>{
     const e=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.ptres===p));
-    const emp=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.ptres===p&&(l.tipoRecurso||'EXE')==='EXE'));
-    if(!e&&!emp)return '';
+    const empBruto=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.ptres===p&&(l.tipoRecurso||'EXE')==='EXE'));
+    const anul=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Anulação'&&l.ptres===p));
+    const emp=empBruto-anul;
+    if(!e&&!empBruto)return '';
     const s=e-emp;
     return`<tr><td style="font-size:11px">${p||'—'}</td><td class="r text-green" style="font-size:11px">${fmtBR(e)}</td><td class="r text-blue" style="font-size:11px">${fmtBR(emp)}</td><td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px;font-weight:700">${fmtBR(s)}</td></tr>`;
   }).filter(Boolean);
@@ -1830,8 +1933,9 @@ function renderDashboard(){
     });
     return{
       e:sum(lancsDoMes.filter(l=>l.tipo==='Entrada')),
-      // Empenho mensal: somente EXE
-      emp:sum(lancsDoMes.filter(l=>l.tipo==='Empenho'&&(l.tipoRecurso||'EXE')==='EXE')),
+      // Empenho mensal líquido: EXE bruto − anulações do mês
+      emp:sum(lancsDoMes.filter(l=>l.tipo==='Empenho'&&(l.tipoRecurso||'EXE')==='EXE'))
+         -sum(lancsDoMes.filter(l=>l.tipo==='Anulação')),
       // Liquidação/Pagamento mensal: somente EXE
       liq:sum(lancsDoMes.filter(l=>l.tipo==='Liquidação'&&(l.tipoRecurso||'EXE')==='EXE')),
       pag:sum(lancsDoMes.filter(l=>l.tipo==='Pagamento'&&(l.tipoRecurso||'EXE')==='EXE'))
@@ -1860,15 +1964,19 @@ function renderDashboard(){
     <tr class="total-row"><td>Saldo (Emp.−Liq./Pag.) EXE</td>${dadosMensais.map(d=>{const s=d.emp-(d.liq+d.pag);return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${totM2Saldo<0?'text-red':'text-gold'} fw7" style="font-size:11px">${fmtBR(totM2Saldo)}</td></tr>
   `;
 
-  // Execução por categoria — apenas EXE
+  // Execução por categoria — apenas EXE, empenhado líquido (bruto − anulações)
   const catRows=DEFAULT_CATS.filter(c=>totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0).map(c=>{
-    const te=totalCreditosOriginais(c),tem=totalEmpenhosEXE(c),tl=totalLiquidacoesEXE(c),tp=totalPagamentosEXE(c);
+    const te=totalCreditosOriginais(c);
+    const temBruto=totalEmpenhosEXE(c);
+    const temAnul=sum(getLancsAtivos('Anulação',c));
+    const tem=temBruto-temAnul; // empenhado líquido
+    const tl=totalLiquidacoesEXE(c),tp=totalPagamentosEXE(c);
     const saldoEmp=te-tem;
     const pe=te>0?Math.round(tem/te*100):0;
     return`<tr>
       <td>${catIcon(c)} <strong>${c}</strong></td>
       <td class="r text-green">${fmtBR(te)}</td>
-      <td class="r text-blue">${fmtBR(tem)}</td>
+      <td class="r text-blue">${fmtBR(tem)}${temAnul>0?`<div style="font-size:9px;color:var(--amber)">−${fmtBR(temAnul)} anulado</div>`:''}</td>
       <td class="r" style="color:var(--amber)">${fmtBR(tl)}</td>
       <td class="r text-green">${fmtBR(tp)}</td>
       <td class="r ${saldoEmp<0?'text-red':'text-gold'}">${fmtBR(saldoEmp)}</td>
@@ -2192,7 +2300,8 @@ function registrarAnulacao(){
   };
   state.lancamentos.push(l);
   auditLog('CREATE','LANCAMENTO',l.id,'Anulação de empenho ['+motivo+']: '+desc,{lancamento:l,empenhoCadId:empCadId});
-  salvar();renderAnulacaoForm();renderAnulacoes();renderSidebar();renderDashboard();
+  // ITEM 1 — Anulação: recalculo completo de todos os módulos do Dashboard afetados
+  salvar();renderAnulacaoForm();renderAnulacoes();renderSidebar();renderDashboard();renderEntradas();renderCatGrid();
   toast('Anulação registrada com sucesso! Saldo do empenho reduzido.','success');
   limparFormAnulacao();
 }
@@ -2247,7 +2356,15 @@ function registrarTransferencia(){
   const entrada={id:shortId('TE'),tipo:'Transferência Entrada',categoria:destino,subcategoria:'',descricao:'TRANSF←'+origem+': '+desc,valor,data,fonte:'',ptres:'',nd:'',referencia:proc,referenciaId:saida.id,observacoes:obs,status:'Ativo',ts:new Date().toISOString()};
   state.lancamentos.push(saida,entrada);
   auditLog('CREATE','LANCAMENTO',saida.id,'Transferência interna: '+origem+'→'+destino+' '+fmtBR(valor),{saida,entrada});
-  salvar();renderTransfForm();renderTransferencias();renderSidebar();renderDashboard();
+  // ITEM 2 — Transferência: fluxos verificados e confirmados:
+  // ✓ saldoCat(): desconta 'Transferência Saída' e soma 'Transferência Entrada'
+  // ✓ Dashboard KPIs: calculados via totalCreditosOriginais (entradas) − totalEmpenhosEXE
+  // ✓ Tabelas de Saldo por Fonte/PTRES: refletidas via renderDashboard()
+  // ✓ Resumo Mensal e Execução por Categoria: refletidos via renderDashboard()
+  // ✓ Histórico: Transferência Saída/Entrada listadas separadamente no histórico
+  // ✓ Relatórios: tipo 'Transferência Saída'/'Transferência Entrada' filtráveis
+  // NOTA: por definição de negócio, Transferência não gera novo crédito — apenas reclassifica saldo
+  salvar();renderTransfForm();renderTransferencias();renderSidebar();renderDashboard();renderEntradas();renderCatGrid();
   toast('Transferência registrada!','success');
   limparFormTransferencia();
 }
@@ -3599,6 +3716,19 @@ async function driveCarregar(){
     state.empenhosCad=Array.isArray(d.empenhosCad)?d.empenhosCad.map(e=>({...e})):[];
     state.liquidacoes=Array.isArray(d.liquidacoes)?d.liquidacoes.map(l=>({...l})):[];
     state.contratosPnae=Array.isArray(d.contratosPnae)?d.contratosPnae.map(c=>({...c})):[];
+    // ITEM 7 — Normalizar categorias após carga do Drive (mesmo tratamento do importarJSON)
+    state.lancamentos=state.lancamentos.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
+    state.contratos=state.contratos.map(c=>({...c,categoria:c.categoria?normalizarCategoria(c.categoria):c.categoria}));
+    state.empenhosCad=state.empenhosCad.map(e=>({...e,categoria:e.categoria?normalizarCategoria(e.categoria):e.categoria}));
+    state.liquidacoes=state.liquidacoes.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
+    // Migração de previstoMensalArr em ações
+    state.acoes=state.acoes.map(a=>{
+      if(!Array.isArray(a.previstoMensalArr)){
+        const pm=a.previstoMensal||((a.previsto||0)/12);
+        a.previstoMensalArr=Array(12).fill(+Number(pm).toFixed(2));
+      }
+      return a;
+    });
     salvar();init();
     toast('✓ Dados carregados do Google Drive!','success');
   }catch(e){toast('Erro ao carregar do Drive: '+e.message,'error');console.error(e);}
@@ -4018,11 +4148,14 @@ function registrarCadastroEmpenho(){
   if(!numero){toast('Número do empenho obrigatório','warn');return;}
   if(!data){toast('Data obrigatória','warn');return;}
   if(!fonte){toast('Fonte de recurso obrigatória','warn');return;}
-  if(!ptres){toast('PTRES obrigatório','warn');return;}
+  // ITEM 6: PTRES e ND são obrigatórios somente para EXE; RAP não usa campos do exercício corrente
+  const tipoEmp=document.querySelector('input[name="cemp-exe-rap"]:checked')?.value||'EXE';
+  if(tipoEmp==='EXE'){
+    if(!ptres){toast('PTRES obrigatório para empenho EXE','warn');return;}
+    if(!nd){toast('Natureza da Despesa obrigatória para empenho EXE','warn');return;}
+  }
   // Verificar duplicata
   if(state.empenhosCad.find(e=>e.numero===numero&&e.status!=='Excluído')){toast('Empenho '+numero+' já cadastrado.','warn');return;}
-  // ── TRAVA EXE: categoria deve ter saldo disponível no exercício ──
-  const tipoEmp=document.querySelector('input[name="cemp-exe-rap"]:checked')?.value||'EXE';
   if(tipoEmp==='EXE'){
     const saldoDisp=saldoCat(_cempCat);
     if(saldoDisp<=0){
@@ -5306,6 +5439,31 @@ function selecionarTipoEmpenho(tipo){
   // Dispara handlers existentes
   cempValidarAno();
   cempAtualizarSaldoInfo();
+
+  // ITEM 6 — Campos condicionais EXE vs RAP:
+  // EXE: PTRES, Natureza da Despesa e Plano Interno são obrigatórios/visíveis
+  // RAP: esses campos são ocultados e removidos da validação (RAP é desvinculado dos créditos do exercício)
+  const campoPtres=document.getElementById('cemp-ptres');
+  const campoNd=document.getElementById('cemp-nd');
+  const campoPi=document.getElementById('cemp-pi');
+  const wrapPtres=campoPtres?campoPtres.closest('.field'):null;
+  const wrapNd=campoNd?campoNd.closest('.field'):null;
+  const wrapPi=campoPi?campoPi.closest('.field'):null;
+  if(tipo==='RAP'){
+    // Ocultar visualmente
+    if(wrapPtres)wrapPtres.style.display='none';
+    if(wrapNd)wrapNd.style.display='none';
+    if(wrapPi)wrapPi.style.display='none';
+    // Limpar valores para que não entrem no payload
+    if(campoPtres)campoPtres.value='';
+    if(campoNd)campoNd.value='';
+    if(campoPi)campoPi.value='';
+  } else {
+    // Exibir campos para EXE
+    if(wrapPtres)wrapPtres.style.display='';
+    if(wrapNd)wrapNd.style.display='';
+    if(wrapPi)wrapPi.style.display='';
+  }
 }
 
 
@@ -5924,6 +6082,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 </style>
 
 <!-- Modal boas-vindas Drive -->
+<!-- ITEM 3: modal só fecha pelo clique explícito nos botões internos — sem fechamento por backdrop ou Escape -->
 <div id="modal-drive-welcome">
   <div id="modal-drive-inner">
     <div style="text-align:center;margin-bottom:18px">
