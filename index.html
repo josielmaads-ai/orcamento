@@ -540,23 +540,25 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="card">
       <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Registrar Saída (Inclusão de Saldo no Empenho)</div>
 
-      <!-- FILTRO: EXE/RAP — apenas para filtrar a lista de empenhos -->
-      <div class="field" style="margin-bottom:14px">
-        <label>Filtrar por Tipo de Recurso</label>
-        <select id="s-exe-rap" onchange="onSaidaTipoChange()" style="max-width:320px">
-          <option value="">-- Todos os tipos --</option>
-          <option value="EXE">EXE — Recurso do Exercício</option>
-          <option value="RAP">RAP — Restos a Pagar</option>
-        </select>
-        <div class="field-hint">Filtra os empenhos disponíveis abaixo. O tipo efetivo é sempre o do empenho cadastrado.</div>
+      <!-- FILTRO: EXE/RAP — com destaque visual diferenciado -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="font-size:10px;color:var(--text3);align-self:center;white-space:nowrap">Filtrar por tipo:</div>
+        <button id="s-exe-rap-btn-all" onclick="setSaidaTipoBtn('')" class="saida-tipo-btn saida-tipo-active" style="padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid var(--border2);background:var(--bg3);cursor:pointer;color:var(--text)">Todos</button>
+        <button id="s-exe-rap-btn-EXE" onclick="setSaidaTipoBtn('EXE')" class="saida-tipo-btn" style="padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid var(--blue);background:rgba(0,153,255,.08);cursor:pointer;color:var(--blue)">EXE — Exercício</button>
+        <button id="s-exe-rap-btn-RAP" onclick="setSaidaTipoBtn('RAP')" class="saida-tipo-btn" style="padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid var(--purple-border);background:var(--purple-bg);cursor:pointer;color:var(--purple)">RAP — Restos a Pagar</button>
+        <input type="hidden" id="s-exe-rap" value="">
       </div>
 
-      <!-- EMPENHO: seleção principal -->
+      <!-- EMPENHO: seleção com busca inteligente (Item 2.2) -->
       <div class="field" style="margin-bottom:10px">
         <label>Empenho Referenciado<span class="required-mark">*</span></label>
-        <select id="s-empenho-cad" onchange="carregarDadosEmpenhoCadastrado()">
-          <option value="">-- Selecione um empenho cadastrado --</option>
-        </select>
+        <div style="position:relative">
+          <input type="text" id="s-emp-busca" placeholder="🔍 Digite número, categoria ou fornecedor..." oninput="filtrarEmpenhosSaida()" onfocus="mostrarDropdownEmpenho()" style="width:100%;padding:8px 12px;font-size:13px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg3)" autocomplete="off">
+          <div id="s-emp-dropdown" style="display:none;position:absolute;z-index:200;left:0;right:0;top:100%;margin-top:2px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
+        </div>
+        <input type="hidden" id="s-empenho-cad">
+        <div id="s-emp-selecionado" style="margin-top:6px"></div>
+        <div class="field-hint">Digite parte do número, categoria ou fornecedor para filtrar.</div>
       </div>
 
       <!-- CAMPOS DERIVADOS: read-only, herdados do cadastro -->
@@ -582,8 +584,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         <div class="field"><label>Valor (R$)<span class="required-mark">*</span></label><input type="number" id="s-valor" min="0" step="0.01" placeholder="0,00" oninput="updateSaldoSaida()"></div>
       </div>
       <div class="form-grid cols2 mt4">
-        <div class="field"><label>Subcategoria<span class="required-mark">*</span></label><input type="text" id="s-subcat" placeholder="Ex: 33903702"></div>
-        <div class="field"><label>Descrição</label><input type="text" id="s-desc" placeholder="Descrição adicional (opcional)"></div>
+        <div class="field"><label>Subcategoria</label><input type="text" id="s-subcat" placeholder="Ex: 33903702 (opcional)"></div>
+        <div class="field"><label>Descrição<span class="required-mark">*</span></label><input type="text" id="s-desc" placeholder="Descrição da saída (obrigatória)"></div>
       </div>
       <div id="s-saldo-bar"></div>
       <div class="btn-row" style="margin-top:12px">
@@ -593,6 +595,35 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     </div>
     <div class="tbl-wrap">
       <div class="tbl-head"><div class="tbl-title">Saídas registradas (Inclusão de Saldo)</div><div class="tbl-count" id="saida-count"></div></div>
+      <!-- FILTRO AVANÇADO 2.1 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;padding:10px 14px;background:var(--bg3);border-bottom:1px solid var(--border);border-radius:8px 8px 0 0">
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Categoria</label>
+          <select id="saida-f-cat" onchange="renderSaidas()" style="padding:5px 8px;font-size:12px">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Nº Empenho</label>
+          <input type="text" id="saida-f-emp" placeholder="Buscar empenho..." oninput="renderSaidas()" style="padding:5px 8px;font-size:12px">
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Competência</label>
+          <select id="saida-f-comp" onchange="renderSaidas()" style="padding:5px 8px;font-size:12px">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Período</label>
+          <div style="display:flex;gap:4px">
+            <input type="date" id="saida-f-de" oninput="renderSaidas()" style="padding:5px 6px;font-size:11px;flex:1">
+            <input type="date" id="saida-f-ate" oninput="renderSaidas()" style="padding:5px 6px;font-size:11px;flex:1">
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <button class="btn btn-sec" onclick="saidaLimparFiltros()" style="padding:5px 10px;font-size:11px;white-space:nowrap">↺ Limpar</button>
+        </div>
+      </div>
       <table><thead><tr><th>ID</th><th>Tipo</th><th>Data</th><th>Competência</th><th>Categoria</th><th>Nº Empenho</th><th>Descrição</th><th>Subcategoria</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="saida-table"></tbody></table>
     </div>
   </div>
@@ -793,7 +824,31 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   </div>
   <div class="tbl-wrap">
     <div class="tbl-head"><div class="tbl-title">Empenhos Cadastrados</div><div class="tbl-count" id="cemp-count">0 empenhos</div></div>
-    <div class="scroll-h"><table><thead><tr><th>Tipo</th><th>Nº Empenho</th><th>Data</th><th>Categoria</th><th>Fornecedor / Vínculo</th><th>Fonte</th><th>PTRES</th><th>ND</th><th>Status</th><th>Ações</th></tr></thead><tbody id="cemp-tbody"></tbody></table></div>
+    <!-- FILTRO AVANÇADO 1.1 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;padding:10px 14px;background:var(--bg3);border-bottom:1px solid var(--border);border-radius:8px 8px 0 0">
+      <div class="field" style="margin:0">
+        <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Nº Empenho</label>
+        <input type="text" id="cemp-f-numero" placeholder="Buscar número..." oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+      </div>
+      <div class="field" style="margin:0">
+        <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Categoria</label>
+        <select id="cemp-f-cat" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0">
+        <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Data Inicial</label>
+        <input type="date" id="cemp-f-de" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+      </div>
+      <div class="field" style="margin:0">
+        <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Data Final</label>
+        <input type="date" id="cemp-f-ate" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button class="btn btn-sec" onclick="cempLimparFiltros()" style="padding:5px 10px;font-size:11px;white-space:nowrap">↺ Limpar</button>
+      </div>
+    </div>
+    <div class="scroll-h"><table><thead><tr><th>Tipo</th><th>Nº Empenho</th><th>Data</th><th>Categoria</th><th>Fornecedor / Vínculo</th><th>Fonte</th><th>PTRES</th><th>Saldo a Liquidar</th><th>Status</th><th>Ações</th></tr></thead><tbody id="cemp-tbody"></tbody></table></div>
   </div>
 </div>
 <!-- ════════ LIQUIDAÇÃO ════════ -->
@@ -1938,16 +1993,11 @@ function renderDashboard(){
   const dadosMensais=MESES.map((_,mi)=>{
     const mesIdx=mi+1;
     const prefixo=anoAtual+'-'+String(mesIdx).padStart(2,'0');
+    // Item 4 — REGRA GLOBAL: competência tem precedência sobre data de emissão em TODOS os tipos
     const lancsDoMes=state.lancamentos.filter(l=>{
       if(l.status!=='Ativo')return false;
-      if(l.tipo==='Empenho'){
-        // Para empenhos: usar competência se disponível; fallback para data
-        if(l.competencia) return l.competencia===prefixo;
-        const d=new Date((l.data||'')+'T12:00:00');
-        return d.getFullYear()===anoAtual&&d.getMonth()===mi;
-      }
-      // Para demais tipos: usar competência se disponível; fallback para data
       if(l.competencia) return l.competencia===prefixo;
+      // Fallback para data de emissão apenas em lançamentos legados sem competencia
       const d=new Date((l.data||'')+'T12:00:00');
       return d.getFullYear()===anoAtual&&d.getMonth()===mi;
     });
@@ -2110,6 +2160,106 @@ function renderEntradas(){
 let _saidaTab='empenho';
 let _lpFase='Liquidação';
 
+// ─── Item 2.2: Smart Empenho Dropdown ───
+function setSaidaTipoBtn(tipo){
+  document.getElementById('s-exe-rap').value=tipo;
+  ['all','EXE','RAP'].forEach(k=>{
+    const btn=document.getElementById('s-exe-rap-btn-'+k);
+    if(!btn)return;
+    const ativo=k===(tipo||'all');
+    btn.style.opacity=ativo?'1':'0.45';
+    btn.style.fontWeight=ativo?'800':'600';
+    btn.style.boxShadow=ativo?'0 0 0 2px var(--blue)':'none';
+  });
+  filtrarEmpenhosSaida();
+}
+let _saidaEmpDropdownAberto=false;
+function mostrarDropdownEmpenho(){
+  _saidaEmpDropdownAberto=true;
+  filtrarEmpenhosSaida();
+}
+function filtrarEmpenhosSaida(){
+  const busca=(document.getElementById('s-emp-busca')?.value||'').toLowerCase();
+  const tipo=document.getElementById('s-exe-rap')?.value||'';
+  const dd=document.getElementById('s-emp-dropdown');
+  if(!dd)return;
+  const empenhos=(state.empenhosCad||[]).filter(e=>{
+    if(e.status==='Excluído')return false;
+    if(tipo&&e.tipoEmp!==tipo)return false;
+    if(!busca)return true;
+    return (e.numero||'').toLowerCase().includes(busca)||(e.categoria||'').toLowerCase().includes(busca)||(e.fornNome||'').toLowerCase().includes(busca);
+  }).slice(0,30);
+  if(!empenhos.length){
+    dd.style.display='block';
+    dd.innerHTML='<div style="padding:10px 14px;font-size:12px;color:var(--text3)">Nenhum empenho encontrado</div>';
+    return;
+  }
+  dd.style.display='block';
+  dd.innerHTML=empenhos.map(e=>{
+    const saldo=calcSaldoEmpenho(e.numero);
+    const sc=saldo<=0?'var(--red)':saldo<1000?'var(--amber)':'var(--green)';
+    const badge=e.tipoEmp==='RAP'
+      ?'<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700">RAP</span>'
+      :'<span style="background:rgba(0,153,255,.12);color:var(--blue);border:1px solid rgba(0,153,255,.3);padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700">EXE</span>';
+    return`<div onclick="selecionarEmpenhoSaida('${e.id}')" style="padding:8px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;transition:background .15s" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">
+      ${badge}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:var(--text)">${e.numero}</div>
+        <div style="font-size:10.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${catIcon(e.categoria)} ${e.categoria}${e.fornNome?' · '+e.fornNome:''}</div>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:${sc};white-space:nowrap">${fmtBR(saldo)}</div>
+    </div>`;
+  }).join('');
+}
+function selecionarEmpenhoSaida(id){
+  document.getElementById('s-empenho-cad').value=id;
+  const e=(state.empenhosCad||[]).find(x=>x.id===id);
+  if(!e)return;
+  const dd=document.getElementById('s-emp-dropdown');
+  if(dd)dd.style.display='none';
+  const inp=document.getElementById('s-emp-busca');
+  if(inp)inp.value=e.numero+(e.fornNome?' — '+e.fornNome:'');
+  const saldo=calcSaldoEmpenho(e.numero);
+  const sc=saldo<=0?'var(--red)':saldo<1000?'var(--amber)':'var(--green)';
+  const badge=e.tipoEmp==='RAP'
+    ?'<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700">RAP</span>'
+    :'<span style="background:rgba(0,153,255,.12);color:var(--blue);border:1px solid rgba(0,153,255,.3);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700">EXE</span>';
+  document.getElementById('s-emp-selecionado').innerHTML=`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:8px;margin-top:4px">
+    ${badge}
+    <div style="flex:1">
+      <span style="font-size:13px;font-weight:700;color:var(--text)">${e.numero}</span>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px">${catIcon(e.categoria)} ${e.categoria}</span>
+      ${e.fornNome?`<span style="font-size:11px;color:var(--text3);margin-left:8px">· ${e.fornNome}</span>`:''}
+    </div>
+    <span style="font-size:12px;font-weight:700;color:${sc}">Saldo: ${fmtBR(saldo)}</span>
+    <button onclick="limparSelecaoEmpenhoSaida()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px" title="Limpar">×</button>
+  </div>`;
+  carregarDadosEmpenhoCadastrado();
+}
+function limparSelecaoEmpenhoSaida(){
+  document.getElementById('s-empenho-cad').value='';
+  document.getElementById('s-emp-busca').value='';
+  document.getElementById('s-emp-selecionado').innerHTML='';
+  document.getElementById('s-emp-dropdown').style.display='none';
+  _saidaClearDerivedFields();
+}
+// Fechar dropdown ao clicar fora
+document.addEventListener('click',function(e){
+  const inp=document.getElementById('s-emp-busca');
+  const dd=document.getElementById('s-emp-dropdown');
+  if(dd&&inp&&!inp.contains(e.target)&&!dd.contains(e.target))dd.style.display='none';
+});
+
+// ─── Item 2.1: Filtros de Saída ───
+function saidaLimparFiltros(){
+  ['saida-f-emp','saida-f-de','saida-f-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['saida-f-cat','saida-f-comp'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderSaidas();
+}
+
+// ─── Compatibilidade: onSaidaTipoChange ───
+// Definida mais abaixo junto com _saidaClearDerivedFields e updateEmpenhosCadastrados
+
 function setSaidaTab(t){
   _saidaTab=t;
   ['empenho','anulacao','transferencia'].forEach(x=>{
@@ -2135,7 +2285,7 @@ function renderSaidaForms(){
     const prefAtual=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
     sComp.value=prefAtual;
   }
-  updateEmpenhosCadastrados();
+  // Item 2.2: smart dropdown — não chama mais updateEmpenhosCadastrados (select antigo)
   renderSaidas();
 }
 
@@ -2168,29 +2318,7 @@ function calcularSaldoEmpenho(empenhoCadId){
   return totalSaidas;
 }
 
-function carregarDadosEmpenhoCadastrado(){
-  const empId=document.getElementById('s-empenho-cad').value;
-  const infoEl=document.getElementById('s-empenho-info');
-  if(!empId){
-    infoEl.innerHTML='';
-    return;
-  }
-  const emp=state.empenhosCad?state.empenhosCad.find(e=>e.id===empId):null;
-  if(!emp){
-    infoEl.innerHTML='<div class="info-box warn"><span class="info-icon">⚠</span><div>Empenho não encontrado.</div></div>';
-    return;
-  }
-  const saldo=calcularSaldoEmpenho(empId);
-  infoEl.innerHTML=`<div class="saldo-bar-card">
-    <div class="sb-top">
-      <span class="sb-nome">${catIcon(emp.categoria)} ${emp.numero} — ${emp.fornNome||'S/Fornecedor'}</span>
-      <span class="sb-val ok">${fmtBR(saldo)}</span>
-    </div>
-    <div class="sb-caption">
-      Fonte: ${emp.fonte||'—'} · PTRES: ${emp.ptres||'—'} · ND: ${emp.nd||'—'}${emp.pi?' · PI: '+emp.pi:''}
-    </div>
-  </div>`;
-}
+// carregarDadosEmpenhoCadastrado definida abaixo (versão completa)
 function updateContratoRef(){
   const cat=document.getElementById('s-cat').value;
   const sel=document.getElementById('s-contrato-ref');if(!sel)return;
@@ -2973,9 +3101,12 @@ function renderAeMensal(){
   const dadosMensais=MESES.map((_,mi)=>{
     const mesIdx=mi+1;
     const prefixo=anoAtual+'-'+String(mesIdx).padStart(2,'0');
+    // Item 3 & 4: TODOS os lançamentos devem ser contabilizados pela competência,
+    // não pela data de emissão. Fallback para data apenas se competencia ausente.
     const filtMes=l=>{
       if(l.status!=='Ativo')return false;
-      if(l.tipo==='Empenho'&&l.competencia) return l.competencia===prefixo;
+      if(l.competencia) return l.competencia===prefixo;
+      // Fallback para data de emissão apenas para lançamentos antigos sem competencia
       const d=new Date((l.data||'')+'T12:00:00');
       return d.getFullYear()===anoAtual&&d.getMonth()===mi;
     };
@@ -4251,13 +4382,40 @@ function limparCadastroEmpenho(){
   selecionarTipoEmpenho('EXE');
 }
 
+function cempLimparFiltros(){
+  ['cemp-f-numero','cemp-f-de','cemp-f-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const sel=document.getElementById('cemp-f-cat');if(sel)sel.value='';
+  renderCadastroEmpenhos();
+}
 function renderCadastroEmpenhos(){
   if(!state.empenhosCad)state.empenhosCad=[];
-  const listaAll=state.empenhosCad.filter(e=>e.status!=='Excluído').slice().reverse();
+  // Populate categoria filter dynamically
+  const catSel=document.getElementById('cemp-f-cat');
+  if(catSel){
+    const cur=catSel.value;
+    catSel.innerHTML='<option value="">Todas</option>'+DEFAULT_CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');
+  }
+  // Read filters
+  const fNum=(document.getElementById('cemp-f-numero')?.value||'').toLowerCase().trim();
+  const fCat=document.getElementById('cemp-f-cat')?.value||'';
+  const fDe=document.getElementById('cemp-f-de')?.value||'';
+  const fAte=document.getElementById('cemp-f-ate')?.value||'';
+  let listaAll=state.empenhosCad.filter(e=>{
+    if(e.status==='Excluído')return false;
+    if(fNum&&!(e.numero||'').toLowerCase().includes(fNum))return false;
+    if(fCat&&e.categoria!==fCat)return false;
+    if(fDe&&e.data<fDe)return false;
+    if(fAte&&e.data>fAte)return false;
+    return true;
+  }).slice().reverse();
   const {slice,pg,totalPgs,total}=paginar(listaAll,'empenhosCad');
   const el=document.getElementById('cemp-count');if(el)el.textContent=total+' empenho(s)';
   const tbody=document.getElementById('cemp-tbody');if(!tbody)return;
   tbody.innerHTML=total?slice.map(e=>{
+    // Item 1.2: Saldo a Liquidar = total empenhado (lançamentos) − liquidado
+    const totalEmpLanc=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.empenhoCadId===e.id));
+    const saldoLiq=calcSaldoEmpenho(e.numero);
+    const saldoColor=saldoLiq<=0?'var(--red)':saldoLiq<totalEmpLanc*0.2?'var(--amber)':'var(--green)';
     return`<tr>
       <td><span class="tag ${e.tipoEmp==='RAP'?'tag-transf':'tag-ent'}" style="font-size:10px">${e.tipoEmp}</span></td>
       <td><code style="font-size:11px">${e.numero||'—'}</code></td>
@@ -4266,11 +4424,11 @@ function renderCadastroEmpenhos(){
       <td style="font-size:11px;color:var(--text2)">${e.fornNome||e.acaoId&&state.acoes.find(a=>a.id===e.acaoId)?.nome||'—'}</td>
       <td style="font-size:11px;color:var(--text3)">${e.fonte?e.fonte.split('–')[0].trim():'—'}</td>
       <td style="font-size:11px;color:var(--text3)">${e.ptres||'—'}</td>
-      <td style="font-size:11px;color:var(--text3)">${e.nd||'—'}</td>
+      <td class="r fw6" style="font-size:11px;color:${saldoColor}">${fmtBR(saldoLiq)}</td>
       <td><span class="tag tag-ent" style="font-size:10px">Ativo</span></td>
       <td><button class="btn btn-sec btn-xs" onclick="editarCadastroEmpenho('${e.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirCadastroEmpenho('${e.id}')">✕</button></td>
     </tr>`;
-  }).join(''):'<tr class="empty-row"><td colspan="10">Nenhum empenho cadastrado.</td></tr>';
+  }).join(''):'<tr class="empty-row"><td colspan="10">Nenhum empenho encontrado.</td></tr>';
   const wrap=tbody.closest('.tbl-wrap');
   if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();if(totalPgs>1)wrap.insertAdjacentHTML('beforeend',renderPagination('empenhosCad',totalPgs,pg,total,"renderCadastroEmpenhos()"));}
 }
@@ -5518,11 +5676,9 @@ function selecionarTipoEmpenho(tipo){
 // ═══════════════════════════════════════════════════════════
 
 function onSaidaTipoChange(){
-  // Reset do empenho selecionado ao mudar filtro
-  const sel = document.getElementById('s-empenho-cad');
-  if(sel) sel.value = '';
+  // Compatibilidade: também dispara o filtro do smart dropdown
+  filtrarEmpenhosSaida();
   _saidaClearDerivedFields();
-  updateEmpenhosCadastrados();
   document.getElementById('s-saldo-bar').innerHTML = '';
 }
 
@@ -5659,7 +5815,8 @@ function registrarSaida(){
   if(!valor||valor<=0){ toast('Valor deve ser maior que zero','warn'); return; }
   if(!data){ toast('Data obrigatória','warn'); return; }
   if(!competencia){ toast('Competência (mês) é obrigatória — selecione o mês de referência do empenho','warn'); return; }
-  if(!subcat){ toast('Subcategoria obrigatória','warn'); return; }
+  // Item 5: Descrição é obrigatória; Subcategoria é opcional
+  if(!desc){ toast('Descrição obrigatória','warn'); return; }
 
   // ── Verificação de saldo: EXE verifica, RAP não ──
   if(tipoRecurso === 'EXE'){
@@ -5701,7 +5858,8 @@ function registrarSaida(){
 // Limpar formulário — preserva o filtro EXE/RAP
 function limparFormSaida(){
   ['s-valor','s-subcat','s-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  const sel=document.getElementById('s-empenho-cad');if(sel)sel.value='';
+  // Limpar smart dropdown (Item 2.2)
+  limparSelecaoEmpenhoSaida();
   // Resetar competência para o mês corrente
   const sComp=document.getElementById('s-comp');
   if(sComp){
@@ -5713,14 +5871,36 @@ function limparFormSaida(){
 }
 
 function renderSaidas(){
-  const l=state.lancamentos.filter(l=>l.tipo==='Empenho'&&l.status==='Ativo').slice().reverse();
+  // Populate filter selects
+  const catSel=document.getElementById('saida-f-cat');
+  if(catSel){const cur=catSel.value;catSel.innerHTML='<option value="">Todas</option>'+DEFAULT_CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');}
+  const compSel=document.getElementById('saida-f-comp');
+  if(compSel){
+    const cur=compSel.value;
+    const comps=[...new Set(state.lancamentos.filter(l=>l.tipo==='Empenho'&&l.status==='Ativo'&&l.competencia).map(l=>l.competencia))].sort().reverse();
+    compSel.innerHTML='<option value="">Todas</option>'+comps.map(c=>{const p=c.split('-');const label=p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:c;return`<option value="${c}" ${c===cur?'selected':''}>${label}</option>`;}).join('');
+  }
+  // Read filters
+  const fCat=document.getElementById('saida-f-cat')?.value||'';
+  const fEmp=(document.getElementById('saida-f-emp')?.value||'').toLowerCase();
+  const fComp=document.getElementById('saida-f-comp')?.value||'';
+  const fDe=document.getElementById('saida-f-de')?.value||'';
+  const fAte=document.getElementById('saida-f-ate')?.value||'';
+  let l=state.lancamentos.filter(l=>{
+    if(l.tipo!=='Empenho'||l.status!=='Ativo')return false;
+    if(fCat&&l.categoria!==fCat)return false;
+    if(fEmp&&!(l.numeroEmpenho||l.referencia||'').toLowerCase().includes(fEmp))return false;
+    if(fComp&&l.competencia!==fComp)return false;
+    if(fDe&&l.data<fDe)return false;
+    if(fAte&&l.data>fAte)return false;
+    return true;
+  }).slice().reverse();
   const {slice,pg,totalPgs,total}=paginar(l,'saidas');
   document.getElementById('saida-count').textContent=total+' registros';
   document.getElementById('saida-table').innerHTML=slice.length?slice.map(l=>{
     const badge = l.tipoRecurso==='RAP'
       ? '<span class="kpi-badge badge-purple" style="font-size:9px">RAP</span>'
       : '<span class="kpi-badge badge-blue" style="font-size:9px">EXE</span>';
-    // Formatar competência para exibição amigável
     const compLabel = l.competencia
       ? (()=>{const p=l.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:l.competencia;})()
       : '<span style="color:var(--amber);font-size:10px">sem comp.</span>';
