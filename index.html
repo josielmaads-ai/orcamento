@@ -1329,6 +1329,26 @@ function carregar(){
       if(_dateCount > 0)
         console.info('Migração: '+_dateCount+' lançamento(s) com data de ano anterior atualizados para '+_prefAtual+'.');
 
+      // ── Migração: propagar tipoRecurso para lançamentos de Liquidação/Pagamento legados
+      // Lançamentos do seed e registros antigos não possuem tipoRecurso. Sem ele,
+      // totalLiquidacoesEXE/totalPagamentosEXE os tratam como EXE (pelo fallback ||'EXE'),
+      // mas é necessário ter o campo explícito para futuras segregações e para o seed RAP.
+      let _tipoRecursoCount = 0;
+      state.lancamentos.forEach(l=>{
+        if((l.tipo==='Liquidação'||l.tipo==='Pagamento')&&!l.tipoRecurso){
+          // Tenta herdar do empenho referenciado por referenciaId
+          const empRef=state.lancamentos.find(e=>e.id===l.referenciaId&&e.tipo==='Empenho');
+          if(empRef&&empRef.tipoRecurso){
+            l.tipoRecurso=empRef.tipoRecurso;_tipoRecursoCount++;
+          } else {
+            // Fallback: EXE (comportamento histórico)
+            l.tipoRecurso='EXE';_tipoRecursoCount++;
+          }
+        }
+      });
+      if(_tipoRecursoCount>0)
+        console.info('Migração: tipoRecurso propagado para '+_tipoRecursoCount+' lançamento(s) de Liquidação/Pagamento.');
+
       // Log de migração automática
       console.log('✅ Categorias normalizadas automaticamente ao carregar');
       console.log('✅ Usando DEFAULT_CATS em todos os módulos para garantir consistência');
@@ -1970,7 +1990,17 @@ function renderDashboard(){
     const temBruto=totalEmpenhosEXE(c);
     const temAnul=sum(getLancsAtivos('Anulação',c));
     const tem=temBruto-temAnul; // empenhado líquido
-    const tl=totalLiquidacoesEXE(c),tp=totalPagamentosEXE(c);
+    const tl=totalLiquidacoesEXE(c);
+    // "Pago" = pagamentos via state.lancamentos (módulo Saída) +
+    //          liquidações do módulo especializado marcadas como pago='Sim' e de empenhos EXE
+    const tpLanc=totalPagamentosEXE(c);
+    const tpLiqMod=(state.liquidacoes||[]).filter(l=>{
+      if(l.status==='Excluído'||l.pago!=='Sim')return false;
+      if(l.categoria!==c)return false;
+      const empCad=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
+      return !empCad||empCad.tipoEmp!=='RAP';
+    }).reduce((s,l)=>s+(l.valorLiquido||l.valorBruto||0),0);
+    const tp=tpLanc+tpLiqMod;
     const saldoEmp=te-tem;
     const pe=te>0?Math.round(tem/te*100):0;
     return`<tr>
@@ -2448,6 +2478,8 @@ function registrarLiqPag(){
     fonte:document.getElementById('lp-fonte').value,
     ptres:document.getElementById('lp-ptres').value,
     nd:document.getElementById('lp-nd').value,
+    // tipoRecurso herdado do empenho referenciado para segregação EXE/RAP correta
+    tipoRecurso:emp.tipoRecurso||'EXE',
     referencia:emp.referencia||empId,
     referenciaId:empId,
     observacoes:document.getElementById('lp-obs').value.trim(),
@@ -3402,6 +3434,13 @@ function seedDataDez2025(){
 function init(){
   const today=new Date().toISOString().slice(0,10);
   ['c-data','s-data'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=today;});
+  // Migração inline: garantir tipoRecurso em lançamentos de Liquidação/Pagamento do seed
+  state.lancamentos.forEach(l=>{
+    if((l.tipo==='Liquidação'||l.tipo==='Pagamento')&&!l.tipoRecurso){
+      const empRef=state.lancamentos.find(e=>e.id===l.referenciaId&&e.tipo==='Empenho');
+      l.tipoRecurso=(empRef&&empRef.tipoRecurso)||'EXE';
+    }
+  });
   renderDashboard();
   renderSidebar();
 }
@@ -4770,6 +4809,8 @@ function registrarLiquidacao(grupo){
     id:shortId('LIQ'),tipo:'Liquidação',categoria:emp.categoria,
     descricao:'Liquidação '+emp.numero+(obj.nf?' NF '+obj.nf:''),
     valor:vlr,data,fonte:emp.fonte||'',ptres:emp.ptres||'',nd:emp.nd||'',
+    // tipoRecurso herdado do empenho cadastrado para correta segregação EXE/RAP na tabela
+    tipoRecurso:emp.tipoEmp||'EXE',
     referencia:emp.numero,referenciaId:emp.id,status:'Ativo',ts:new Date().toISOString(),
     liquidacaoId:obj.id
   };
