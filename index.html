@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FinSight — v10.1 PRO · IFPI Campus SJP</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23111118'/><path d='M8 22 L13 14 L18 18 L23 10' stroke='%23f5c842' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='23' cy='10' r='2.5' fill='%2300e676'/></svg>" type="image/svg+xml">
+<title>SUCO v1.0 — Sistema Unificado de Controle Orçamentário · IFPI Campus SJP</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23111118'/><path d='M5 23 L11 14 L17 18 L25 8' stroke='%23f5a623' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='25' cy='8' r='3' fill='%2300e676'/><circle cx='25' cy='8' r='1.4' fill='%23111118'/></svg>" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════ TOKENS ═══════════════════════ */
@@ -361,6 +361,28 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   .ct-kpi,.ae-kpi{grid-template-columns:1fr 1fr}
   .fase-flow{grid-template-columns:1fr}
 }
+
+/* ═══ PRINT / PDF ═══ */
+@media print{
+  body{background:#fff!important;color:#000!important;font-size:11pt}
+  .topbar,.sidebar,.btn,.btn-top,.btn-row,.page-actions,.filter-panel,.pagination,.badge-save,.badge-drive-status,#modal-drive-welcome{display:none!important}
+  .app{display:block!important}
+  .main{overflow:visible!important}
+  .page{display:block!important;padding:0!important}
+  .page:not(.active){display:none!important}
+  .card,.tbl-wrap,.kpi,.info-box{border:1px solid #ccc!important;border-radius:4px!important;background:#fff!important;color:#000!important;box-shadow:none!important;break-inside:avoid}
+  .kpi-value,.kpi-label,.kpi-sub{color:#000!important}
+  .tbl-wrap th,.tbl-wrap td{color:#000!important;border-bottom:1px solid #ddd!important;background:#fff!important}
+  .tbl-wrap th{background:#f5f5f5!important}
+  .month-table th,.month-table td{color:#000!important;border-bottom:1px solid #eee!important}
+  /* Cabeçalho de impressão SUCO */
+  .page-header::before{
+    content:'SUCO — Sistema Unificado de Controle Orçamentário  ·  v1.0  ·  IFPI Campus São João do Piauí';
+    display:block;font-size:10pt;font-weight:700;color:#555;border-bottom:2px solid #333;padding-bottom:6px;margin-bottom:10px;letter-spacing:.04em
+  }
+  .page-footer{color:#555!important;border-top:1px solid #ccc!important;font-size:9pt}
+  a{text-decoration:none;color:#000}
+}
 </style>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -369,20 +391,26 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 
 <!-- ═══════════ TOPBAR ═══════════ -->
 <header class="topbar">
-  <div class="logo" style="gap:6px;align-items:center">
-    <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
-      <rect width="32" height="32" rx="6" fill="#111118"/>
-      <path d="M7 23 L12 14 L17 18 L24 9" stroke="#f5c842" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="24" cy="9" r="2.5" fill="#00e676"/>
-      <path d="M7 26 L25 26" stroke="#1a1a28" stroke-width="1.5"/>
+  <div class="logo" style="gap:8px;align-items:center;flex-shrink:0">
+    <!-- Ícone: gráfico de linha com ponto verde — idêntico ao favicon de referência -->
+    <svg width="30" height="30" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;filter:drop-shadow(0 0 6px rgba(245,166,35,.35))">
+      <rect width="32" height="32" rx="7" fill="#111118"/>
+      <path d="M5 23 L11 14 L17 18 L25 8" stroke="#f5a623" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="25" cy="8" r="3.2" fill="#00e676"/>
+      <circle cx="25" cy="8" r="1.5" fill="#111118"/>
     </svg>
-    <span>Fin<span style="color:var(--green)">Sight</span></span>
-    <span class="logo-badge">v10.0 PRO</span>
+    <!-- Nome: SU laranja / CO verde, design moderno com sombras sutis -->
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:900;letter-spacing:.06em;line-height:1;user-select:none">
+      <span style="color:#f5a623;text-shadow:0 0 12px rgba(245,166,35,.55),0 1px 3px rgba(0,0,0,.7)">SU</span><span style="color:#00e676;text-shadow:0 0 12px rgba(0,230,118,.5),0 1px 3px rgba(0,0,0,.7)">CO</span>
+    </span>
+    <span style="font-size:9px;color:rgba(245,166,35,.7);background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.22);border-radius:3px;padding:2px 6px;letter-spacing:.05em;font-weight:600;font-family:'IBM Plex Mono',monospace">v1.0</span>
   </div>
   <div class="topbar-center">
-    <div class="topbar-inst">
-      <strong>SISTEMA DE CONTROLE ORÇAMENTÁRIO</strong><br>
-      IFPI – Campus São João do Piauí · Coordenação de Orçamento, Contabilidade e Finanças (COCF)
+    <div class="topbar-inst" style="font-size:11.5px;letter-spacing:.03em;text-align:center;line-height:1.5">
+      <div style="font-size:12px;font-weight:800;letter-spacing:.06em;line-height:1.2">
+        <span style="color:#c8cfe0">SISTEMA UNIFICADO DE CONTROLE ORÇAMENTÁRIO — </span><span style="color:#f5a623;text-shadow:0 0 8px rgba(245,166,35,.4)">SU</span><span style="color:#00e676;text-shadow:0 0 8px rgba(0,230,118,.35)">CO</span>
+      </div>
+      <div style="font-size:10.5px;color:#4a5070;margin-top:1px">IFPI – Campus São João do Piauí · Coordenação de Orçamento, Contabilidade e Finanças (COCF)</div>
     </div>
   </div>
   <div class="topbar-right">
@@ -445,7 +473,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div id="sidebar-saldo"><div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">Sem dados</div></div>
   </div>
   <div class="sidebar-footer">
-    <div class="sf-text">IFPI Campus São João do Piauí · FinSight v10.1 PRO<br>localStorage · Soft-delete · Auditoria</div>
+    <div class="sf-text">IFPI Campus São João do Piauí · <strong style="color:var(--gold)">SUCO v1.0</strong><br>localStorage · Soft-delete · Auditoria</div>
   </div>
 </aside>
 
@@ -496,7 +524,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   </div>
   <!-- Card RAP -->
   <div id="dash-rap-card" style="margin-bottom:14px"></div>
-  <div class="page-footer">José Marcondes Ribeiro Coelho – Contador · IFPI Campus São João do Piauí · COCF</div>
+  <div class="page-footer">José Marcondes Ribeiro Coelho – Contador · IFPI Campus São João do Piauí · COCF · <strong>SUCO v1.0</strong></div>
 </div>
 
 <!-- ════════ REGISTRAR CRÉDITO ════════ -->
@@ -561,20 +589,33 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="card">
       <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Registrar Saída (Inclusão de Saldo no Empenho)</div>
 
-      <!-- FILTRO: EXE/RAP — com destaque visual diferenciado -->
-      <div class="saida-tipo-filter" role="group" aria-label="Filtrar por Tipo">
-        <div class="saida-tipo-label">Filtrar por Tipo</div>
-        <button id="s-exe-rap-btn-all" onclick="setSaidaTipoBtn('')" class="saida-tipo-btn saida-tipo-active" type="button"><span class="saida-tipo-ico">◉</span>Todos</button>
-        <button id="s-exe-rap-btn-EXE" onclick="setSaidaTipoBtn('EXE')" class="saida-tipo-btn tipo-exe" type="button"><span class="saida-tipo-ico">◆</span>EXE — Exercício</button>
-        <button id="s-exe-rap-btn-RAP" onclick="setSaidaTipoBtn('RAP')" class="saida-tipo-btn tipo-rap" type="button"><span class="saida-tipo-ico">▣</span>RAP — Restos a Pagar</button>
+      <!-- FILTRO: EXE/RAP — visual reforçado: contraste alto, ícones realçados, hover e estado ativo bem definidos -->
+      <div class="saida-tipo-filter" role="group" aria-label="Filtrar por Tipo" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="saida-tipo-label" style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap">Filtrar por Tipo</div>
+        <button id="s-exe-rap-btn-all" onclick="setSaidaTipoBtn('')" class="saida-tipo-btn saida-tipo-active" type="button"
+          style="min-height:38px;padding:8px 18px;border-radius:8px;font-size:12.5px;font-weight:800;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);display:inline-flex;align-items:center;gap:8px;letter-spacing:.03em;transition:all .18s;box-shadow:0 0 10px rgba(245,200,66,.2)">
+          <span style="font-size:15px;line-height:1">◉</span>Todos
+        </button>
+        <button id="s-exe-rap-btn-EXE" onclick="setSaidaTipoBtn('EXE')" class="saida-tipo-btn" type="button"
+          style="min-height:38px;padding:8px 18px;border-radius:8px;font-size:12.5px;font-weight:800;border:2px solid var(--border2);background:var(--bg4);color:var(--text3);display:inline-flex;align-items:center;gap:8px;letter-spacing:.03em;transition:all .18s"
+          onmouseover="if(this.dataset.active!=='1')this.style.borderColor='var(--blue)';this.style.color='var(--blue2)'"
+          onmouseout="if(this.dataset.active!=='1'){this.style.borderColor='var(--border2)';this.style.color='var(--text3)'}">
+          <span style="font-size:15px;line-height:1;color:var(--blue)">◆</span>EXE — Exercício
+        </button>
+        <button id="s-exe-rap-btn-RAP" onclick="setSaidaTipoBtn('RAP')" class="saida-tipo-btn" type="button"
+          style="min-height:38px;padding:8px 18px;border-radius:8px;font-size:12.5px;font-weight:800;border:2px solid var(--border2);background:var(--bg4);color:var(--text3);display:inline-flex;align-items:center;gap:8px;letter-spacing:.03em;transition:all .18s"
+          onmouseover="if(this.dataset.active!=='1')this.style.borderColor='var(--purple)';this.style.color='var(--purple2)'"
+          onmouseout="if(this.dataset.active!=='1'){this.style.borderColor='var(--border2)';this.style.color='var(--text3)'}">
+          <span style="font-size:15px;line-height:1;color:var(--purple)">▣</span>RAP — Restos a Pagar
+        </button>
         <input type="hidden" id="s-exe-rap" value="">
       </div>
 
       <!-- EMPENHO: seleção com busca inteligente (Item 2.2) -->
-      <div class="field" style="margin-bottom:10px">
-        <label>Empenho Referenciado<span class="required-mark">*</span></label>
+      <div class="field" style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.06em;text-transform:uppercase">Empenho Referenciado<span class="required-mark">*</span></label>
         <div style="position:relative">
-          <input type="text" id="s-emp-busca" placeholder="🔍 Digite número, categoria ou fornecedor..." oninput="filtrarEmpenhosSaida()" onfocus="mostrarDropdownEmpenho()" style="width:100%;padding:8px 12px;font-size:13px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg3)" autocomplete="off">
+          <input type="text" id="s-emp-busca" placeholder="🔍 Digite número, categoria ou fornecedor..." oninput="filtrarEmpenhosSaida()" onfocus="mostrarDropdownEmpenho()" style="width:100%;padding:12px 16px;font-size:14px;font-weight:500;border:2px solid var(--border2);border-radius:10px;background:var(--bg3);color:var(--text);letter-spacing:.02em;transition:all .15s" autocomplete="off" onfocus="this.style.borderColor='var(--gold)';this.style.boxShadow='0 0 0 3px rgba(245,200,66,.08)';mostrarDropdownEmpenho()" onblur="this.style.borderColor='var(--border2)';this.style.boxShadow=''">
           <div id="s-emp-dropdown" style="display:none;position:absolute;z-index:200;left:0;right:0;top:100%;margin-top:2px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4)"></div>
         </div>
         <input type="hidden" id="s-empenho-cad">
@@ -616,33 +657,43 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     </div>
     <div class="tbl-wrap">
       <div class="tbl-head"><div class="tbl-title">Saídas registradas (Inclusão de Saldo)</div><div class="tbl-count" id="saida-count"></div></div>
-      <!-- FILTRO AVANÇADO 2.1 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;padding:10px 14px;background:var(--bg3);border-bottom:1px solid var(--border);border-radius:8px 8px 0 0">
-        <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Categoria</label>
-          <select id="saida-f-cat" onchange="renderSaidas()" style="padding:5px 8px;font-size:12px">
-            <option value="">Todas</option>
-          </select>
+      <!-- FILTRO AVANÇADO — Saídas -->
+      <div style="background:var(--bg4);border-bottom:1px solid var(--border);padding:12px 14px;border-radius:8px 8px 0 0">
+        <!-- Filtro EXE/RAP com destaque visual forte -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <span style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap">Tipo:</span>
+          <button id="saida-f-tipo-all" onclick="saidaFiltroTipo('')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;letter-spacing:.03em;transition:all .15s">◉ Todos</button>
+          <button id="saida-f-tipo-exe" onclick="saidaFiltroTipo('EXE')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">◆ EXE — Exercício</button>
+          <button id="saida-f-tipo-rap" onclick="saidaFiltroTipo('RAP')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">▣ RAP — Restos a Pagar</button>
+          <input type="hidden" id="saida-f-tipo-val" value="">
         </div>
-        <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Nº Empenho</label>
-          <input type="text" id="saida-f-emp" placeholder="Buscar empenho..." oninput="renderSaidas()" style="padding:5px 8px;font-size:12px">
-        </div>
-        <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Competência</label>
-          <select id="saida-f-comp" onchange="renderSaidas()" style="padding:5px 8px;font-size:12px">
-            <option value="">Todas</option>
-          </select>
-        </div>
-        <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Período</label>
-          <div style="display:flex;gap:4px">
-            <input type="date" id="saida-f-de" oninput="renderSaidas()" style="padding:5px 6px;font-size:11px;flex:1">
-            <input type="date" id="saida-f-ate" oninput="renderSaidas()" style="padding:5px 6px;font-size:11px;flex:1">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px">
+          <div class="field" style="margin:0">
+            <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Categoria</label>
+            <select id="saida-f-cat" onchange="renderSaidas()" style="padding:6px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text)">
+              <option value="">Todas</option>
+            </select>
           </div>
-        </div>
-        <div style="display:flex;align-items:flex-end">
-          <button class="btn btn-sec" onclick="saidaLimparFiltros()" style="padding:5px 10px;font-size:11px;white-space:nowrap">↺ Limpar</button>
+          <div class="field" style="margin:0">
+            <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Nº Empenho</label>
+            <input type="text" id="saida-f-emp" placeholder="Buscar empenho..." oninput="renderSaidas()" style="padding:6px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text);width:100%">
+          </div>
+          <div class="field" style="margin:0">
+            <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Competência</label>
+            <select id="saida-f-comp" onchange="renderSaidas()" style="padding:6px 8px;font-size:12px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text)">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0">
+            <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Período</label>
+            <div style="display:flex;gap:4px">
+              <input type="date" id="saida-f-de" oninput="renderSaidas()" style="padding:5px 6px;font-size:11px;flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text)">
+              <input type="date" id="saida-f-ate" oninput="renderSaidas()" style="padding:5px 6px;font-size:11px;flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;color:var(--text)">
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-end">
+            <button class="btn btn-sec" onclick="saidaLimparFiltros()" style="padding:6px 12px;font-size:11px;white-space:nowrap">↺ Limpar</button>
+          </div>
         </div>
       </div>
       <table><thead><tr><th>ID</th><th>Tipo</th><th>Data</th><th>Competência</th><th>Categoria</th><th>Nº Empenho</th><th>Descrição</th><th>Subcategoria</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="saida-table"></tbody></table>
@@ -995,23 +1046,40 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 <!-- ════════ RELATÓRIOS ════════ -->
 <div id="page-relatorios" class="page">
   <div class="page-header">
-    <div><div class="page-title"><span>📊</span>Relatórios e Indicadores</div><div class="page-sub">Geração dinâmica de relatórios financeiros orçamentários</div></div>
+    <div><div class="page-title"><span>📊</span>Relatórios e Indicadores</div><div class="page-sub">Geração dinâmica de relatórios financeiros orçamentários · SUCO v1.0</div></div>
   </div>
   <div class="card">
-    <div class="card-title">Filtros Avançados</div>
+    <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Filtros Avançados</div>
+    <!-- Linha 1: datas, categoria, tipo fase -->
     <div class="form-grid cols4">
       <div class="field"><label>De</label><input type="date" id="rel-de"></div>
       <div class="field"><label>Até</label><input type="date" id="rel-ate"></div>
       <div class="field"><label>Categoria</label><select id="rel-cat"><option value="">Todas</option></select></div>
-      <div class="field"><label>Tipo</label><select id="rel-tipo"><option value="">Todos</option><option>Entrada</option><option>Empenho</option><option>Liquidação</option><option>Pagamento</option><option>Anulação</option></select></div>
+      <div class="field"><label>Fase / Tipo</label><select id="rel-tipo"><option value="">Todas as fases</option><option>Entrada</option><option>Empenho</option><option>Liquidação</option><option>Pagamento</option><option>Anulação</option></select></div>
     </div>
-    <div class="form-grid cols3" style="margin-top:10px">
-      <div class="field"><label>Fonte</label><select id="rel-fonte"><option value="">Todas</option></select></div>
+    <!-- Linha 2: Tipo EXE/RAP (novo) + competência (novo) + fonte + PTRES -->
+    <div class="form-grid cols4" style="margin-top:10px">
+      <div class="field">
+        <label>Tipo <span style="font-size:9px;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:3px;padding:1px 5px;font-weight:700">NOVO</span></label>
+        <select id="rel-tipo-exe-rap" style="border-color:var(--blue-border)">
+          <option value="">EXE + RAP (Todos)</option>
+          <option value="EXE">◆ EXE — Exercício</option>
+          <option value="RAP">▣ RAP — Restos a Pagar</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Mês de Competência <span style="font-size:9px;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:3px;padding:1px 5px;font-weight:700">NOVO</span></label>
+        <select id="rel-competencia" style="border-color:var(--blue-border)">
+          <option value="">Todas as competências</option>
+        </select>
+      </div>
+      <div class="field"><label>Fonte de Recurso</label><select id="rel-fonte"><option value="">Todas</option></select></div>
       <div class="field"><label>PTRES</label><select id="rel-ptres"><option value="">Todos</option></select></div>
-      <div class="field"><label>Natureza da Despesa</label><select id="rel-nd"><option value="">Todas</option></select></div>
     </div>
-    <div class="form-grid cols3" style="margin-top:10px">
-      <div class="field"><label>Filtrar por Mês</label>
+    <!-- Linha 3: ND + mês + agrupamento + relatório contratos -->
+    <div class="form-grid cols4" style="margin-top:10px">
+      <div class="field"><label>Natureza da Despesa</label><select id="rel-nd"><option value="">Todas</option></select></div>
+      <div class="field"><label>Filtrar por Mês (calendário)</label>
         <select id="rel-mes">
           <option value="">Todos os meses</option>
           ${['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'].map((m,i)=>`<option value="${String(i+1).padStart(2,'0')}">${m}</option>`).join('')}
@@ -1023,13 +1091,14 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
           <option value="nd">Natureza da Despesa</option>
           <option value="cat">Categoria</option>
           <option value="mes">Mês</option>
+          <option value="tipo">Tipo EXE/RAP</option>
         </select>
       </div>
       <div class="field" style="padding-top:18px">
         <button class="btn btn-purple btn-sm" onclick="gerarRelatorioContratos()">📄 Relatório de Contratos</button>
       </div>
     </div>
-    <div class="btn-row" style="margin-top:10px">
+    <div class="btn-row" style="margin-top:12px">
       <button class="btn btn-primary" onclick="gerarRelatorio()">◈ Gerar Relatório</button>
       <button class="btn btn-blue btn-sm" onclick="exportarRelatorioCSV()">↓ CSV</button>
       <button class="btn btn-amber btn-sm" onclick="imprimirRelatorio()">⎙ Imprimir / PDF</button>
@@ -1501,7 +1570,7 @@ function exportarJSON(){
     liquidacoes: state.liquidacoes.length,
     contratosPnae: state.contratosPnae.length
   };
-  downloadFile(d,'backup_completo_finsight_'+new Date().toISOString().slice(0,10)+'.json','application/json');
+  downloadFile(d,'backup_SUCO_v1_'+new Date().toISOString().slice(0,10)+'.json','application/json');
   auditLog('EXPORT','SISTEMA','JSON','Backup JSON completo exportado',resumo);
   salvar();
   toast('✓ Backup completo exportado! ('+Object.entries(resumo).map(([k,v])=>k+': '+v).join(' · ')+')','success');
@@ -1658,6 +1727,31 @@ function empsDoContrado_via_liq(l, empsCadIds){
     return empsCadIds.includes(l.referenciaId);
   }
   return false;
+}
+
+// ── Helper EXE-only: igual a sumLancsByContrato mas EXCLUI obrigatoriamente RAP ──
+// Regra: nenhum dado de RAP (empenho, liquidação, pagamento) deve compor o módulo Contratos Continuados.
+// tipoRecurso é herdado do empenho de origem no momento do lançamento. O fallback ||'EXE' garante
+// que lançamentos legados sem o campo sejam tratados como EXE (comportamento conservador).
+function sumLancsByContratoEXE(tipo, contratoId){
+  const isEXE = l => (l.tipoRecurso || 'EXE') === 'EXE';
+  // Método 1: referenciaId direto + filtro EXE
+  const porRef = state.lancamentos.filter(l =>
+    l.status === 'Ativo' && l.tipo === tipo && l.referenciaId === contratoId && isEXE(l)
+  );
+  // Método 2: via empenho cadastrado vinculado ao contrato + filtro EXE
+  const empsDoContrato = (state.empenhosCad || [])
+    .filter(e => e.contratoId === contratoId && e.status !== 'Excluído' && (e.tipoEmp || 'EXE') === 'EXE')
+    .map(e => e.id);
+  const porEmpCad = empsDoContrato.length ? state.lancamentos.filter(l => {
+    if (l.status !== 'Ativo' || l.tipo !== tipo || !isEXE(l)) return false;
+    if (tipo === 'Empenho') return empsDoContrato.includes(l.empenhoCadId);
+    if (tipo === 'Liquidação' || tipo === 'Pagamento')
+      return empsDoContrato.includes(l.referenciaId) || empsDoContrado_via_liq(l, empsDoContrato);
+    return false;
+  }) : [];
+  const ids = new Set([...porRef.map(x => x.id), ...porEmpCad.map(x => x.id)]);
+  return state.lancamentos.filter(l => ids.has(l.id));
 }
 
 // ── Helper: soma lançamentos vinculados a uma AÇÃO de AE ──
@@ -2246,12 +2340,31 @@ let _lpFase='Liquidação';
 // ─── Item 2.2: Smart Empenho Dropdown ───
 function setSaidaTipoBtn(tipo){
   document.getElementById('s-exe-rap').value=tipo;
+  // ── REFATORAÇÃO UI: ênfase visual por cor semântica conforme tipo ──
+  const CORES={
+    all:{border:'var(--gold-border)',bg:'var(--gold-bg)',color:'var(--gold)',glow:'var(--glow-gold)'},
+    EXE:{border:'var(--blue-border)',bg:'var(--blue-bg)',color:'var(--blue)',glow:'0 0 16px rgba(68,138,255,.28)'},
+    RAP:{border:'var(--purple-border)',bg:'var(--purple-bg)',color:'var(--purple)',glow:'0 0 16px rgba(170,102,255,.28)'}
+  };
   ['all','EXE','RAP'].forEach(k=>{
     const btn=document.getElementById('s-exe-rap-btn-'+k);
     if(!btn)return;
     const ativo=k===(tipo||'all');
     btn.classList.toggle('saida-tipo-active',ativo);
-    btn.style.opacity=ativo?'1':'0.72';
+    if(ativo){
+      const c=CORES[k]||CORES.all;
+      btn.style.cssText=`
+        opacity:1;border-color:${c.border};background:${c.bg};color:${c.color};
+        box-shadow:${c.glow},inset 0 0 0 1.5px ${c.border};
+        transform:translateY(-2px) scale(1.045);font-weight:800;
+        outline:2px solid ${c.border};outline-offset:2px;
+      `;
+    } else {
+      btn.style.cssText=`
+        opacity:0.60;border-color:var(--border2);background:var(--bg3);color:var(--text3);
+        box-shadow:none;transform:none;font-weight:800;outline:none;
+      `;
+    }
   });
   filtrarEmpenhosSaida();
 }
@@ -2336,6 +2449,29 @@ document.addEventListener('click',function(e){
 function saidaLimparFiltros(){
   ['saida-f-emp','saida-f-de','saida-f-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   ['saida-f-cat','saida-f-comp'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const tvEl=document.getElementById('saida-f-tipo-val');if(tvEl)tvEl.value='';
+  // Resetar botões tipo
+  ['all','exe','rap'].forEach(k=>{
+    const btn=document.getElementById('saida-f-tipo-'+k);
+    if(!btn)return;
+    if(k==='all'){btn.style.borderColor='var(--gold-border)';btn.style.background='var(--gold-bg)';btn.style.color='var(--gold)';}
+    else{btn.style.borderColor='var(--border2)';btn.style.background='var(--bg3)';btn.style.color='var(--text3)';}
+  });
+  renderSaidas();
+}
+
+function saidaFiltroTipo(tipo){
+  const tvEl=document.getElementById('saida-f-tipo-val');if(tvEl)tvEl.value=tipo;
+  ['all','exe','rap'].forEach(k=>{
+    const btn=document.getElementById('saida-f-tipo-'+k);
+    if(!btn)return;
+    const ativo=(tipo===''&&k==='all')||(tipo.toLowerCase()===k);
+    if(ativo){
+      if(k==='exe'){btn.style.borderColor='var(--blue-border)';btn.style.background='var(--blue-bg)';btn.style.color='var(--blue)';}
+      else if(k==='rap'){btn.style.borderColor='var(--purple-border)';btn.style.background='var(--purple-bg)';btn.style.color='var(--purple)';}
+      else{btn.style.borderColor='var(--gold-border)';btn.style.background='var(--gold-bg)';btn.style.color='var(--gold)';}
+    }else{btn.style.borderColor='var(--border2)';btn.style.background='var(--bg3)';btn.style.color='var(--text3)';}
+  });
   renderSaidas();
 }
 
@@ -2775,9 +2911,9 @@ function renderContratoLista(){
       else if(diasVenc<=30)alertaHtml=`<span class="ct-alerta vencendo">⏰ Vence em ${diasVenc}d</span>`;
       else alertaHtml=`<span class="ct-alerta ok">✓ ${diasVenc}d</span>`;
     }
-    const empC=sum(sumLancsByContrato('Empenho',c.id));
-    const liqC=sum(sumLancsByContrato('Liquidação',c.id));
-    const pagC=sum(sumLancsByContrato('Pagamento',c.id));
+    const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
+    const liqC=sum(sumLancsByContratoEXE('Liquidação',c.id));
+    const pagC=sum(sumLancsByContratoEXE('Pagamento',c.id));
     const pExec=c.valorTotal>0?Math.round(empC/c.valorTotal*100):0;
     const pLiq=empC>0?Math.round((liqC+pagC)/empC*100):0;
     return`<div class="ct-card">
@@ -2802,9 +2938,9 @@ function renderContratoLista(){
 function renderContratoExec(){
   const cts=state.contratos.filter(c=>c.status!=='Excluído');
   const rows=cts.map(c=>{
-    const empC=sum(sumLancsByContrato('Empenho',c.id));
-    const liqC=sum(sumLancsByContrato('Liquidação',c.id));
-    const pagC=sum(sumLancsByContrato('Pagamento',c.id));
+    const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
+    const liqC=sum(sumLancsByContratoEXE('Liquidação',c.id));
+    const pagC=sum(sumLancsByContratoEXE('Pagamento',c.id));
     const saldo=(c.valorTotal||0)-empC;
     const pExec=c.valorTotal>0?Math.round(empC/c.valorTotal*100):0;
     const pLiqEmp=empC>0?Math.round((liqC+pagC)/empC*100):0;
@@ -2826,25 +2962,75 @@ function renderContratoDash(){
   const hoje=new Date();
   const vencendo=cts.filter(c=>{if(!c.dataFim)return false;const d=Math.round((new Date(c.dataFim+'T12:00:00')-hoje)/86400000);return d>=0&&d<=30;});
   const vencidos=cts.filter(c=>{if(!c.dataFim)return false;return new Date(c.dataFim+'T12:00:00')<hoje;});
+
+  // === RESTRIÇÃO OBRIGATÓRIA: apenas EXE (sem RAP) ===
+  const empEXEonly=l=>l.status==='Ativo'&&l.tipo==='Empenho'&&(l.tipoRecurso||'EXE')==='EXE';
+  const liqEXEonly=l=>l.status==='Ativo'&&l.tipo==='Liquidação'&&(l.tipoRecurso||'EXE')==='EXE';
+  const pagEXEonly=l=>l.status==='Ativo'&&l.tipo==='Pagamento'&&(l.tipoRecurso||'EXE')==='EXE';
+
+  // Total Recebido — Contratos (Registrar Crédito, categoria CONTRATOS)
+  const totRecContratos=sum(getLancsAtivos('Entrada','CONTRATOS'));
+  // Total Recebido — Apoio ao Ensino (Registrar Crédito, categoria APOIO AO ENSINO)
+  const totRecApoio=sum(getLancsAtivos('Entrada','APOIO AO ENSINO'));
+
+  // Total Empenhado EXE (contratos + apoio ao ensino)
+  const totEmpContratosEXE=sum(state.lancamentos.filter(l=>empEXEonly(l)&&(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO')));
+  // Total Liquidado EXE
+  const totLiqContratosEXE=sum(state.lancamentos.filter(l=>liqEXEonly(l)&&(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO')));
+  // Total Pago EXE
+  const totPagContratosEXE=sum(state.lancamentos.filter(l=>pagEXEonly(l)&&(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO')));
+
+  // Valor contratado total
   const totContratado=cts.reduce((s,c)=>s+(c.valorTotal||0),0);
-  const totEmpContratos=cts.reduce((s,c)=>s+sum(sumLancsByContrato('Empenho',c.id)),0);
-  const totPagContratos=cts.reduce((s,c)=>s+sum(sumLancsByContrato('Pagamento',c.id)),0);
-  const totLiqContratos=cts.reduce((s,c)=>s+sum(sumLancsByContrato('Liquidação',c.id)),0);
-  const pctExecGeral=totContratado>0?Math.round(totEmpContratos/totContratado*100):0;
+  const pctExecGeral=totContratado>0?Math.round(totEmpContratosEXE/totContratado*100):0;
+
+  // === Tabela Distribuição Mensal Prevista vs Executada (competência) ===
+  const anoAtual=new Date().getFullYear();
+  const distribMensal=MESES.map((_,mi)=>{
+    const mesIdx=mi+1;
+    const prefixo=anoAtual+'-'+String(mesIdx).padStart(2,'0');
+    const prev=cts.reduce((s,c)=>{
+      const arr=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
+      return s+(arr[mi]||0);
+    },0);
+    // Empenhado pelo mês de competência (EXE only) — fonte de verdade: campo competencia
+    // RAP excluído via empEXEonly(); fallback por data removido (Regra Global de Origem)
+    const empM=sum(state.lancamentos.filter(l=>{
+      if(!empEXEonly(l))return false;
+      if(!(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO'))return false;
+      return (l.competencia||'')===prefixo;
+    }));
+    return{prev,empM};
+  });
+  const totDistribPrev=distribMensal.reduce((s,d)=>s+d.prev,0);
+  const totDistribEmp=distribMensal.reduce((s,d)=>s+d.empM,0);
+  const fmtCell=(v)=>v>0?`<td class="r" style="font-size:10px">${fmtBR(v)}</td>`:`<td class="r" style="color:var(--text4);font-size:10px">—</td>`;
+
   document.getElementById('contratos-dash').innerHTML=`
+    <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">ℹ</span><div>Dashboard considera exclusivamente dados do tipo <strong>EXE (Exercício)</strong>. Dados RAP (Restos a Pagar) não são exibidos aqui.</div></div>
     <div class="kpi-grid">
       <div class="kpi accent-blue"><div class="kpi-label">Contratos Ativos</div><div class="kpi-value text-blue">${cts.length}</div><div class="kpi-sub">contratos cadastrados</div></div>
-      <div class="kpi accent-gold"><div class="kpi-label">Valor Total Contratado</div><div class="kpi-value text-gold">${fmtBR(totContratado)}</div><div class="kpi-sub">${pctExecGeral}% empenhado</div></div>
-      <div class="kpi accent-blue"><div class="kpi-label">Total Empenhado</div><div class="kpi-value text-blue">${fmtBR(totEmpContratos)}</div><div class="kpi-sub">${pctExecGeral}% do contratado</div></div>
-      <div class="kpi accent-amber"><div class="kpi-label">Total Liquidado</div><div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiqContratos)}</div><div class="kpi-sub">${totEmpContratos>0?Math.round(totLiqContratos/totEmpContratos*100):0}% do empenhado</div></div>
-      <div class="kpi accent-green"><div class="kpi-label">Total Pago</div><div class="kpi-value text-green">${fmtBR(totPagContratos)}</div><div class="kpi-sub">${totLiqContratos>0?Math.round(totPagContratos/totLiqContratos*100):0}% do liquidado</div></div>
+      <div class="kpi accent-green"><div class="kpi-label">Total Recebido — Contratos</div><div class="kpi-value text-green">${fmtBR(totRecContratos)}</div><div class="kpi-sub">Entradas categoria CONTRATOS</div></div>
+      <div class="kpi accent-teal"><div class="kpi-label">Total Recebido — Apoio ao Ensino</div><div class="kpi-value" style="color:var(--teal)">${fmtBR(totRecApoio)}</div><div class="kpi-sub">Entradas categoria APOIO AO ENSINO</div></div>
+      <div class="kpi accent-blue"><div class="kpi-label">Total Empenhado <span class="kpi-badge badge-blue" style="font-size:8px">EXE</span></div><div class="kpi-value text-blue">${fmtBR(totEmpContratosEXE)}</div><div class="kpi-sub">${pctExecGeral}% do contratado</div></div>
+      <div class="kpi accent-amber"><div class="kpi-label">Total Liquidado <span class="kpi-badge badge-blue" style="font-size:8px">EXE</span></div><div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiqContratosEXE)}</div><div class="kpi-sub">${totEmpContratosEXE>0?Math.round(totLiqContratosEXE/totEmpContratosEXE*100):0}% do empenhado</div></div>
+      <div class="kpi accent-green"><div class="kpi-label">Total Pago <span class="kpi-badge badge-blue" style="font-size:8px">EXE</span></div><div class="kpi-value text-green">${fmtBR(totPagContratosEXE)}</div><div class="kpi-sub">${totLiqContratosEXE>0?Math.round(totPagContratosEXE/totLiqContratosEXE*100):0}% do liquidado</div></div>
       <div class="kpi accent-amber"><div class="kpi-label">Vencendo em 30 dias</div><div class="kpi-value" style="color:var(--amber)">${vencendo.length}</div><div class="kpi-sub">${vencendo.slice(0,2).map(c=>c.nContrato||c.nome).join(', ')||'nenhum'}</div></div>
       <div class="kpi accent-red"><div class="kpi-label">Contratos Vencidos</div><div class="kpi-value text-red">${vencidos.length}</div><div class="kpi-sub">${vencidos.slice(0,2).map(c=>c.nContrato||c.nome).join(', ')||'nenhum'}</div></div>
     </div>
     ${vencendo.length?`<div class="info-box warn"><span class="info-icon">⏰</span><div>Contratos vencendo em 30 dias: <strong>${vencendo.map(c=>(c.nContrato||c.nome)+' ('+fmtData(c.dataFim)+')').join(', ')}</strong></div></div>`:''}
     ${vencidos.length?`<div class="info-box danger"><span class="info-icon">⚠</span><div>Contratos vencidos: <strong>${vencidos.map(c=>(c.nContrato||c.nome)+' ('+fmtData(c.dataFim)+')').join(', ')}</strong></div></div>`:''}
+    <div class="tbl-wrap" style="margin-bottom:14px">
+      <div class="tbl-head"><div class="tbl-title">Distribuição Mensal Prevista vs Executada — ${anoAtual} <span style="font-size:9px;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:4px;padding:1px 6px;margin-left:6px">Competência · EXE</span></div></div>
+      <div class="scroll-h"><table class="month-table"><thead><tr><th>Indicador</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead>
+      <tbody>
+        <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Previsto</td>${distribMensal.map(d=>fmtCell(d.prev)).join('')}<td class="r text-green fw7" style="font-size:10px">${fmtBR(totDistribPrev)}</td></tr>
+        <tr><td style="font-size:11px;font-weight:600;color:var(--blue)">Empenhado EXE</td>${distribMensal.map(d=>fmtCell(d.empM)).join('')}<td class="r text-blue fw7" style="font-size:10px">${fmtBR(totDistribEmp)}</td></tr>
+        <tr class="total-row"><td style="font-size:11px">Saldo Prev.−Emp.</td>${distribMensal.map(d=>{const s=d.prev-d.empM;return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:10px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${(totDistribPrev-totDistribEmp)<0?'text-red':'text-gold'} fw7" style="font-size:10px">${fmtBR(totDistribPrev-totDistribEmp)}</td></tr>
+      </tbody></table></div>
+    </div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Situação dos Contratos</div></div><table><thead><tr><th>Empresa</th><th>N° Contrato</th><th class="r">% Execução</th><th class="r">Saldo Disponível</th><th>Situação</th></tr></thead><tbody>${cts.map(c=>{
-      const emp=sum(sumLancsByContrato('Empenho',c.id));
+      const emp=sum(sumLancsByContratoEXE('Empenho',c.id));
       const saldo=(c.valorTotal||0)-emp;
       const pct=c.valorTotal>0?Math.round(emp/c.valorTotal*100):0;
       const sit=pct>=80?'<span class="ct-alerta ok">🟢 Normal</span>':pct>=50?'<span class="ct-alerta vencendo">🟡 Atenção</span>':'<span class="ct-alerta vencido" style="background:transparent;border:none">🔴 Crítico</span>';
@@ -3194,14 +3380,11 @@ function renderAeMensal(){
   const dadosMensais=MESES.map((_,mi)=>{
     const mesIdx=mi+1;
     const prefixo=anoAtual+'-'+String(mesIdx).padStart(2,'0');
-    // Item 3 & 4: TODOS os lançamentos devem ser contabilizados pela competência,
-    // não pela data de emissão. Fallback para data apenas se competencia ausente.
+    // ── REGRA GLOBAL DE ORIGEM: mês extraído EXCLUSIVAMENTE do campo competencia ──
+    // Fallback por data de emissão REMOVIDO conforme §2 Módulo Assistência Estudantil.
     const filtMes=l=>{
       if(l.status!=='Ativo')return false;
-      if(l.competencia) return l.competencia===prefixo;
-      // Fallback para data de emissão apenas para lançamentos antigos sem competencia
-      const d=new Date((l.data||'')+'T12:00:00');
-      return d.getFullYear()===anoAtual&&d.getMonth()===mi;
+      return (l.competencia||'')===prefixo;
     };
     const prev=acoes.reduce((s,a)=>{
       const arr=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
@@ -3235,8 +3418,18 @@ function renderAeMensal(){
     return`<tr><td>${a.nome}</td><td class="r text-green">${fmtBR(prev2)}</td><td class="r text-blue">${fmtBR(emp2)}</td><td class="r" style="color:var(--amber)">${fmtBR(liq2)}</td><td class="r text-green">${fmtBR(pag2)}</td><td class="r">${prev2>0?semaforo(pEmp):'—'}</td><td class="r">${emp2>0?semaforo(pPag):'—'}</td></tr>`;
   });
   document.getElementById('ae-mensal').innerHTML=`
+    <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>Linha <strong>Empenhado</strong> considera exclusivamente o <strong>mês de competência</strong> definido no momento do registro da saída (aba Empenho).</div></div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo Mensal Consolidado — ${anoAtual}</div></div>
     <div class="scroll-h"><table class="month-table"><thead><tr><th>Fase</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead><tbody>${mensalHtml}</tbody></table></div></div>
+    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Valores Mensais Previstos vs Executados</div></div>
+    <div class="scroll-h"><table class="month-table"><thead><tr><th>Indicador</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead>
+    <tbody>
+      <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Previsto</td>${dadosMensais.map(d=>fmtC(d.prev)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPrev)}</td></tr>
+      <tr><td style="font-size:11px;font-weight:600;color:var(--blue)">Empenhado <span style="font-size:9px;color:var(--text3)">(competência)</span></td>${dadosMensais.map(d=>fmtC(d.emp)).join('')}<td class="r text-blue fw7" style="font-size:10.5px">${fmtBR(totEmp)}</td></tr>
+      <tr><td style="font-size:11px;font-weight:600;color:var(--amber)">Liquidado</td>${dadosMensais.map(d=>fmtC(d.liq)).join('')}<td class="r text-amber fw7" style="font-size:10.5px">${fmtBR(totLiq)}</td></tr>
+      <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Pago</td>${dadosMensais.map(d=>fmtC(d.pag)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPag)}</td></tr>
+      <tr class="total-row"><td style="font-size:11px">Saldo Previsto−Emp.</td>${dadosMensais.map(d=>{const s=d.prev-d.emp;return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:10.5px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${(totPrev-totEmp)<0?'text-red':'text-gold'} fw7" style="font-size:10.5px">${fmtBR(totPrev-totEmp)}</td></tr>
+    </tbody></table></div></div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo por Ação</div></div>
     <table><thead><tr><th>Ação</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Liquidado</th><th class="r">Pago</th><th class="r">% Emp.</th><th class="r">% Pago</th></tr></thead>
     <tbody>${porAcaoRows.length?porAcaoRows.join(''):'<tr class="empty-row"><td colspan="7">Nenhuma ação</td></tr>'}</tbody></table></div>
@@ -3244,26 +3437,70 @@ function renderAeMensal(){
 }
 function renderAeDash(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  // Cards obrigatórios — conforme spec §3
   const totPrev=acoes.reduce((s,a)=>s+(a.previsto||0),0);
-  const totEmp=acoes.reduce((s,a)=>s+sum(sumLancsByAcao('Empenho',a.id)),0);
-  const totPag=acoes.reduce((s,a)=>s+sum(sumLancsByAcao('Pagamento',a.id)),0);
-  const pGeral=totPrev>0?Math.round(totEmp/totPrev*100):0;
+
+  // Total Recebido = soma das entradas da categoria ASSISTÊNCIA ESTUDANTIL
+  const totRecebido=sum(getLancsAtivos('Entrada','ASSISTÊNCIA ESTUDANTIL'));
+
+  // Total Empenhado = soma dos empenhos da categoria AE (todos os lançamentos Empenho AE)
+  const totEmpenhado=sum(state.lancamentos.filter(l=>
+    l.status==='Ativo'&&l.tipo==='Empenho'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'
+  ));
+
+  // Total Liquidado = liquidações vinculadas à categoria AE
+  const totLiquidado=sum(state.lancamentos.filter(l=>
+    l.status==='Ativo'&&l.tipo==='Liquidação'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'
+  ));
+
+  // Total Pago = pagamentos vinculados à categoria AE
+  const totPago=sum(state.lancamentos.filter(l=>
+    l.status==='Ativo'&&l.tipo==='Pagamento'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'
+  ));
+
+  // % Execução Geral = (Pago / Recebido) × 100
+  const pExecGeral=totRecebido>0?Math.round(totPago/totRecebido*100):0;
+
+  // Tabela Ações — Indicadores com totalização
+  const linhasAcoes=acoes.map(a=>{
+    const emp=sum(sumLancsByAcao('Empenho',a.id));
+    const pag=sum(sumLancsByAcao('Pagamento',a.id));
+    const prev=a.previsto||0;
+    const pct=prev>0?Math.round(emp/prev*100):0;
+    return{a,emp,pag,prev,pct};
+  });
+
+  const totTabelaPrev=linhasAcoes.reduce((s,r)=>s+r.prev,0);
+  const totTabelaEmp=linhasAcoes.reduce((s,r)=>s+r.emp,0);
+  const totTabelaPag=linhasAcoes.reduce((s,r)=>s+r.pag,0);
+  const totTabelaSaldo=linhasAcoes.reduce((s,r)=>s+(r.prev-r.emp),0);
+
   document.getElementById('ae-dashboard').innerHTML=`
     <div class="kpi-grid">
-      <div class="kpi accent-green"><div class="kpi-label">Total Previsto</div><div class="kpi-value text-green">${fmtBR(totPrev)}</div><div class="kpi-sub">${acoes.length} ações cadastradas</div></div>
-      <div class="kpi accent-blue"><div class="kpi-label">Total Empenhado</div><div class="kpi-value text-blue">${fmtBR(totEmp)}</div><div class="kpi-sub">${pGeral}% do previsto</div></div>
-      <div class="kpi accent-green"><div class="kpi-label">Total Pago</div><div class="kpi-value text-green">${fmtBR(totPag)}</div><div class="kpi-sub">${totPrev>0?Math.round(totPag/totPrev*100):0}% do previsto pago</div></div>
-      <div class="kpi ${pGeral>=80?'accent-green':pGeral>=50?'accent-amber':'accent-red'}"><div class="kpi-label">% Execução Geral</div><div class="kpi-value ${pGeral>=80?'text-green':pGeral>=50?'text-amber':'text-red'}">${pGeral}%</div><div class="kpi-sub">${semaforo(pGeral)}</div></div>
+      <div class="kpi accent-gold"><div class="kpi-label">Total Previsto</div><div class="kpi-value text-gold">${fmtBR(totPrev)}</div><div class="kpi-sub">${acoes.length} ações cadastradas</div></div>
+      <div class="kpi accent-green"><div class="kpi-label">Total Recebido</div><div class="kpi-value text-green">${fmtBR(totRecebido)}</div><div class="kpi-sub">Entradas — Assistência Estudantil</div></div>
+      <div class="kpi accent-blue"><div class="kpi-label">Total Empenhado</div><div class="kpi-value text-blue">${fmtBR(totEmpenhado)}</div><div class="kpi-sub">Empenhos da categoria AE</div></div>
+      <div class="kpi accent-amber"><div class="kpi-label">Total Liquidado</div><div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiquidado)}</div><div class="kpi-sub">Liquidações — AE</div></div>
+      <div class="kpi accent-green"><div class="kpi-label">Total Pago</div><div class="kpi-value text-green">${fmtBR(totPago)}</div><div class="kpi-sub">Pagamentos — AE</div></div>
+      <div class="kpi ${pExecGeral>=80?'accent-green':pExecGeral>=50?'accent-amber':'accent-red'}">
+        <div class="kpi-label">% Execução Geral</div>
+        <div class="kpi-value ${pExecGeral>=80?'text-green':pExecGeral>=50?'text-amber':'text-red'}">${pExecGeral}%</div>
+        <div class="kpi-sub">${semaforo(pExecGeral)} · Pago / Recebido</div>
+      </div>
     </div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Ações — Indicadores</div></div>
     <table><thead><tr><th>Ação</th><th>Tipo</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Pago</th><th class="r">Saldo Não Emp.</th><th class="r">% Emp.</th></tr></thead>
-    <tbody>${acoes.map(a=>{
-      const emp=sum(sumLancsByAcao('Empenho',a.id));
-      const pag=sum(sumLancsByAcao('Pagamento',a.id));
-      const prev=a.previsto||0;
-      const pct=prev>0?Math.round(emp/prev*100):0;
-      return`<tr><td><strong>${a.nome}</strong></td><td><span class="kpi-badge badge-blue">${a.tipo}</span></td><td class="r text-green">${fmtBR(prev)}</td><td class="r text-blue">${fmtBR(emp)}</td><td class="r text-green">${fmtBR(pag)}</td><td class="r ${(prev-emp)<0?'text-red':'text-gold'}">${fmtBR(prev-emp)}</td><td class="r">${prev>0?semaforo(pct):'—'}</td></tr>`;
-    }).join('')||'<tr class="empty-row"><td colspan="7">Nenhuma ação</td></tr>'}</tbody></table></div>
+    <tbody>
+      ${linhasAcoes.map(({a,emp,pag,prev,pct})=>`<tr><td><strong>${a.nome}</strong></td><td><span class="kpi-badge badge-blue">${a.tipo}</span></td><td class="r text-green">${fmtBR(prev)}</td><td class="r text-blue">${fmtBR(emp)}</td><td class="r text-green">${fmtBR(pag)}</td><td class="r ${(prev-emp)<0?'text-red':'text-gold'}">${fmtBR(prev-emp)}</td><td class="r">${prev>0?semaforo(pct):'—'}</td></tr>`).join('')||'<tr class="empty-row"><td colspan="7">Nenhuma ação</td></tr>'}
+      ${linhasAcoes.length?`<tr style="font-weight:700;background:var(--bg4);border-top:2px solid var(--gold-border)">
+        <td colspan="2" style="color:var(--gold)">TOTAIS</td>
+        <td class="r text-green fw7">${fmtBR(totTabelaPrev)}</td>
+        <td class="r text-blue fw7">${fmtBR(totTabelaEmp)}</td>
+        <td class="r text-green fw7">${fmtBR(totTabelaPag)}</td>
+        <td class="r ${totTabelaSaldo<0?'text-red':'text-gold'} fw7">${fmtBR(totTabelaSaldo)}</td>
+        <td class="r">${totTabelaPrev>0?semaforo(Math.round(totTabelaEmp/totTabelaPrev*100)):'—'}</td>
+      </tr>`:''}
+    </tbody></table></div>
   `;
 }
 function openModalAcao(id){
@@ -3406,6 +3643,17 @@ function renderRelatorioFiltros(){
   sp.innerHTML='<option value="">Todos</option>'+state.ptres.map(p=>`<option>${p}</option>`).join('');
   const snd=document.getElementById('rel-nd');
   snd.innerHTML='<option value="">Todas</option>'+state.nd.map(n=>`<option>${n}</option>`).join('');
+  // Novo: popular Mês de Competência dinamicamente
+  const sComp=document.getElementById('rel-competencia');
+  if(sComp){
+    const cur=sComp.value;
+    const comps=[...new Set(state.lancamentos.filter(l=>l.competencia&&l.status==='Ativo').map(l=>l.competencia))].sort().reverse();
+    sComp.innerHTML='<option value="">Todas as competências</option>'+comps.map(c=>{
+      const p=c.split('-');
+      const lbl=p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:c;
+      return`<option value="${c}" ${c===cur?'selected':''}>${lbl}</option>`;
+    }).join('');
+  }
 }
 function gerarRelatorio(){
   const de=document.getElementById('rel-de').value;
@@ -3415,6 +3663,9 @@ function gerarRelatorio(){
   const fonte=document.getElementById('rel-fonte').value;
   const ptres=document.getElementById('rel-ptres').value;
   const nd=document.getElementById('rel-nd').value;
+  // Novos filtros
+  const tipoExeRap=document.getElementById('rel-tipo-exe-rap')?.value||'';
+  const competencia=document.getElementById('rel-competencia')?.value||'';
   let l=[...state.lancamentos].filter(x=>x.status==='Ativo');
   if(de)l=l.filter(x=>x.data>=de);
   if(ate)l=l.filter(x=>x.data<=ate);
@@ -3423,6 +3674,14 @@ function gerarRelatorio(){
   if(fonte)l=l.filter(x=>x.fonte===fonte);
   if(ptres)l=l.filter(x=>x.ptres===ptres);
   if(nd)l=l.filter(x=>x.nd===nd);
+  // Filtro Tipo EXE/RAP — aplica apenas em Empenhos (lançamentos com tipoRecurso)
+  if(tipoExeRap)l=l.filter(x=>{
+    if(x.tipo==='Empenho')return(x.tipoRecurso||'EXE')===tipoExeRap;
+    if(x.tipo==='Liquidação'||x.tipo==='Pagamento')return(x.tipoRecurso||'EXE')===tipoExeRap;
+    return true; // entradas e outros não filtrados por este campo
+  });
+  // Filtro Mês de Competência
+  if(competencia)l=l.filter(x=>(x.competencia||'')===competencia);
   // Totais EXE
   const totE=sum(l.filter(x=>x.tipo==='Entrada'));
   const totEmpEXE=sum(l.filter(x=>x.tipo==='Empenho'&&(x.tipoRecurso||'EXE')==='EXE'));
@@ -3437,20 +3696,31 @@ function gerarRelatorio(){
   const periodo=(de?fmtData(de):'início')+' a '+(ate?fmtData(ate):'hoje');
   const pExecEXE=totE>0?Math.round(totEmpEXE/totE*100):0;
   const pExecGeral=totE>0?Math.round(totEmp/totE*100):0;
+  // Label do filtro aplicado
+  const filtrosLabel=[
+    cat?'Cat: '+cat:'',
+    tipo?'Fase: '+tipo:'',
+    tipoExeRap?'Tipo: '+tipoExeRap:'',
+    competencia?(()=>{const p=competencia.split('-');return'Comp: '+(p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:competencia);})():'',
+    fonte?'Fonte: '+fonte.split('–')[0].trim():'',
+    ptres?'PTRES: '+ptres:''
+  ].filter(Boolean).join(' · ');
   document.getElementById('rel-resultado').innerHTML=`
     <div class="card">
-      <div class="card-title">Relatório — ${periodo}${cat?' · '+cat:''}${tipo?' · '+tipo:''}</div>
+      <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Relatório — ${periodo}${filtrosLabel?' · '+filtrosLabel:''}</div>
+      ${tipoExeRap?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">◆</span><div>Filtro ativo: somente lançamentos do tipo <strong>${tipoExeRap==='EXE'?'EXE — Exercício':'RAP — Restos a Pagar'}</strong></div></div>`:''}
+      ${competencia?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">📅</span><div>Competência filtrada: <strong>${(()=>{const p=competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:competencia;})()}</strong></div></div>`:''}
       <div class="kpi-grid" style="margin-bottom:10px">
         <div class="kpi accent-green"><div class="kpi-label">Créditos Originais</div><div class="kpi-value text-green">${fmtBR(totE)}</div></div>
         <div class="kpi accent-blue">
           <div class="kpi-label">Empenhos <span class="kpi-badge badge-blue" style="font-size:9px">EXE</span></div>
           <div class="kpi-value text-blue">${fmtBR(totEmpEXE)}</div>
-          ${totEmpRAP>0?`<div class="kpi-sub" style="color:var(--purple)">+ ${fmtBR(totEmpRAP)} RAP</div>`:''}
+          ${totEmpRAP>0&&!tipoExeRap?`<div class="kpi-sub" style="color:var(--purple)">+ ${fmtBR(totEmpRAP)} RAP</div>`:''}
         </div>
         <div class="kpi accent-amber">
           <div class="kpi-label">Liquidações <span class="kpi-badge badge-warn" style="font-size:9px">EXE</span></div>
           <div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiqEXE)}</div>
-          ${totLiqRAP>0?`<div class="kpi-sub" style="color:var(--purple)">+ ${fmtBR(totLiqRAP)} RAP</div>`:''}
+          ${totLiqRAP>0&&!tipoExeRap?`<div class="kpi-sub" style="color:var(--purple)">+ ${fmtBR(totLiqRAP)} RAP</div>`:''}
         </div>
         <div class="kpi accent-green"><div class="kpi-label">Pagamentos</div><div class="kpi-value text-green">${fmtBR(totPag)}</div></div>
         <div class="kpi accent-red"><div class="kpi-label">Anulações</div><div class="kpi-value text-red">${fmtBR(totAnul)}</div></div>
@@ -3458,11 +3728,12 @@ function gerarRelatorio(){
       </div>
       ${totTransf>0?`<div class="info-box info"><span class="info-icon">⇄</span><div>Transferências internas no período: <strong>${fmtBR(totTransf)}</strong> — Não incluídas no total de créditos.</div></div>`:''}
       <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Lançamentos filtrados — ${l.length} registros</div></div>
-      <div class="scroll-h"><table><thead><tr><th>ID</th><th>Data</th><th>Fase</th><th>Tipo</th><th>Categoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th></tr></thead>
+      <div class="scroll-h"><table><thead><tr><th>ID</th><th>Data</th><th>Competência</th><th>Fase</th><th>Tipo</th><th>Categoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th></tr></thead>
       <tbody>${l.length?l.slice().reverse().map(x=>{
         const tipoTag=x.tipo==='Empenho'?(x.tipoRecurso==='RAP'?'<span class="kpi-badge badge-purple" style="font-size:9px">RAP</span>':'<span class="kpi-badge badge-blue" style="font-size:9px">EXE</span>'):'';
-        return`<tr><td><code style="font-size:10px">${x.id}</code></td><td>${fmtData(x.data)}</td><td>${tagFase(x.tipo)}</td><td>${tipoTag}</td><td>${catIcon(x.categoria)} ${x.categoria}</td><td style="font-size:11px;color:var(--text3)">${(x.fonte||'').split('–')[0]||'—'}</td><td style="font-size:11px;color:var(--text3)">${x.ptres||'—'}</td><td>${x.descricao}</td><td class="r ${x.tipo==='Entrada'?'text-green':'text-red'}">${fmtBR(x.valor)}</td></tr>`;
-      }).join(''):'<tr class="empty-row"><td colspan="9">Nenhum registro encontrado</td></tr>'}
+        const compLabel=x.competencia?(()=>{const p=x.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:x.competencia;})():'—';
+        return`<tr><td><code style="font-size:10px">${x.id}</code></td><td>${fmtData(x.data)}</td><td style="font-size:11px;color:var(--gold);white-space:nowrap">${compLabel}</td><td>${tagFase(x.tipo)}</td><td>${tipoTag}</td><td>${catIcon(x.categoria)} ${x.categoria}</td><td style="font-size:11px;color:var(--text3)">${(x.fonte||'').split('–')[0]||'—'}</td><td style="font-size:11px;color:var(--text3)">${x.ptres||'—'}</td><td>${x.descricao}</td><td class="r ${x.tipo==='Entrada'?'text-green':'text-red'}">${fmtBR(x.valor)}</td></tr>`;
+      }).join(''):'<tr class="empty-row"><td colspan="10">Nenhum registro encontrado</td></tr>'}
       </tbody></table></div></div>
     </div>`;
 }
@@ -3766,9 +4037,9 @@ function renderContratoDetalhe(){
   if(!c)return;
   const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
   const totPrevMensal=pm.reduce((s,v)=>s+v,0);
-  const emp=sum(sumLancsByContrato('Empenho',c.id));
-  const liq=sum(sumLancsByContrato('Liquidação',c.id));
-  const pag=sum(sumLancsByContrato('Pagamento',c.id));
+  const emp=sum(sumLancsByContratoEXE('Empenho',c.id));
+  const liq=sum(sumLancsByContratoEXE('Liquidação',c.id));
+  const pag=sum(sumLancsByContratoEXE('Pagamento',c.id));
   const liqPag=liq+pag;
   const valorRef=c.valorTotal||totPrevMensal||0;
   const saldoNEmp=valorRef-emp;
@@ -3840,8 +4111,8 @@ function gerarRelatorioContratos(){
         <tbody>
           ${cts.map(c=>{
             const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
-            const empC=sum(sumLancsByContrato('Empenho',c.id));
-            const liqC=sum(sumLancsByContrato('Liquidação',c.id))+sum(sumLancsByContrato('Pagamento',c.id));
+            const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
+            const liqC=sum(sumLancsByContratoEXE('Liquidação',c.id))+sum(sumLancsByContratoEXE('Pagamento',c.id));
             const mesesCells=mesFiltro
               ?`<td class="r">${fmtBR(pm[parseInt(mesFiltro)-1])}</td>`
               :pm.map(v=>`<td class="r" style="font-size:10px;color:${v>0?'var(--gold)':'var(--text4)'}">${v>0?fmtBR(v).replace('R$ ',''):'-'}</td>`).join('');
@@ -4498,6 +4769,7 @@ function limparCadastroEmpenho(){
 function cempLimparFiltros(){
   ['cemp-f-numero','cemp-f-de','cemp-f-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const sel=document.getElementById('cemp-f-cat');if(sel)sel.value='';
+  const tipoSel=document.getElementById('cemp-f-tipo');if(tipoSel)tipoSel.value='';
   renderCadastroEmpenhos();
 }
 function renderCadastroEmpenhos(){
@@ -4508,15 +4780,34 @@ function renderCadastroEmpenhos(){
     const cur=catSel.value;
     catSel.innerHTML='<option value="">Todas</option>'+DEFAULT_CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');
   }
+  // Populate tipo filter (EXE/RAP)
+  const tipoSelEl=document.getElementById('cemp-f-tipo');
+  if(!tipoSelEl){
+    // Inject the tipo filter into the filter panel if not yet present
+    const filterGrid=document.querySelector('#page-cadastro-empenho .filter-panel .form-grid');
+    if(filterGrid){
+      const div=document.createElement('div');
+      div.className='field';
+      div.innerHTML=`<label>Tipo</label>
+        <select id="cemp-f-tipo" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+          <option value="">Todos</option>
+          <option value="EXE">EXE — Exercício</option>
+          <option value="RAP">RAP — Restos a Pagar</option>
+        </select>`;
+      filterGrid.appendChild(div);
+    }
+  }
   // Read filters
   const fNum=(document.getElementById('cemp-f-numero')?.value||'').toLowerCase().trim();
   const fCat=document.getElementById('cemp-f-cat')?.value||'';
+  const fTipo=document.getElementById('cemp-f-tipo')?.value||'';
   const fDe=document.getElementById('cemp-f-de')?.value||'';
   const fAte=document.getElementById('cemp-f-ate')?.value||'';
   let listaAll=state.empenhosCad.filter(e=>{
     if(e.status==='Excluído')return false;
     if(fNum&&!(e.numero||'').toLowerCase().includes(fNum))return false;
     if(fCat&&e.categoria!==fCat)return false;
+    if(fTipo&&e.tipoEmp!==fTipo)return false;
     if(fDe&&e.data<fDe)return false;
     if(fAte&&e.data>fAte)return false;
     return true;
@@ -4525,21 +4816,23 @@ function renderCadastroEmpenhos(){
   const el=document.getElementById('cemp-count');if(el)el.textContent=total+' empenho(s)';
   const tbody=document.getElementById('cemp-tbody');if(!tbody)return;
   tbody.innerHTML=total?slice.map(e=>{
-    // Item 1.2: Saldo a Liquidar = total empenhado (lançamentos) − liquidado
     const totalEmpLanc=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.empenhoCadId===e.id));
     const saldoLiq=calcSaldoEmpenho(e.numero);
     const saldoColor=saldoLiq<=0?'var(--red)':saldoLiq<totalEmpLanc*0.2?'var(--amber)':'var(--green)';
+    const tipoBadge=e.tipoEmp==='RAP'
+      ?`<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap">▣ RAP</span>`
+      :`<span style="background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap">◆ EXE</span>`;
     return`<tr>
-      <td><span class="tag ${e.tipoEmp==='RAP'?'tag-transf':'tag-ent'}" style="font-size:10px">${e.tipoEmp}</span></td>
-      <td><code style="font-size:11px">${e.numero||'—'}</code></td>
-      <td>${fmtData(e.data)}</td>
-      <td>${catIcon(e.categoria)} <span style="font-size:11px">${e.categoria}</span></td>
-      <td style="font-size:11px;color:var(--text2)">${e.fornNome||e.acaoId&&state.acoes.find(a=>a.id===e.acaoId)?.nome||'—'}</td>
-      <td style="font-size:11px;color:var(--text3)">${e.fonte?e.fonte.split('–')[0].trim():'—'}</td>
-      <td style="font-size:11px;color:var(--text3)">${e.ptres||'—'}</td>
-      <td class="r fw6" style="font-size:11px;color:${saldoColor}">${fmtBR(saldoLiq)}</td>
-      <td><span class="tag tag-ent" style="font-size:10px">Ativo</span></td>
-      <td><button class="btn btn-sec btn-xs" onclick="editarCadastroEmpenho('${e.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirCadastroEmpenho('${e.id}')">✕</button></td>
+      <td style="padding:10px 12px">${tipoBadge}</td>
+      <td style="padding:10px 12px"><code style="font-size:11.5px;font-weight:700;color:var(--text)">${e.numero||'—'}</code></td>
+      <td style="padding:10px 12px;color:var(--text3);font-size:12px">${fmtData(e.data)}</td>
+      <td style="padding:10px 12px">${catIcon(e.categoria)} <span style="font-size:12px;font-weight:500">${e.categoria}</span></td>
+      <td style="padding:10px 12px;font-size:11.5px;color:var(--text2)">${e.fornNome||e.acaoId&&state.acoes.find(a=>a.id===e.acaoId)?.nome||'—'}</td>
+      <td style="padding:10px 12px;font-size:11px;color:var(--text3)">${e.fonte?e.fonte.split('–')[0].trim():'—'}</td>
+      <td style="padding:10px 12px;font-size:11px;color:var(--text3)">${e.ptres||'—'}</td>
+      <td style="padding:10px 12px" class="r fw6" style="font-size:12px;color:${saldoColor}">${fmtBR(saldoLiq)}</td>
+      <td style="padding:10px 12px"><span style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">Ativo</span></td>
+      <td style="padding:10px 12px;white-space:nowrap"><button class="btn btn-sec btn-xs" onclick="editarCadastroEmpenho('${e.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirCadastroEmpenho('${e.id}')">✕</button></td>
     </tr>`;
   }).join(''):'<tr class="empty-row"><td colspan="10">Nenhum empenho encontrado.</td></tr>';
   const wrap=tbody.closest('.tbl-wrap');
@@ -6030,6 +6323,7 @@ function renderSaidas(){
   const fComp=document.getElementById('saida-f-comp')?.value||'';
   const fDe=document.getElementById('saida-f-de')?.value||'';
   const fAte=document.getElementById('saida-f-ate')?.value||'';
+  const fTipo=(document.getElementById('saida-f-tipo-val')?.value||'').toUpperCase();
   let l=state.lancamentos.filter(l=>{
     if(l.tipo!=='Empenho'||l.status!=='Ativo')return false;
     if(fCat&&l.categoria!==fCat)return false;
@@ -6037,6 +6331,7 @@ function renderSaidas(){
     if(fComp&&l.competencia!==fComp)return false;
     if(fDe&&l.data<fDe)return false;
     if(fAte&&l.data>fAte)return false;
+    if(fTipo&&(l.tipoRecurso||'EXE')!==fTipo)return false;
     return true;
   }).slice().reverse();
   const {slice,pg,totalPgs,total}=paginar(l,'saidas');
