@@ -22,7 +22,7 @@
   --accent-teal:rgba(0,229,204,.08);
   --radius:6px;--radius-lg:10px;--radius-xl:16px;
   --shadow:0 12px 48px rgba(0,0,0,.8);--shadow-sm:0 4px 20px rgba(0,0,0,.6);
-  --sidebar-w:248px;--topbar-h:56px;
+  --sidebar-w:264px;--topbar-h:60px;
   --glow-gold:0 0 20px rgba(245,200,66,.15);
   --glow-green:0 0 20px rgba(0,230,118,.15);
 }
@@ -67,8 +67,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 }
 .nav-label{font-size:9px;font-weight:700;color:var(--text4);letter-spacing:.2em;text-transform:uppercase;padding:10px 14px 3px}
 .nav-item{
-  display:flex;align-items:center;gap:9px;padding:8px 12px;margin:1px 6px;
-  border-radius:var(--radius);cursor:pointer;color:var(--text3);font-size:12.5px;
+  display:flex;align-items:center;gap:10px;padding:9px 14px;margin:1px 8px;
+  border-radius:var(--radius);cursor:pointer;color:var(--text3);font-size:13px;
   transition:all .12s;border:1px solid transparent;user-select:none;
 }
 .nav-item:hover{background:var(--bg4);color:var(--text2)}
@@ -92,30 +92,30 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 
 /* ═══ MAIN ═══ */
 .main{overflow-y:auto;background:var(--bg);display:flex;flex-direction:column}
-.page{display:none;padding:20px 24px;max-width:1080px;width:100%;flex:1}
+.page{display:none;padding:24px 32px;max-width:none;width:100%;flex:1}
 .page.active{display:block}
-.page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)}
-.page-title{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:700;color:var(--text);margin-bottom:5px;display:flex;align-items:center;gap:10px;letter-spacing:-.01em}
-.page-sub{font-size:12px;color:var(--text3);letter-spacing:.01em}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+.page-title{font-family:'IBM Plex Mono',monospace;font-size:23px;font-weight:700;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:10px;letter-spacing:-.01em}
+.page-sub{font-size:13px;color:var(--text3);letter-spacing:.01em}
 .page-actions{display:flex;gap:8px;flex-shrink:0;align-items:flex-start}
 
 /* ═══ CARDS ═══ */
-.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:14px;box-shadow:var(--shadow-sm)}
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 24px;margin-bottom:18px;box-shadow:var(--shadow-sm)}
 .card:hover{border-color:var(--border2)}
 .card-title{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px}
 .card-title-dot{width:5px;height:5px;border-radius:50%;background:var(--border3)}
 
 /* ═══ KPI GRID ═══ */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:18px}
-.kpi{background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:16px 22px 14px;position:relative;overflow:hidden;transition:all .22s cubic-bezier(.34,1.2,.64,1);box-shadow:0 4px 24px rgba(0,0,0,.45);min-width:0;min-height:100px;display:flex;flex-direction:column;justify-content:space-between;cursor:default}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-bottom:22px}
+.kpi{background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:20px 26px 18px;position:relative;overflow:hidden;transition:all .22s cubic-bezier(.34,1.2,.64,1);box-shadow:0 4px 24px rgba(0,0,0,.45);min-width:0;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;cursor:default}
 .kpi:hover{border-color:var(--kpi-accent,var(--border3));transform:translateY(-4px) scale(1.012);box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 0 1px var(--kpi-accent,transparent)}
 .kpi::after{content:'';position:absolute;top:-30px;right:-30px;width:110px;height:110px;border-radius:50%;background:var(--kpi-accent,transparent);opacity:.07;filter:blur(28px);pointer-events:none;transition:opacity .22s}
 .kpi:hover::after{opacity:.14}
 .kpi::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--kpi-accent,var(--border2));border-radius:16px 0 0 16px}
 .kpi.accent-green{--kpi-accent:var(--green)}.kpi.accent-red{--kpi-accent:var(--red)}.kpi.accent-gold{--kpi-accent:var(--gold)}.kpi.accent-blue{--kpi-accent:var(--blue)}.kpi.accent-amber{--kpi-accent:var(--amber)}.kpi.accent-purple{--kpi-accent:var(--purple)}.kpi.accent-teal{--kpi-accent:var(--teal)}.kpi.accent-cyan{--kpi-accent:var(--cyan)}
-.kpi-label{font-size:10px;color:var(--text3);font-weight:700;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:6px;letter-spacing:.06em;text-transform:uppercase;flex-wrap:wrap;line-height:1.3}
-.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:clamp(20px,2.4vw,32px);font-weight:700;margin-bottom:6px;line-height:1.15;word-break:break-word;overflow-wrap:anywhere;white-space:normal;letter-spacing:-.02em}
-.kpi-sub{font-size:12.5px;color:var(--text3);margin-top:auto;padding-top:6px;border-top:1px solid var(--border)}
+.kpi-label{font-size:11px;color:var(--text3);font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:6px;letter-spacing:.06em;text-transform:uppercase;flex-wrap:wrap;line-height:1.3}
+.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:clamp(22px,2.6vw,36px);font-weight:700;margin-bottom:8px;line-height:1.15;word-break:break-word;overflow-wrap:anywhere;white-space:normal;letter-spacing:-.02em}
+.kpi-sub{font-size:13px;color:var(--text3);margin-top:auto;padding-top:7px;border-top:1px solid var(--border)}
 .kpi-badge{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:700;white-space:nowrap;letter-spacing:.03em}
 .badge-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
 .badge-warn{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
@@ -142,11 +142,11 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .fase-pct{font-size:11.5px;margin-top:4px;font-weight:600}
 
 /* ═══ FORMS ═══ */
-.form-grid{display:grid;gap:10px}
+.form-grid{display:grid;gap:14px}
 .form-grid.cols2{grid-template-columns:1fr 1fr}.form-grid.cols3{grid-template-columns:1fr 1fr 1fr}.form-grid.cols4{grid-template-columns:1fr 1fr 1fr 1fr}.form-grid.cols21{grid-template-columns:2fr 1fr}.form-grid.cols12{grid-template-columns:1fr 2fr}
-.field{display:flex;flex-direction:column;gap:4px}
-.field label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase}
-.field input,.field select,.field textarea{background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);padding:9px 12px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13.5px;outline:none;transition:all .15s;width:100%}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase}
+.field input,.field select,.field textarea{background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;outline:none;transition:all .15s;width:100%}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--gold);background:var(--bg5);box-shadow:0 0 0 3px rgba(245,200,66,.08)}
 .field input[readonly]{color:var(--text3);cursor:default}
 .field select option{background:var(--bg4)}
@@ -155,7 +155,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .required-mark{color:var(--red);margin-left:2px}
 
 /* ═══ BUTTONS ═══ */
-.btn{padding:9px 16px;border-radius:var(--radius);font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;border:1px solid;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;letter-spacing:.02em}
+.btn{padding:10px 18px;border-radius:var(--radius);font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;border:1px solid;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;letter-spacing:.02em}
 .btn-primary{background:var(--gold-bg);border-color:var(--gold-border);color:var(--gold)}
 .btn-primary:hover{background:rgba(245,200,66,.18);box-shadow:var(--glow-gold)}
 .btn-primary:active{transform:scale(.97)}
@@ -173,9 +173,9 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .btn-purple:hover{opacity:.85}
 .btn-sm{padding:6px 12px;font-size:11.5px}
 .btn-xs{padding:4px 9px;font-size:10.5px}
-.btn-row{display:flex;gap:8px;flex-wrap:wrap}
-.filter-panel{background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:12px;margin:0 14px 14px}
-.filter-panel .field label{font-size:9.5px}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
+.filter-panel{background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:16px 18px;margin:0 0 18px}
+.filter-panel .field label{font-size:10.5px}
 .saida-tipo-filter{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:12px}
 .saida-tipo-label{font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
 .saida-tipo-btn{min-height:42px;padding:9px 16px;border-radius:8px;font-size:12px;font-weight:800;border:1px solid var(--border2);background:var(--bg3);cursor:pointer;color:var(--text2);display:inline-flex;align-items:center;gap:8px;letter-spacing:.02em;transition:all .15s}
@@ -213,9 +213,17 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .sb-caption{font-size:10.5px;color:var(--text3)}
 
 /* ═══ TABLES ═══ */
-.tbl-wrap{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:14px;overflow:hidden}
-.tbl-head{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg4)}
-.tbl-title{font-size:10.5px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase}
+.tbl-wrap{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:18px;overflow:hidden}
+.tbl-head{display:flex;justify-content:space-between;align-items:center;padding:13px 20px;border-bottom:1px solid var(--border);background:var(--bg4)}
+.tbl-title{font-size:11.5px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase}
+.tbl-count{font-size:11px;color:var(--text3)}
+.tbl-wrap table{width:100%;border-collapse:collapse}
+.tbl-wrap th{padding:10px 14px;font-size:10.5px;font-weight:700;background:var(--bg4);color:var(--text3);letter-spacing:.09em;text-transform:uppercase;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.tbl-wrap th.r{text-align:right}
+.tbl-wrap td{padding:11px 14px;border-bottom:1px solid var(--border);color:var(--text2);font-size:13px;vertical-align:middle}
+.tbl-wrap td.r{text-align:right;font-family:'IBM Plex Mono',monospace}
+.tbl-wrap tr:last-child td{border-bottom:none}
+.tbl-wrap tr:hover td{background:rgba(255,255,255,.025)}
 .tbl-count{font-size:11px;color:var(--text3);font-family:'IBM Plex Mono',monospace}
 .tbl-wrap table{width:100%;border-collapse:collapse}
 .tbl-wrap th{padding:8px 12px;font-size:9.5px;font-weight:700;background:var(--bg4);color:var(--text3);letter-spacing:.09em;text-transform:uppercase;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
@@ -914,75 +922,75 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   <div class="tbl-wrap">
     <div class="tbl-head"><div class="tbl-title">Empenhos Cadastrados, Reforçados e Saldos Anulados</div><div class="tbl-count" id="cemp-count">0 empenhos</div></div>
     <!-- FILTROS AVANÇADOS -->
-    <div style="background:var(--bg4);border-bottom:1px solid var(--border);padding:14px 16px;border-radius:8px 8px 0 0">
+    <div style="background:var(--bg4);border-bottom:1px solid var(--border);padding:18px 20px;border-radius:8px 8px 0 0">
       <!-- Linha 1: Tipo de Registro e Tipo de Empenho -->
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-        <span style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap">Operação:</span>
-        <button id="cemp-f-op-all" onclick="cempFiltroOp('')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;letter-spacing:.03em;transition:all .15s">◉ Todas</button>
-        <button id="cemp-f-op-INICIAL" onclick="cempFiltroOp('INICIAL')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">📝 Empenho Original</button>
-        <button id="cemp-f-op-REFORCO" onclick="cempFiltroOp('REFORCO')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">➕ Reforço</button>
-        <button id="cemp-f-op-ANULACAO" onclick="cempFiltroOp('ANULACAO')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">➖ Anulação</button>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap">Operação:</span>
+        <button id="cemp-f-op-all" onclick="cempFiltroOp('')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;letter-spacing:.03em;transition:all .15s">◉ Todas</button>
+        <button id="cemp-f-op-INICIAL" onclick="cempFiltroOp('INICIAL')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">📝 Empenho Original</button>
+        <button id="cemp-f-op-REFORCO" onclick="cempFiltroOp('REFORCO')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">➕ Reforço</button>
+        <button id="cemp-f-op-ANULACAO" onclick="cempFiltroOp('ANULACAO')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">➖ Anulação</button>
         <input type="hidden" id="cemp-f-op-val" value="">
-        <span style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;margin-left:8px">Tipo:</span>
-        <button id="cemp-f-tipo-all" onclick="cempFiltroTipo('')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;letter-spacing:.03em;transition:all .15s">◉ Todos</button>
-        <button id="cemp-f-tipo-EXE" onclick="cempFiltroTipo('EXE')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">◆ EXE</button>
-        <button id="cemp-f-tipo-RAP" onclick="cempFiltroTipo('RAP')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">▣ RAP</button>
+        <span style="font-size:11px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;margin-left:12px">Tipo:</span>
+        <button id="cemp-f-tipo-all" onclick="cempFiltroTipo('')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;letter-spacing:.03em;transition:all .15s">◉ Todos</button>
+        <button id="cemp-f-tipo-EXE" onclick="cempFiltroTipo('EXE')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">◆ EXE</button>
+        <button id="cemp-f-tipo-RAP" onclick="cempFiltroTipo('RAP')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">▣ RAP</button>
         <input type="hidden" id="cemp-f-tipo-val" value="">
       </div>
-      <!-- Linha 2: Busca global + campos -->
-      <div style="margin-bottom:8px">
+      <!-- Busca global -->
+      <div style="margin-bottom:12px">
         <div style="position:relative">
-          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text3);pointer-events:none">🔍</span>
-          <input type="text" id="cemp-f-global" placeholder="Busca inteligente: número, fornecedor, categoria, descrição, processo..." oninput="renderCadastroEmpenhos()" style="padding:7px 10px 7px 34px;font-size:12px;width:100%;background:var(--bg3);border:1.5px solid var(--border2);border-radius:8px;color:var(--text);outline:none">
+          <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;color:var(--text3);pointer-events:none">🔍</span>
+          <input type="text" id="cemp-f-global" placeholder="Busca inteligente: número, fornecedor, categoria, descrição, processo..." oninput="renderCadastroEmpenhos()" style="padding:10px 14px 10px 42px;font-size:13.5px;width:100%;background:var(--bg3);border:1.5px solid var(--border2);border-radius:8px;color:var(--text);outline:none">
         </div>
       </div>
-      <!-- Linha 3: Filtros de campo -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px">
+      <!-- Filtros de campo -->
+      <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr 1fr 1fr auto;gap:10px;margin-bottom:10px">
         <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Nº Empenho</label>
-          <input type="text" id="cemp-f-numero" placeholder="Buscar..." oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Nº Empenho</label>
+          <input type="text" id="cemp-f-numero" placeholder="Buscar..." oninput="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px">
         </div>
         <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Categoria</label>
-          <select id="cemp-f-cat" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Categoria</label>
+          <select id="cemp-f-cat" onchange="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px">
             <option value="">Todas</option>
           </select>
         </div>
         <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Fornecedor</label>
-          <input type="text" id="cemp-f-forn" placeholder="Buscar..." oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Fornecedor</label>
+          <input type="text" id="cemp-f-forn" placeholder="Buscar..." oninput="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px">
         </div>
         <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Competência</label>
-          <select id="cemp-f-comp" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Competência</label>
+          <select id="cemp-f-comp" onchange="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px">
             <option value="">Todas</option>
           </select>
         </div>
         <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Data Inicial</label>
-          <input type="date" id="cemp-f-de" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Data Inicial</label>
+          <input type="date" id="cemp-f-de" oninput="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px">
         </div>
         <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Data Final</label>
-          <input type="date" id="cemp-f-ate" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Data Final</label>
+          <input type="date" id="cemp-f-ate" oninput="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px">
         </div>
         <div style="display:flex;align-items:flex-end">
-          <button class="btn btn-sec" onclick="cempLimparFiltros()" style="padding:5px 10px;font-size:11px;white-space:nowrap">↺ Limpar</button>
+          <button class="btn btn-sec" onclick="cempLimparFiltros()" style="padding:8px 14px;font-size:12px;white-space:nowrap">↺ Limpar</button>
         </div>
       </div>
-      <!-- Linha 4: Faixa de valor + Situação do saldo -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+      <!-- Faixa de valor + Situação do saldo -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px">
         <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Valor Mínimo (R$)</label>
-          <input type="number" id="cemp-f-vmin" placeholder="0,00" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px" min="0" step="0.01">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Valor Mínimo (R$)</label>
+          <input type="number" id="cemp-f-vmin" placeholder="0,00" oninput="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px" min="0" step="0.01">
         </div>
         <div class="field" style="margin:0">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Valor Máximo (R$)</label>
-          <input type="number" id="cemp-f-vmax" placeholder="Sem limite" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px" min="0" step="0.01">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Valor Máximo (R$)</label>
+          <input type="number" id="cemp-f-vmax" placeholder="Sem limite" oninput="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px" min="0" step="0.01">
         </div>
-        <div class="field" style="margin:0" style="grid-column:span 2">
-          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Situação do Saldo</label>
-          <select id="cemp-f-saldo" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px;width:100%">
+        <div class="field" style="margin:0">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Situação do Saldo</label>
+          <select id="cemp-f-saldo" onchange="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px;width:100%">
             <option value="">Todas</option>
             <option value="disponivel">✅ Com saldo disponível</option>
             <option value="parcial">🟡 Saldo parcialmente utilizado</option>
@@ -992,14 +1000,18 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         </div>
       </div>
     </div>
-    <div class="tbl-wrap" style="overflow:visible"><table style="table-layout:fixed;width:100%"><thead><tr>
-      <th style="width:46px">Tipo</th>
-      <th style="width:148px">Nº Empenho</th>
+    <div class="tbl-wrap"><table style="width:100%;table-layout:auto"><thead><tr>
+      <th style="width:52px">Tipo</th>
+      <th style="width:160px">Nº Empenho</th>
+      <th style="width:80px">Data</th>
+      <th style="width:100px">Competência</th>
       <th>Categoria</th>
       <th>Fornecedor</th>
-      <th style="width:240px" class="r">Movimentações</th>
-      <th style="width:110px" class="r">Saldo</th>
-      <th style="width:108px">Ações</th>
+      <th style="width:100px">Fonte</th>
+      <th style="width:80px">PTRES</th>
+      <th style="width:270px" class="r">Movimentações</th>
+      <th style="width:120px" class="r">Saldo</th>
+      <th style="width:130px">Ações</th>
     </tr></thead><tbody id="cemp-tbody"></tbody></table></div>
   </div>
 </div>
@@ -2017,6 +2029,24 @@ function saldoCat(cat){
   const transfS=sum(getLancsAtivos('Transferência Saída',cat));
   return creditos+transfE+anulacoes-empenhos-transfS;
 }
+// Saldo efetivo considerando a regra COSIP → ENERGIA ELÉTRICA:
+// Empenhos e reforços na categoria COSIP consomem o saldo da ENERGIA ELÉTRICA.
+// O saldo disponível para COSIP é calculado como:
+//   saldo(ENERGIA ELÉTRICA) − empenhos(COSIP) − empenhos(ENERGIA ELÉTRICA) + anulações(COSIP) + anulações(ENERGIA ELÉTRICA)
+// Assim o conjunto ENERGIA + COSIP compartilha o mesmo pool de crédito.
+function saldoCatEfetivo(cat){
+  if(cat!=='COSIP') return saldoCat(cat);
+  // Para COSIP: crédito da Energia menos todos os empenhos de Energia e COSIP combinados
+  const creditosEnergia=sum(getLancsAtivos('Entrada','ENERGIA ELÉTRICA'));
+  const transfEEnergia=sum(getLancsAtivos('Transferência Entrada','ENERGIA ELÉTRICA'));
+  const transfSEnergia=sum(getLancsAtivos('Transferência Saída','ENERGIA ELÉTRICA'));
+  const empEnergia=totalEmpenhosEXE('ENERGIA ELÉTRICA');
+  const empCosip=totalEmpenhosEXE('COSIP');
+  const anulEnergia=sum(getLancsAtivos('Anulação','ENERGIA ELÉTRICA'));
+  const anulCosip=sum(getLancsAtivos('Anulação','COSIP'));
+  return creditosEnergia+transfEEnergia+anulEnergia+anulCosip-empEnergia-empCosip-transfSEnergia;
+}
+
 // Saldo empenhado disponível para liquidação (empenhado - liquidado)
 // IMPORTANTE: Pagamento NÃO é subtraído pois já foi liquidado antes
 // Fluxo: EMPENHO → LIQUIDAÇÃO → PAGAMENTO (o pagamento marca a liquidação como paga)
@@ -2405,8 +2435,9 @@ function renderDashboard(){
 // ═══════════════════════════════════════════════════════════
 function renderCatGrid(){
   const sel=state.catSelecionadaE;
-  // CORREÇÃO: Usar DEFAULT_CATS ao invés de state.cats para garantir consistência
-  document.getElementById('cat-grid-e').innerHTML=DEFAULT_CATS.map(c=>{
+  // COSIP excluída do módulo Registrar Crédito — usa saldo da ENERGIA ELÉTRICA
+  const CATS_CREDITO=DEFAULT_CATS.filter(c=>c!=='COSIP');
+  document.getElementById('cat-grid-e').innerHTML=CATS_CREDITO.map(c=>{
     const s=saldoCat(c);
     return`<div class="cat-card ${c===sel?'sel':''}" onclick="selCat('${c}')"><span class="cat-icon">${catIcon(c)}</span><div class="cat-name">${c}</div><div class="cat-saldo">${fmtBR(s)}</div></div>`;
   }).join('');
@@ -4855,10 +4886,11 @@ function abrirModalReforco(empCadId){
     if(!data){toast('Data obrigatória','warn');return false;}
     if(!competencia){toast('Competência obrigatória','warn');return false;}
     if(!desc){toast('Descrição obrigatória','warn');return false;}
-    // Verifica saldo da categoria (apenas EXE)
-    const saldoCategoria=saldoCat(e.categoria);
+    // REGRA COSIP: usa saldo da ENERGIA ELÉTRICA como referência
+    const saldoCategoria=saldoCatEfetivo(e.categoria);
+    const catRef=e.categoria==='COSIP'?'ENERGIA ELÉTRICA':e.categoria;
     if(valor>saldoCategoria+0.01){
-      toast('Saldo insuficiente em '+e.categoria+': '+fmtBR(saldoCategoria),'warn');
+      toast('Saldo insuficiente em '+catRef+(e.categoria==='COSIP'?' (pool COSIP+Energia)':'')+': '+fmtBR(saldoCategoria),'warn');
       return false;
     }
     const l={
@@ -5190,43 +5222,47 @@ function cempAtualizarSaldoInfo(){
   if(!cat){ infoEl.innerHTML=''; return; }
 
   const tipoEmp=document.querySelector('input[name="cemp-exe-rap"]:checked')?.value||'EXE';
-  const saldo=saldoCat(cat);
-  const te=totalEntradas(cat);
+  // REGRA COSIP: usa saldo da ENERGIA ELÉTRICA como pool compartilhado
+  const isCosip=(cat==='COSIP');
+  const saldo=saldoCatEfetivo(cat);
+  const catRef=isCosip?'ENERGIA ELÉTRICA':cat;
+  const te=totalEntradas(catRef);
 
   if(tipoEmp==='RAP'){
-    // RAP: livre, sem verificação de saldo
     infoEl.innerHTML=`<div class="saldo-bar-card" style="margin:8px 0;border-color:var(--purple-border)">
       <div class="sb-top">
         <span class="sb-nome">${catIcon(cat)} ${cat}</span>
         <span style="font-size:10px;font-weight:700;color:var(--purple);background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:10px;padding:2px 8px">RAP — Livre</span>
       </div>
-      <div class="sb-caption" style="color:var(--purple2)">Restos a Pagar: sem verificação de saldo do exercício. Cadastro permitido em qualquer categoria.</div>
+      <div class="sb-caption" style="color:var(--purple2)">Restos a Pagar: sem verificação de saldo do exercício.</div>
     </div>`;
     if(btnRegistrar){ btnRegistrar.disabled=false; btnRegistrar.style.opacity=''; btnRegistrar.title=''; }
     return;
   }
 
-  // EXE: verificar saldo
   if(saldo>0){
+    const aviso=isCosip?` <span style="font-size:10px;color:var(--amber)">(saldo da ENERGIA ELÉTRICA — pool compartilhado)</span>`:'';
     infoEl.innerHTML=`<div class="saldo-bar-card" style="margin:8px 0;border-color:var(--green-border)">
       <div class="sb-top">
-        <span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para EXE</span>
+        <span class="sb-nome">${catIcon(cat)} ${cat} — Saldo disponível para EXE${aviso}</span>
         <span class="sb-val ok">${fmtBR(saldo)}</span>
       </div>
-      <div class="sb-caption">Crédito registrado: ${fmtBR(te)} · ✓ Cadastro permitido</div>
+      <div class="sb-caption">Crédito registrado em ${catRef}: ${fmtBR(te)} · ✓ Cadastro permitido</div>
     </div>`;
     if(btnRegistrar){ btnRegistrar.disabled=false; btnRegistrar.style.opacity=''; btnRegistrar.title=''; }
   } else {
+    const msg=isCosip
+      ?`A categoria <strong>COSIP</strong> utiliza o saldo da categoria <strong>ENERGIA ELÉTRICA</strong>. Não há crédito disponível em Energia Elétrica.`
+      :`A categoria <strong>${cat}</strong> não possui crédito registrado. Registre um crédito antes de empenhar (EXE).`;
     infoEl.innerHTML=`<div class="info-box" style="margin:8px 0;background:var(--red-bg);border-color:var(--red-border);color:var(--red2)">
       <span class="info-icon" style="color:var(--red)">🔒</span>
       <div>
         <strong style="color:var(--red)">Cadastro bloqueado — EXE sem saldo disponível</strong><br>
-        <span style="font-size:11px">A categoria <strong>${cat}</strong> não possui crédito registrado no módulo <strong>Registrar Crédito</strong>.
-        Para empenhos do exercício corrente (EXE), é obrigatório haver saldo disponível.<br>
-        <em>Dica: Registre um crédito para esta categoria primeiro, ou selecione o tipo RAP se for restos a pagar.</em></span>
+        <span style="font-size:11px">${msg}<br>
+        <em>Dica: Selecione o tipo RAP se for restos a pagar.</em></span>
       </div>
     </div>`;
-    if(btnRegistrar){ btnRegistrar.disabled=true; btnRegistrar.style.opacity='0.4'; btnRegistrar.title='Bloqueado: categoria sem saldo no exercício (EXE).'; }
+    if(btnRegistrar){ btnRegistrar.disabled=true; btnRegistrar.style.opacity='0.4'; btnRegistrar.title='Bloqueado: sem saldo disponível (EXE).'; }
   }
 }
 
@@ -5351,13 +5387,15 @@ function registrarCadastroEmpenho(){
   // Verificar duplicata
   if(state.empenhosCad.find(e=>e.numero===numero&&e.status!=='Excluído')){toast('Empenho '+numero+' já cadastrado.','warn');return;}
   if(tipoEmp==='EXE'){
-    const saldoDisp=saldoCat(_cempCat);
+    // REGRA COSIP: usa saldo da ENERGIA ELÉTRICA como referência
+    const saldoDisp=saldoCatEfetivo(_cempCat);
+    const catRef=_cempCat==='COSIP'?'ENERGIA ELÉTRICA':_cempCat;
     if(saldoDisp<=0){
-      toast('❌ Bloqueado: categoria "'+_cempCat+'" sem saldo no exercício. Registre um crédito antes de empenhar (EXE).','warn');
+      toast('❌ Bloqueado: '+(  _cempCat==='COSIP'?'categoria COSIP usa saldo da ENERGIA ELÉTRICA, que está sem saldo disponível':'categoria "'+_cempCat+'" sem saldo no exercício. Registre um crédito antes de empenhar (EXE).')+'.','warn');
       return;
     }
     if(valorInicial>saldoDisp+0.01){
-      toast('Valor inicial ('+fmtBR(valorInicial)+') excede o saldo disponível em '+_cempCat+': '+fmtBR(saldoDisp),'warn');
+      toast('Valor inicial ('+fmtBR(valorInicial)+') excede o saldo disponível em '+catRef+': '+fmtBR(saldoDisp),'warn');
       return;
     }
   }
@@ -5545,38 +5583,40 @@ function renderCadastroEmpenhos(){
     const saldoColor=t.saldo<=0?'var(--red)':t.saldo<t.totalEmp*0.2?'var(--amber)':'var(--green)';
     const isRAP=e.tipoEmp==='RAP';
     const tipoBadge=isRAP
-      ?`<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 6px;border-radius:8px;font-size:9px;font-weight:700">RAP</span>`
-      :`<span style="background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border);padding:2px 6px;border-radius:8px;font-size:9px;font-weight:700">EXE</span>`;
+      ?`<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:3px 8px;border-radius:8px;font-size:10px;font-weight:700">RAP</span>`
+      :`<span style="background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border);padding:3px 8px;border-radius:8px;font-size:10px;font-weight:700">EXE</span>`;
     const compLabel=e.competencia?(()=>{const p=e.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:e.competencia;})():'—';
     const fornNome=e.fornNome||(e.acaoId&&state.acoes.find(a=>a.id===e.acaoId)?.nome)||'—';
-    // Células de movimentações compactas
+    const fonteLabel=e.fonte?e.fonte.split('–')[0].trim():'—';
     const movBadges=`
-      <span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;padding:2px 7px;font-size:10px;white-space:nowrap" title="Valor Inicial">
-        <span style="color:var(--text3)">Ini</span> <span style="color:var(--text);font-weight:700">${fmtBR(valorIni)}</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;padding:3px 8px;font-size:11px;white-space:nowrap" title="Valor Inicial">
+        <span style="color:var(--text3)">Ini</span><span style="color:var(--text);font-weight:700">${fmtBR(valorIni)}</span>
       </span>
-      ${t.reforcos>0?`<span style="display:inline-flex;align-items:center;gap:3px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:6px;padding:2px 7px;font-size:10px;white-space:nowrap" title="Reforços">
+      ${t.reforcos>0?`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:6px;padding:3px 8px;font-size:11px;white-space:nowrap" title="Reforços">
         <span style="color:var(--green)">➕</span><span style="color:var(--green);font-weight:700">${fmtBR(t.reforcos)}</span>
       </span>`:''}
-      ${t.anulacoes>0?`<span style="display:inline-flex;align-items:center;gap:3px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:6px;padding:2px 7px;font-size:10px;white-space:nowrap" title="Anulações">
+      ${t.anulacoes>0?`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:6px;padding:3px 8px;font-size:11px;white-space:nowrap" title="Anulações">
         <span style="color:var(--amber)">➖</span><span style="color:var(--amber);font-weight:700">${fmtBR(t.anulacoes)}</span>
       </span>`:''}`;
     const btnReforco=!isRAP?`<button class="btn btn-xs" style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green)" onclick="abrirModalReforco('${e.id}')" title="Reforço">➕</button>`:'';
     const btnAnular=!isRAP?`<button class="btn btn-xs" style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)" onclick="abrirModalAnular('${e.id}')" title="Anular">➖</button>`:'';
-    // Tooltip com detalhes secundários
-    const tooltip=`Data: ${fmtData(e.data)} | Comp.: ${compLabel} | Fonte: ${e.fonte?e.fonte.split('–')[0].trim():'—'} | PTRES: ${e.ptres||'—'} | ND: ${e.nd||'—'}`;
-    return`<tr title="${tooltip}" style="cursor:default">
-      <td style="padding:8px 10px;text-align:center">${tipoBadge}</td>
-      <td style="padding:8px 10px"><code style="font-size:11px;font-weight:700;color:var(--text)">${e.numero||'—'}</code></td>
-      <td style="padding:8px 10px;font-size:11.5px">${catIcon(e.categoria)} ${e.categoria}</td>
-      <td style="padding:8px 10px;font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px" title="${fornNome}">${fornNome}</td>
-      <td class="r" style="padding:8px 10px"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">${movBadges}</div></td>
-      <td class="r fw7" style="padding:8px 10px;font-size:12px;color:${saldoColor};white-space:nowrap">${fmtBR(t.saldo)}</td>
-      <td style="padding:6px 6px;white-space:nowrap;text-align:right">
-        <button class="btn btn-xs" style="background:var(--blue-bg);border:1px solid var(--blue-border);color:var(--blue);font-weight:700;margin-bottom:3px;display:block;width:100%" onclick="abrirModalEditarEmpenho('${e.id}')" title="Editar empenho inicial">✎ Editar</button>
-        <div style="display:flex;gap:2px;justify-content:flex-end">${btnReforco}${btnAnular}<button class="btn btn-sec btn-xs" onclick="abrirHistoricoEmpenho('${e.id}')" title="Histórico">📋</button><button class="btn btn-red btn-xs" onclick="excluirCadastroEmpenho('${e.id}')" title="Excluir">✕</button></div>
+    return`<tr>
+      <td style="padding:10px 12px;text-align:center">${tipoBadge}</td>
+      <td style="padding:10px 12px"><code style="font-size:12px;font-weight:700;color:var(--text)">${e.numero||'—'}</code></td>
+      <td style="padding:10px 12px;font-size:12px;color:var(--text3);white-space:nowrap">${fmtData(e.data)}</td>
+      <td style="padding:10px 12px;font-size:12px;color:var(--gold);font-weight:600;white-space:nowrap">${compLabel}</td>
+      <td style="padding:10px 12px;font-size:12.5px">${catIcon(e.categoria)} ${e.categoria}</td>
+      <td style="padding:10px 12px;font-size:12px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px" title="${fornNome}">${fornNome}</td>
+      <td style="padding:10px 12px;font-size:11px;color:var(--text3);white-space:nowrap">${fonteLabel}</td>
+      <td style="padding:10px 12px;font-size:11px;color:var(--text3)">${e.ptres||'—'}</td>
+      <td class="r" style="padding:10px 12px"><div style="display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap">${movBadges}</div></td>
+      <td class="r fw7" style="padding:10px 12px;font-size:13px;color:${saldoColor};white-space:nowrap">${fmtBR(t.saldo)}</td>
+      <td style="padding:8px 8px;white-space:nowrap;text-align:right">
+        <button class="btn btn-xs" style="background:var(--blue-bg);border:1px solid var(--blue-border);color:var(--blue);font-weight:700;margin-bottom:4px;display:block;width:100%" onclick="abrirModalEditarEmpenho('${e.id}')" title="Editar empenho inicial">✎ Editar</button>
+        <div style="display:flex;gap:3px;justify-content:flex-end">${btnReforco}${btnAnular}<button class="btn btn-sec btn-xs" onclick="abrirHistoricoEmpenho('${e.id}')" title="Histórico">📋</button><button class="btn btn-red btn-xs" onclick="excluirCadastroEmpenho('${e.id}')" title="Excluir">✕</button></div>
       </td>
     </tr>`;
-  }).join(''):'<tr class="empty-row"><td colspan="7">Nenhum empenho encontrado.</td></tr>';
+  }).join(''):'<tr class="empty-row"><td colspan="11">Nenhum empenho encontrado.</td></tr>';
   const wrap=tbody.closest('.tbl-wrap');
   if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();if(totalPgs>1)wrap.insertAdjacentHTML('beforeend',renderPagination('empenhosCad',totalPgs,pg,total,"renderCadastroEmpenhos()"));}
 }
@@ -7192,11 +7232,12 @@ function registrarSaida(){
   // Item 5: Descrição é obrigatória; Subcategoria é opcional
   if(!desc){ toast('Descrição obrigatória','warn'); return; }
 
-  // ── Verificação de saldo: EXE verifica, RAP não ──
+  // ── Verificação de saldo: EXE verifica, RAP não — COSIP usa pool da Energia ──
   if(tipoRecurso === 'EXE'){
-    const saldo = saldoCat(cat);
+    const saldo = saldoCatEfetivo(cat);
+    const catRef = cat==='COSIP' ? 'ENERGIA ELÉTRICA' : cat;
     if(valor > saldo + 0.01){
-      toast('Saldo insuficiente na categoria ' + cat,'warn');
+      toast('Saldo insuficiente em ' + catRef + (cat==='COSIP'?' (pool COSIP+Energia)':''),'warn');
       return;
     }
   }
@@ -8043,9 +8084,11 @@ function registrarReforco(){
 
   // Verificação de saldo apenas para EXE
   if(tipoRecurso === 'EXE'){
-    const saldo = saldoCat(cat);
+    // REGRA COSIP: usa saldo da ENERGIA ELÉTRICA como referência
+    const saldo = saldoCatEfetivo(cat);
+    const catRef = cat==='COSIP' ? 'ENERGIA ELÉTRICA' : cat;
     if(valor > saldo + 0.01){
-      toast('Saldo insuficiente na categoria ' + cat + ' (' + fmtBR(saldo) + ' disponível)','warn');
+      toast('Saldo insuficiente em ' + catRef + (cat==='COSIP'?' (pool COSIP+Energia)':'') + ': ' + fmtBR(saldo) + ' disponível','warn');
       return;
     }
   }
