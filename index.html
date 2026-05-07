@@ -444,8 +444,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   <div>
     <div class="nav-label">Operação</div>
     <div class="nav-item" id="nav-credito" onclick="showPage('credito')"><span class="nav-icon">↓</span>Registrar Crédito</div>
-    <div class="nav-item" id="nav-cadastro-empenho" onclick="showPage('cadastro-empenho')"><span class="nav-icon">📝</span>Cadastro Empenho</div>
-    <div class="nav-item" id="nav-saida" onclick="showPage('saida')"><span class="nav-icon">↑</span>Registrar Saída</div>
+    <div class="nav-item" id="nav-cadastro-empenho" onclick="showPage('cadastro-empenho')"><span class="nav-icon">📝</span>Empenho</div>
     <div class="nav-item" id="nav-liquidacao" onclick="showPage('liquidacao')"><span class="nav-icon">💰</span>Liquidação</div>
   </div>
   <div>
@@ -531,6 +530,9 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 <div id="page-credito" class="page">
   <div class="page-header">
     <div><div class="page-title"><span>↓</span>Registrar Crédito Orçamentário</div><div class="page-sub">Entrada de recursos — provisões, dotações e créditos recebidos</div></div>
+    <div class="page-actions">
+      <button class="btn btn-sec" style="background:rgba(0,229,204,.08);border-color:var(--teal);color:var(--teal);font-weight:700" onclick="abrirModalTransferencia()">⇄ Transferir Saldo</button>
+    </div>
   </div>
   <div class="card">
     <div class="card-title"><span class="card-title-dot" style="background:var(--green)"></span>Selecione a categoria</div>
@@ -569,6 +571,11 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <div class="btn-row" style="margin-top:10px"><button class="btn btn-sec btn-sm" onclick="limparFiltrosCredito()">↺ Limpar filtros</button></div>
     </div>
     <table><thead><tr><th>ID</th><th>Data</th><th>Categoria</th><th>Descrição</th><th>Fonte</th><th>PTRES</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="credito-table"></tbody></table>
+  </div>
+  <!-- TRANSFERÊNCIAS REGISTRADAS (migrado de Registrar Saída) -->
+  <div class="tbl-wrap" style="margin-top:14px">
+    <div class="tbl-head"><div class="tbl-title">⇄ Transferências entre Categorias</div><div class="tbl-count" id="tr-count"></div></div>
+    <table><thead><tr><th>ID</th><th>Data</th><th>Origem</th><th>Destino</th><th>Descrição</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="tr-table"></tbody></table>
   </div>
 </div>
 
@@ -750,9 +757,9 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         <button class="btn btn-sec" onclick="limparFormTransferencia()">↺ Limpar</button>
       </div>
     </div>
-    <div class="tbl-wrap">
-      <div class="tbl-head"><div class="tbl-title">Transferências registradas</div><div class="tbl-count" id="tr-count"></div></div>
-      <table><thead><tr><th>ID</th><th>Data</th><th>Origem</th><th>Destino</th><th>Descrição</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="tr-table"></tbody></table>
+    <div class="tbl-wrap" style="display:none">
+      <div class="tbl-head"><div class="tbl-title">Transferências registradas</div><div class="tbl-count" id="tr-count-old"></div></div>
+      <table><thead><tr><th>ID</th><th>Data</th><th>Origem</th><th>Destino</th><th>Descrição</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="tr-table-old"></tbody></table>
     </div>
   </div>
 </div>
@@ -805,7 +812,11 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 <!-- ════════ CADASTRO EMPENHO ════════ -->
 <div id="page-cadastro-empenho" class="page">
   <div class="page-header">
-    <div><div class="page-title"><span>📝</span>Cadastro de Empenho</div><div class="page-sub">Registro de empenhos orçamentários — base do fluxo de execução</div></div>
+    <div><div class="page-title"><span>📝</span>Empenho</div><div class="page-sub">Módulo central — cadastro · reforço · anulação · saldo dinâmico</div></div>
+    <div class="page-actions">
+      <button class="btn btn-primary" onclick="abrirModalReforcoNovo()" style="background:var(--gold-bg);border-color:var(--gold-border);color:var(--gold);font-weight:700">➕ REFORÇO</button>
+      <button class="btn btn-primary" onclick="abrirModalAnulacaoNovo()" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red);font-weight:700">➖ ANULAÇÃO</button>
+    </div>
   </div>
   <div class="card">
     <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Novo Empenho</div>
@@ -876,17 +887,23 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <div class="form-grid cols3">
         <div class="field"><label>Número do Empenho<span class="required-mark">*</span></label><input type="text" id="cemp-numero" placeholder="Ex: 2026NE000123" oninput="cempValidarAno()"></div>
         <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="cemp-data"></div>
-        <div class="field"><label>Fonte de Recurso<span class="required-mark">*</span></label><select id="cemp-fonte"></select></div>
+        <div class="field"><label>Competência (Mês)<span class="required-mark">*</span></label><select id="cemp-comp"><option value="">Selecione</option></select><div class="field-hint">Mês de referência — usado pela Assistência Estudantil</div></div>
       </div>
       <div class="form-grid cols3 mt4">
+        <div class="field"><label>Valor Inicial (R$)<span class="required-mark">*</span></label><input type="number" id="cemp-valor-inicial" min="0.01" step="0.01" placeholder="0,00" oninput="cempUpdateSaldoBar()"><div class="field-hint">Valor inicial do empenho — gera lançamento INICIAL</div></div>
+        <div class="field"><label>Fonte de Recurso<span class="required-mark">*</span></label><select id="cemp-fonte"></select></div>
         <div class="field"><label>PTRES<span class="required-mark">*</span></label><select id="cemp-ptres"></select></div>
+      </div>
+      <div class="form-grid cols3 mt4">
         <div class="field"><label>Natureza da Despesa<span class="required-mark">*</span></label><input type="text" id="cemp-nd" placeholder="Ex: 33903702"></div>
         <div class="field"><label>Plano Interno</label><input type="text" id="cemp-pi" placeholder="Opcional"></div>
+        <div class="field"><label>Subcategoria</label><input type="text" id="cemp-subcat" placeholder="Opcional"></div>
       </div>
       <div class="form-grid cols2 mt4">
         <div class="field"><label>Descrição</label><input type="text" id="cemp-desc" placeholder="Opcional"></div>
         <div class="field"><label>Observação</label><input type="text" id="cemp-obs" placeholder="Opcional"></div>
       </div>
+      <div id="cemp-saldo-bar"></div>
       <div id="cemp-ano-alerta" class="info-box warn" style="display:none;margin-top:10px"><span class="info-icon">⚠</span><div id="cemp-ano-alerta-msg"></div></div>
       <div class="btn-row" style="margin-top:14px">
         <button class="btn btn-primary" onclick="registrarCadastroEmpenho()">✓ Registrar Empenho</button>
@@ -895,32 +912,95 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     </div>
   </div>
   <div class="tbl-wrap">
-    <div class="tbl-head"><div class="tbl-title">Empenhos Cadastrados</div><div class="tbl-count" id="cemp-count">0 empenhos</div></div>
-    <!-- FILTRO AVANÇADO 1.1 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;padding:10px 14px;background:var(--bg3);border-bottom:1px solid var(--border);border-radius:8px 8px 0 0">
-      <div class="field" style="margin:0">
-        <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Nº Empenho</label>
-        <input type="text" id="cemp-f-numero" placeholder="Buscar número..." oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+    <div class="tbl-head"><div class="tbl-title">Empenhos Cadastrados, Reforçados e Saldos Anulados</div><div class="tbl-count" id="cemp-count">0 empenhos</div></div>
+    <!-- FILTROS AVANÇADOS -->
+    <div style="background:var(--bg4);border-bottom:1px solid var(--border);padding:14px 16px;border-radius:8px 8px 0 0">
+      <!-- Linha 1: Tipo de Registro e Tipo de Empenho -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap">Operação:</span>
+        <button id="cemp-f-op-all" onclick="cempFiltroOp('')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;letter-spacing:.03em;transition:all .15s">◉ Todas</button>
+        <button id="cemp-f-op-INICIAL" onclick="cempFiltroOp('INICIAL')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">📝 Empenho Original</button>
+        <button id="cemp-f-op-REFORCO" onclick="cempFiltroOp('REFORCO')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">➕ Reforço</button>
+        <button id="cemp-f-op-ANULACAO" onclick="cempFiltroOp('ANULACAO')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">➖ Anulação</button>
+        <input type="hidden" id="cemp-f-op-val" value="">
+        <span style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;margin-left:8px">Tipo:</span>
+        <button id="cemp-f-tipo-all" onclick="cempFiltroTipo('')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;letter-spacing:.03em;transition:all .15s">◉ Todos</button>
+        <button id="cemp-f-tipo-EXE" onclick="cempFiltroTipo('EXE')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">◆ EXE</button>
+        <button id="cemp-f-tipo-RAP" onclick="cempFiltroTipo('RAP')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">▣ RAP</button>
+        <input type="hidden" id="cemp-f-tipo-val" value="">
       </div>
-      <div class="field" style="margin:0">
-        <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Categoria</label>
-        <select id="cemp-f-cat" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
-          <option value="">Todas</option>
-        </select>
+      <!-- Linha 2: Busca global + campos -->
+      <div style="margin-bottom:8px">
+        <div style="position:relative">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text3);pointer-events:none">🔍</span>
+          <input type="text" id="cemp-f-global" placeholder="Busca inteligente: número, fornecedor, categoria, descrição, processo..." oninput="renderCadastroEmpenhos()" style="padding:7px 10px 7px 34px;font-size:12px;width:100%;background:var(--bg3);border:1.5px solid var(--border2);border-radius:8px;color:var(--text);outline:none">
+        </div>
       </div>
-      <div class="field" style="margin:0">
-        <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Data Inicial</label>
-        <input type="date" id="cemp-f-de" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+      <!-- Linha 3: Filtros de campo -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px">
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Nº Empenho</label>
+          <input type="text" id="cemp-f-numero" placeholder="Buscar..." oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Categoria</label>
+          <select id="cemp-f-cat" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Fornecedor</label>
+          <input type="text" id="cemp-f-forn" placeholder="Buscar..." oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Competência</label>
+          <select id="cemp-f-comp" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Data Inicial</label>
+          <input type="date" id="cemp-f-de" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Data Final</label>
+          <input type="date" id="cemp-f-ate" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <button class="btn btn-sec" onclick="cempLimparFiltros()" style="padding:5px 10px;font-size:11px;white-space:nowrap">↺ Limpar</button>
+        </div>
       </div>
-      <div class="field" style="margin:0">
-        <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Data Final</label>
-        <input type="date" id="cemp-f-ate" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
-      </div>
-      <div style="display:flex;align-items:flex-end">
-        <button class="btn btn-sec" onclick="cempLimparFiltros()" style="padding:5px 10px;font-size:11px;white-space:nowrap">↺ Limpar</button>
+      <!-- Linha 4: Faixa de valor + Situação do saldo -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Valor Mínimo (R$)</label>
+          <input type="number" id="cemp-f-vmin" placeholder="0,00" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px" min="0" step="0.01">
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Valor Máximo (R$)</label>
+          <input type="number" id="cemp-f-vmax" placeholder="Sem limite" oninput="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px" min="0" step="0.01">
+        </div>
+        <div class="field" style="margin:0" style="grid-column:span 2">
+          <label style="font-size:10px;color:var(--text3);margin-bottom:3px;display:block">Situação do Saldo</label>
+          <select id="cemp-f-saldo" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px;width:100%">
+            <option value="">Todas</option>
+            <option value="disponivel">✅ Com saldo disponível</option>
+            <option value="parcial">🟡 Saldo parcialmente utilizado</option>
+            <option value="zerado">🔴 Saldo zerado</option>
+            <option value="anulado">⛔ Saldo anulado</option>
+          </select>
+        </div>
       </div>
     </div>
-    <div class="scroll-h"><table><thead><tr><th>Tipo</th><th>Nº Empenho</th><th>Data</th><th>Categoria</th><th>Fornecedor / Vínculo</th><th>Fonte</th><th>PTRES</th><th>Saldo a Liquidar</th><th>Status</th><th>Ações</th></tr></thead><tbody id="cemp-tbody"></tbody></table></div>
+    <div class="tbl-wrap" style="overflow:visible"><table style="table-layout:fixed;width:100%"><thead><tr>
+      <th style="width:46px">Tipo</th>
+      <th style="width:148px">Nº Empenho</th>
+      <th>Categoria</th>
+      <th>Fornecedor</th>
+      <th style="width:240px" class="r">Movimentações</th>
+      <th style="width:110px" class="r">Saldo</th>
+      <th style="width:108px">Ações</th>
+    </tr></thead><tbody id="cemp-tbody"></tbody></table></div>
   </div>
 </div>
 <!-- ════════ LIQUIDAÇÃO ════════ -->
@@ -998,8 +1078,18 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 <!-- ════════ ASSISTÊNCIA ESTUDANTIL ════════ -->
 <div id="page-ae" class="page">
   <div class="page-header">
-    <div><div class="page-title"><span>🎓</span>Assistência Estudantil</div><div class="page-sub">Bolsas, auxílios e benefícios — controle por ação</div></div>
+    <div><div class="page-title"><span>🎓</span>Assistência Estudantil</div><div class="page-sub">Bolsas, auxílios e benefícios — referência temporal: <strong style="color:var(--gold)">mês de competência do empenho</strong></div></div>
     <div class="page-actions"><button class="btn btn-primary btn-sm" onclick="openModalAcao()">+ Nova Ação</button></div>
+  </div>
+  <!-- Filtro global de competência (regra obrigatória AE) -->
+  <div class="card" style="padding:10px 14px;margin-bottom:10px;border-color:var(--gold-border);background:var(--gold-bg)">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.06em;text-transform:uppercase">📅 Filtrar por Competência:</div>
+      <select id="ae-f-comp" onchange="aeAtualizarFiltroComp()" style="padding:6px 12px;font-size:12.5px;font-weight:600;background:var(--bg2);border:1px solid var(--gold-border);color:var(--text);border-radius:8px;min-width:200px">
+        <option value="">— Todas as competências —</option>
+      </select>
+      <span style="font-size:10.5px;color:var(--text3);font-style:italic">Empenhado, Liquidado e Pago são apurados pelo <strong>mês de competência</strong> do empenho cadastrado.</span>
+    </div>
   </div>
   <div class="module-tabs">
     <div class="mtab active" id="ae-tab-acoes" onclick="setAeTab('acoes')">🎯 Visão Geral</div>
@@ -1516,6 +1606,62 @@ function carregar(){
       if(_tipoRecursoLiqCount>0)
         console.info('Migração: tipoRecurso propagado para '+_tipoRecursoLiqCount+' liquidação(ões).');
 
+      // ─────────────────────────────────────────────────────────────────
+      // ★ MIGRAÇÃO: tipoRegistro discriminador (INICIAL / REFORCO / ANULACAO)
+      // Para lançamentos antigos sem tipoRegistro, classifica:
+      //   - Anulação → ANULACAO
+      //   - Empenho: o primeiro lançamento por empenhoCadId (ordem ts) → INICIAL
+      //              os demais → REFORCO
+      // ─────────────────────────────────────────────────────────────────
+      let _migTipoReg=0, _migAnul=0;
+      // 1) Anulações
+      state.lancamentos.forEach(l=>{
+        if(l.tipo==='Anulação'&&!l.tipoRegistro){
+          l.tipoRegistro='ANULACAO';
+          _migAnul++;
+        }
+      });
+      // 2) Empenhos: agrupa por empenhoCadId (ou número), o primeiro vira INICIAL
+      const _gruposEmp={};
+      state.lancamentos.forEach(l=>{
+        if(l.tipo!=='Empenho'||l.tipoRegistro)return;
+        const k=l.empenhoCadId||l.referencia||l.numeroEmpenho||'__';
+        if(!_gruposEmp[k])_gruposEmp[k]=[];
+        _gruposEmp[k].push(l);
+      });
+      Object.values(_gruposEmp).forEach(arr=>{
+        arr.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
+        arr.forEach((l,i)=>{
+          // Se o empenho já tem valorInicial cadastrado, esse primeiro lançamento é o INICIAL
+          l.tipoRegistro=i===0?'INICIAL':'REFORCO';
+          _migTipoReg++;
+        });
+      });
+      // 3) Para empenhos com valorInicial mas sem lançamento INICIAL, garantir compatibilidade
+      // (já implementado no cálculo via fallback em calcEmpenhoTotais)
+      if(_migTipoReg>0||_migAnul>0)
+        console.info('Migração: tipoRegistro atribuído a '+_migTipoReg+' empenho(s) e '+_migAnul+' anulação(ões).');
+
+      // 4) Para empenhos cadastrados sem valorInicial mas com lançamento INICIAL, sincroniza
+      let _syncVI=0;
+      (state.empenhosCad||[]).forEach(e=>{
+        if(e.valorInicial==null||e.valorInicial===0){
+          const lInicial=state.lancamentos.find(l=>
+            l.status==='Ativo'&&l.tipo==='Empenho'&&
+            l.tipoRegistro==='INICIAL'&&
+            (l.empenhoCadId===e.id||l.referencia===e.numero)
+          );
+          if(lInicial){
+            e.valorInicial=lInicial.valor||0;
+            // herda competência se ainda não tiver
+            if(!e.competencia&&lInicial.competencia)e.competencia=lInicial.competencia;
+            _syncVI++;
+          }
+        }
+      });
+      if(_syncVI>0)
+        console.info('Migração: valorInicial sincronizado para '+_syncVI+' empenho(s) cadastrados.');
+
       // Log de migração automática
       console.log('✅ Categorias normalizadas automaticamente ao carregar');
       console.log('✅ Usando DEFAULT_CATS em todos os módulos para garantir consistência');
@@ -1773,6 +1919,23 @@ function sumLancsByAcao(tipo, acaoId){
     return false;
   });
 }
+
+// ★ REGRA AE: filtra lançamentos de uma ação POR COMPETÊNCIA (mês_competencia do empenho)
+// Compete: '' = todas as competências, ou 'YYYY-MM' = competência específica.
+// Empenho: usa l.competencia diretamente.
+// Liquidação/Pagamento: herdam a competência do empenho cadastrado vinculado.
+function sumLancsByAcaoComp(tipo, acaoId, comp){
+  const lancs=sumLancsByAcao(tipo, acaoId);
+  if(!comp)return lancs;
+  return lancs.filter(l=>{
+    // Empenho: usa competencia direta
+    if(l.tipo==='Empenho')return (l.competencia||'')===comp;
+    // Liquidação/Pagamento: pegar competencia do empenho cadastrado vinculado
+    const empCadId=l.empenhoCadId||l.referenciaId;
+    const empCad=(state.empenhosCad||[]).find(e=>e.id===empCadId);
+    return empCad&&((empCad.competencia||'')===comp);
+  });
+}
 function sum(arr){return arr.reduce((s,l)=>s+(l.valor||0),0)}
 // Créditos originais (SOMENTE entradas — Anulação reduz empenho, não aumenta crédito)
 function totalCreditosOriginais(cat){
@@ -2021,7 +2184,15 @@ function renderDashboard(){
   const totCred=totalCreditosOriginais();
   // ── SEGREGAÇÃO RAP/EXE: Dashboard reflete APENAS exercício corrente (EXE) ──
   const totEmp=totalEmpenhosEXE();          // apenas EXE (empenhos brutos)
-  const totAnul=sum(getLancsAtivos('Anulação',null)); // anulações devolvem saldo
+  // Anulações EXE apenas — filtra pelo tipoRecurso do lançamento ou do empenho cadastrado
+  const totAnul=sum(state.lancamentos.filter(l=>{
+    if(l.status!=='Ativo'||l.tipo!=='Anulação') return false;
+    // tipoRecurso direto no lançamento
+    if(l.tipoRecurso) return l.tipoRecurso==='EXE';
+    // fallback: busca empenho cadastrado vinculado
+    const empCad=(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId||e.id===l.referenciaId||e.numero===l.referencia);
+    return !empCad || (empCad.tipoEmp||'EXE')==='EXE';
+  }));
   const totLiq=totalLiquidacoesEXE();       // apenas EXE (módulo lancamentos)
   const totPag=totalPagamentosEXE();        // apenas EXE
   // Saldo disponível: Créditos - Empenhos EXE brutos + Anulações (que reduzem comprometimento)
@@ -2675,7 +2846,9 @@ function registrarAnulacao(){
   if(!desc){toast('Descrição/justificativa obrigatória','warn');return;}
   // Registrar como lançamento de Anulação que reduz o saldo do empenho
   const l={
-    id:shortId('AN'),tipo:'Anulação',categoria:empCad.categoria,subcategoria:'',
+    id:shortId('AN'),tipo:'Anulação',
+    tipoRegistro:'ANULACAO',  // ★ discriminador
+    categoria:empCad.categoria,subcategoria:'',
     descricao:'ANULAÇÃO ['+motivo+']: '+desc,valor,data,
     fonte:empCad.fonte||'',ptres:empCad.ptres||'',nd:empCad.nd||'',
     referencia:empCad.numero,
@@ -2994,7 +3167,7 @@ function renderContratoDash(){
       return s+(arr[mi]||0);
     },0);
     // Empenhado pelo mês de competência (EXE only) — fonte de verdade: campo competencia
-    // RAP excluído via empEXEonly(); fallback por data removido (Regra Global de Origem)
+    // RAP excluído via empEXEonly(); fallback por data removido — competência é obrigatória
     const empM=sum(state.lancamentos.filter(l=>{
       if(!empEXEonly(l))return false;
       if(!(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO'))return false;
@@ -3123,6 +3296,48 @@ function excluirContrato(id){
 // ═══════════════════════════════════════════════════════════
 //  ASSISTÊNCIA ESTUDANTIL
 // ═══════════════════════════════════════════════════════════
+// ★ Filtro global de competência da Assistência Estudantil
+let _aeFiltroComp=''; // '' = todas, 'YYYY-MM' = competência específica
+
+function aeAtualizarFiltroComp(){
+  const sel=document.getElementById('ae-f-comp');
+  _aeFiltroComp=sel?.value||'';
+  // Re-renderiza a aba ativa
+  const tabs=['acoes','gerenciar','detalhe','mensal','dashboard'];
+  for(const t of tabs){
+    const pane=document.getElementById('ae-'+t);
+    if(pane&&pane.style.display==='block'){
+      if(t==='acoes')renderAeAcoes();
+      else if(t==='detalhe')renderAeDetalhe();
+      else if(t==='mensal')renderAeMensal();
+      else if(t==='dashboard')renderAeDash();
+      break;
+    }
+  }
+}
+
+function aePopularFiltroComp(){
+  const sel=document.getElementById('ae-f-comp');
+  if(!sel)return;
+  const cur=sel.value;
+  const comps=new Set();
+  // Coleta competências dos empenhos cadastrados de AE
+  (state.empenhosCad||[]).forEach(e=>{
+    if(e.status!=='Excluído'&&e.categoria==='ASSISTÊNCIA ESTUDANTIL'&&e.competencia)comps.add(e.competencia);
+  });
+  // Coleta competências dos lançamentos AE
+  state.lancamentos.forEach(l=>{
+    if(l.status==='Ativo'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'&&l.competencia)comps.add(l.competencia);
+  });
+  const compsSorted=[...comps].sort().reverse();
+  sel.innerHTML='<option value="">— Todas as competências —</option>'+compsSorted.map(c=>{
+    const p=c.split('-');
+    const label=p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:c;
+    return`<option value="${c}" ${c===cur?'selected':''}>${label}</option>`;
+  }).join('');
+  if(cur)sel.value=cur;
+}
+
 function setAeTab(t){
   ['acoes','gerenciar','detalhe','mensal','dashboard'].forEach(x=>{
     const tab=document.getElementById('ae-tab-'+x);
@@ -3130,6 +3345,7 @@ function setAeTab(t){
     if(tab)tab.classList.toggle('active',x===t);
     if(pane)pane.style.display=x===t?'block':'none';
   });
+  aePopularFiltroComp();
   if(t==='acoes')renderAeAcoes();
   else if(t==='gerenciar')renderAeGerenciar();
   else if(t==='detalhe')renderAeDetalhe();
@@ -3346,17 +3562,29 @@ function gae_confirmarExclusao(){
 }
 function renderAeAcoes(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
-  document.getElementById('ae-acoes').innerHTML=acoes.length?acoes.map(a=>{
-    const emp=sum(sumLancsByAcao('Empenho',a.id));
-    const liq=sum(sumLancsByAcao('Liquidação',a.id));
-    const pag=sum(sumLancsByAcao('Pagamento',a.id));
-    const prev=a.previsto||0;
+  const comp=_aeFiltroComp; // '' = todas
+  const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
+  const headerFiltro=comp?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">📅</span><div>Mostrando dados da competência: <strong>${labelFiltro}</strong> · Apuração por <strong>mês de competência</strong> do empenho.</div></div>`:'';
+  document.getElementById('ae-acoes').innerHTML=headerFiltro+(acoes.length?acoes.map(a=>{
+    // ★ REGRA AE: usar competência (não data de cadastro/pagamento/liquidação)
+    const emp=sum(sumLancsByAcaoComp('Empenho',a.id,comp));
+    const liq=sum(sumLancsByAcaoComp('Liquidação',a.id,comp));
+    const pag=sum(sumLancsByAcaoComp('Pagamento',a.id,comp));
+    // Previsto: se filtro de competência, usa valor mensal específico; senão, anual
+    let prev=a.previsto||0;
+    if(comp){
+      const p=comp.split('-');
+      if(p.length===2&&Array.isArray(a.previstoMensalArr)){
+        const mIdx=parseInt(p[1])-1;
+        prev=a.previstoMensalArr[mIdx]||0;
+      }
+    }
     const pEmp=prev>0?Math.round(emp/prev*100):0;
     const pExec=emp>0?Math.round((liq+pag)/emp*100):0;
     const saldoNaoEmp=prev-emp;
     return`<div class="ae-card">
       <div class="ae-header">
-        <div><div class="ae-nome">${a.nome}</div><div class="ae-meta">${a.tipo} · Previsto anual: ${fmtBR(prev)}</div></div>
+        <div><div class="ae-nome">${a.nome}</div><div class="ae-meta">${a.tipo} · ${comp?'Previsto '+labelFiltro:'Previsto anual'}: ${fmtBR(prev)}</div></div>
         <div class="ct-actions"><button class="btn btn-sec btn-xs" onclick="editarAcao('${a.id}')">✎</button><button class="btn btn-red btn-xs" onclick="excluirAcao('${a.id}')">✕</button></div>
       </div>
       <div class="ae-kpi">
@@ -3371,7 +3599,7 @@ function renderAeAcoes(){
         ${semaforo(pEmp)}
       </div>
     </div>`;
-  }).join(''):'<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhuma ação cadastrada. Clique em "+ Nova Ação" para começar.</div></div>';
+  }).join(''):'<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhuma ação cadastrada. Clique em "+ Nova Ação" para começar.</div></div>');
 }
 function renderAeMensal(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
@@ -3437,35 +3665,61 @@ function renderAeMensal(){
 }
 function renderAeDash(){
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
-  // Cards obrigatórios — conforme spec §3
-  const totPrev=acoes.reduce((s,a)=>s+(a.previsto||0),0);
+  const comp=_aeFiltroComp; // '' = todas
+  const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
+
+  // Total Previsto: anual ou do mês de competência selecionado
+  let totPrev=0;
+  if(comp){
+    const p=comp.split('-');
+    if(p.length===2){
+      const mIdx=parseInt(p[1])-1;
+      totPrev=acoes.reduce((s,a)=>{
+        const arr=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
+        return s+(arr[mIdx]||0);
+      },0);
+    }
+  } else {
+    totPrev=acoes.reduce((s,a)=>s+(a.previsto||0),0);
+  }
 
   // Total Recebido = soma das entradas da categoria ASSISTÊNCIA ESTUDANTIL
-  const totRecebido=sum(getLancsAtivos('Entrada','ASSISTÊNCIA ESTUDANTIL'));
+  // (filtra por competência se houver — entradas têm competência em c-comp)
+  const totRecebido=sum(getLancsAtivos('Entrada','ASSISTÊNCIA ESTUDANTIL').filter(l=>!comp||(l.competencia||'')===comp));
 
-  // Total Empenhado = soma dos empenhos da categoria AE (todos os lançamentos Empenho AE)
+  // ★ REGRA AE: Empenhado/Liquidado/Pago apurados por mês de competência (não por data)
+  const compFiltro=l=>{
+    if(!comp)return true;
+    if(l.tipo==='Empenho')return (l.competencia||'')===comp;
+    // Liquidação/Pagamento: herdam competência do empenho cadastrado vinculado
+    const empCadId=l.empenhoCadId||l.referenciaId;
+    const empCad=(state.empenhosCad||[]).find(e=>e.id===empCadId);
+    return empCad&&((empCad.competencia||'')===comp);
+  };
   const totEmpenhado=sum(state.lancamentos.filter(l=>
-    l.status==='Ativo'&&l.tipo==='Empenho'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'
+    l.status==='Ativo'&&l.tipo==='Empenho'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'&&compFiltro(l)
   ));
-
-  // Total Liquidado = liquidações vinculadas à categoria AE
   const totLiquidado=sum(state.lancamentos.filter(l=>
-    l.status==='Ativo'&&l.tipo==='Liquidação'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'
+    l.status==='Ativo'&&l.tipo==='Liquidação'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'&&compFiltro(l)
   ));
-
-  // Total Pago = pagamentos vinculados à categoria AE
   const totPago=sum(state.lancamentos.filter(l=>
-    l.status==='Ativo'&&l.tipo==='Pagamento'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'
+    l.status==='Ativo'&&l.tipo==='Pagamento'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'&&compFiltro(l)
   ));
 
   // % Execução Geral = (Pago / Recebido) × 100
   const pExecGeral=totRecebido>0?Math.round(totPago/totRecebido*100):0;
 
-  // Tabela Ações — Indicadores com totalização
+  // Tabela Ações — Indicadores com totalização (filtrada por competência)
   const linhasAcoes=acoes.map(a=>{
-    const emp=sum(sumLancsByAcao('Empenho',a.id));
-    const pag=sum(sumLancsByAcao('Pagamento',a.id));
-    const prev=a.previsto||0;
+    const emp=sum(sumLancsByAcaoComp('Empenho',a.id,comp));
+    const pag=sum(sumLancsByAcaoComp('Pagamento',a.id,comp));
+    let prev=a.previsto||0;
+    if(comp){
+      const p=comp.split('-');
+      if(p.length===2&&Array.isArray(a.previstoMensalArr)){
+        prev=a.previstoMensalArr[parseInt(p[1])-1]||0;
+      }
+    }
     const pct=prev>0?Math.round(emp/prev*100):0;
     return{a,emp,pag,prev,pct};
   });
@@ -3474,21 +3728,23 @@ function renderAeDash(){
   const totTabelaEmp=linhasAcoes.reduce((s,r)=>s+r.emp,0);
   const totTabelaPag=linhasAcoes.reduce((s,r)=>s+r.pag,0);
   const totTabelaSaldo=linhasAcoes.reduce((s,r)=>s+(r.prev-r.emp),0);
+  const headerFiltro=comp?`<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📅</span><div>Apuração por <strong>mês de competência</strong> · Filtrando: <strong>${labelFiltro}</strong></div></div>`:'<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>Empenhado, Liquidado e Pago apurados pelo <strong>mês de competência</strong> do empenho — conforme regra do módulo Assistência Estudantil.</div></div>';
 
   document.getElementById('ae-dashboard').innerHTML=`
+    ${headerFiltro}
     <div class="kpi-grid">
-      <div class="kpi accent-gold"><div class="kpi-label">Total Previsto</div><div class="kpi-value text-gold">${fmtBR(totPrev)}</div><div class="kpi-sub">${acoes.length} ações cadastradas</div></div>
+      <div class="kpi accent-gold"><div class="kpi-label">Total Previsto${comp?' · '+labelFiltro:' (anual)'}</div><div class="kpi-value text-gold">${fmtBR(totPrev)}</div><div class="kpi-sub">${acoes.length} ações cadastradas</div></div>
       <div class="kpi accent-green"><div class="kpi-label">Total Recebido</div><div class="kpi-value text-green">${fmtBR(totRecebido)}</div><div class="kpi-sub">Entradas — Assistência Estudantil</div></div>
-      <div class="kpi accent-blue"><div class="kpi-label">Total Empenhado</div><div class="kpi-value text-blue">${fmtBR(totEmpenhado)}</div><div class="kpi-sub">Empenhos da categoria AE</div></div>
-      <div class="kpi accent-amber"><div class="kpi-label">Total Liquidado</div><div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiquidado)}</div><div class="kpi-sub">Liquidações — AE</div></div>
-      <div class="kpi accent-green"><div class="kpi-label">Total Pago</div><div class="kpi-value text-green">${fmtBR(totPago)}</div><div class="kpi-sub">Pagamentos — AE</div></div>
+      <div class="kpi accent-blue"><div class="kpi-label">Total Empenhado <span class="kpi-badge badge-blue" style="font-size:8px">competência</span></div><div class="kpi-value text-blue">${fmtBR(totEmpenhado)}</div><div class="kpi-sub">Empenhos AE${comp?' em '+labelFiltro:''}</div></div>
+      <div class="kpi accent-amber"><div class="kpi-label">Total Liquidado <span class="kpi-badge badge-blue" style="font-size:8px">competência</span></div><div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiquidado)}</div><div class="kpi-sub">Liquidações AE${comp?' em '+labelFiltro:''}</div></div>
+      <div class="kpi accent-green"><div class="kpi-label">Total Pago <span class="kpi-badge badge-blue" style="font-size:8px">competência</span></div><div class="kpi-value text-green">${fmtBR(totPago)}</div><div class="kpi-sub">Pagamentos AE${comp?' em '+labelFiltro:''}</div></div>
       <div class="kpi ${pExecGeral>=80?'accent-green':pExecGeral>=50?'accent-amber':'accent-red'}">
         <div class="kpi-label">% Execução Geral</div>
         <div class="kpi-value ${pExecGeral>=80?'text-green':pExecGeral>=50?'text-amber':'text-red'}">${pExecGeral}%</div>
         <div class="kpi-sub">${semaforo(pExecGeral)} · Pago / Recebido</div>
       </div>
     </div>
-    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Ações — Indicadores</div></div>
+    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Ações — Indicadores${comp?' · '+labelFiltro:''}</div></div>
     <table><thead><tr><th>Ação</th><th>Tipo</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Pago</th><th class="r">Saldo Não Emp.</th><th class="r">% Emp.</th></tr></thead>
     <tbody>
       ${linhasAcoes.map(({a,emp,pag,prev,pct})=>`<tr><td><strong>${a.nome}</strong></td><td><span class="kpi-badge badge-blue">${a.tipo}</span></td><td class="r text-green">${fmtBR(prev)}</td><td class="r text-blue">${fmtBR(emp)}</td><td class="r text-green">${fmtBR(pag)}</td><td class="r ${(prev-emp)<0?'text-red':'text-gold'}">${fmtBR(prev-emp)}</td><td class="r">${prev>0?semaforo(pct):'—'}</td></tr>`).join('')||'<tr class="empty-row"><td colspan="7">Nenhuma ação</td></tr>'}
@@ -3998,8 +4254,14 @@ function renderAeDetalhe(){
         ${pm.map((v,i)=>{
           const anoAtual=new Date().getFullYear();
           const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
-          const empM=sum(sumLancsByAcao('Empenho',a.id).filter(l=>l.data&&l.data.startsWith(prefix)));
-          const liqM=sum([...sumLancsByAcao('Liquidação',a.id),...sumLancsByAcao('Pagamento',a.id)].filter(l=>l.data&&l.data.startsWith(prefix)));
+          // ★ REGRA AE: mês determinado EXCLUSIVAMENTE pelo campo competencia do lançamento
+          const empM=sum(sumLancsByAcao('Empenho',a.id).filter(l=>l.competencia===prefix));
+          const liqM=sum([...sumLancsByAcao('Liquidação',a.id),...sumLancsByAcao('Pagamento',a.id)].filter(l=>{
+            // Liquidações: herdar competência do empenho cadastrado vinculado
+            if(l.competencia) return l.competencia===prefix;
+            const empCad=(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId||e.id===l.referenciaId);
+            return empCad&&(empCad.competencia||'')===prefix;
+          }));
           return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;text-align:center">
             <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px">${MESES_ABR[i]}</div>
             <div style="font-size:11px;color:var(--gold);font-family:'IBM Plex Mono',monospace">${v>0?fmtBR(v).replace('R$ ',''):'—'}</div>
@@ -4063,9 +4325,11 @@ function renderContratoDetalhe(){
         ${pm.map((v,i)=>{
           const anoAtual=new Date().getFullYear();
           const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
-          // Busca lançamentos do contrato no mês (via sumLancsByContrato + filtro de data)
-          const empM=sum(sumLancsByContrato('Empenho',c.id).filter(l=>l.data&&l.data.startsWith(prefix)));
-          const liqM=sum([...sumLancsByContrato('Liquidação',c.id),...sumLancsByContrato('Pagamento',c.id)].filter(l=>l.data&&l.data.startsWith(prefix)));
+          // ★ REGRA: Contratos Continuados — mês determinado EXCLUSIVAMENTE pela competência
+          // Fallback por data removido — se não há competência, não computa no mês
+          const filtMes=l=>l.competencia===prefix;
+          const empM=sum(sumLancsByContratoEXE('Empenho',c.id).filter(filtMes));
+          const liqM=sum([...sumLancsByContratoEXE('Liquidação',c.id),...sumLancsByContratoEXE('Pagamento',c.id)].filter(filtMes));
           return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;text-align:center">
             <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px">${MESES_ABR[i]}</div>
             <div style="font-size:11px;color:var(--gold);font-family:'IBM Plex Mono',monospace">${v>0?fmtBR(v).replace('R$ ',''):'—'}</div>
@@ -4515,10 +4779,382 @@ function excluirContratoPnae(id){
 //  MÓDULO CADASTRO EMPENHO
 // ═══════════════════════════════════════════════════════════
 let _cempCat=null;
+let _cempFiltroOp='';   // '', 'INICIAL', 'REFORCO', 'ANULACAO'
+let _cempFiltroTipo=''; // '', 'EXE', 'RAP'
+
+// Funções dos filtros visuais (segmented buttons)
+function cempFiltroOp(op){
+  _cempFiltroOp=op||'';
+  const elHidden=document.getElementById('cemp-f-op-val');if(elHidden)elHidden.value=_cempFiltroOp;
+  ['all','INICIAL','REFORCO','ANULACAO'].forEach(k=>{
+    const btn=document.getElementById('cemp-f-op-'+k);
+    if(!btn)return;
+    const ativo=(k==='all'&&_cempFiltroOp==='')||k===_cempFiltroOp;
+    btn.style.borderColor=ativo?'var(--gold-border)':'var(--border2)';
+    btn.style.background=ativo?'var(--gold-bg)':'var(--bg3)';
+    btn.style.color=ativo?'var(--gold)':'var(--text3)';
+  });
+  renderCadastroEmpenhos();
+}
+
+function cempFiltroTipo(tipo){
+  _cempFiltroTipo=tipo||'';
+  const elHidden=document.getElementById('cemp-f-tipo-val');if(elHidden)elHidden.value=_cempFiltroTipo;
+  ['all','EXE','RAP'].forEach(k=>{
+    const btn=document.getElementById('cemp-f-tipo-'+k);
+    if(!btn)return;
+    const ativo=(k==='all'&&_cempFiltroTipo==='')||k===_cempFiltroTipo;
+    btn.style.borderColor=ativo?'var(--gold-border)':'var(--border2)';
+    btn.style.background=ativo?'var(--gold-bg)':'var(--bg3)';
+    btn.style.color=ativo?'var(--gold)':'var(--text3)';
+  });
+  renderCadastroEmpenhos();
+}
+
+// Atualiza barra de saldo no formulário de cadastro
+function cempUpdateSaldoBar(){
+  const cat=_cempCat;
+  const bar=document.getElementById('cemp-saldo-bar');
+  if(!bar)return;
+  if(!cat){bar.innerHTML='';return;}
+  const tipoEmp=document.querySelector('input[name="cemp-exe-rap"]:checked')?.value||'EXE';
+  if(tipoEmp==='RAP'){bar.innerHTML='';return;}
+  const valor=parseFloat(document.getElementById('cemp-valor-inicial')?.value)||0;
+  const saldoDisp=saldoCat(cat);
+  const saldoApos=saldoDisp-valor;
+  const cor=saldoApos<0?'danger':saldoApos<saldoDisp*0.2?'warn':'ok';
+  bar.innerHTML=`<div class="saldo-bar-card" style="margin:8px 0">
+    <div class="sb-top">
+      <span class="sb-nome">${catIcon(cat)} Saldo após este empenho</span>
+      <span class="sb-val ${cor}">${fmtBR(saldoApos)}</span>
+    </div>
+    <div class="sb-caption">Disponível: ${fmtBR(saldoDisp)} − Valor inicial: ${fmtBR(valor)}</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODAIS UNIFICADOS DO MÓDULO EMPENHO (Reforço, Anular, Histórico)
+//  e Transferência (acionada de Registrar Crédito)
+// ═══════════════════════════════════════════════════════════
+
+// ★ MODAL REFORÇO — adiciona valor ao empenho existente
+function abrirModalReforco(empCadId){
+  const e=(state.empenhosCad||[]).find(x=>x.id===empCadId);
+  if(!e){toast('Empenho não encontrado','error');return;}
+  if(e.tipoEmp==='RAP'){toast('Reforço não permitido para empenhos RAP','warn');return;}
+  const t=calcEmpenhoTotais(e.id,e.numero);
+  document.getElementById('modal-inner').className='modal modal-lg';
+  openModal('➕ Reforço de Empenho',`Adicionar valor ao empenho ${e.numero} — ${e.categoria}`,()=>{
+    // Recolhe dados do formulário e chama a lógica de registro
+    const valor=parseFloat(document.getElementById('mrfn-valor')?.value)||0;
+    const data=document.getElementById('mrfn-data')?.value;
+    const competencia=document.getElementById('mrfn-comp')?.value||'';
+    const subcat=document.getElementById('mref-subcat')?.value.trim()||'';
+    const desc=document.getElementById('mrfn-desc')?.value.trim()||'';
+    if(!valor||valor<=0){toast('Valor deve ser maior que zero','warn');return false;}
+    if(!data){toast('Data obrigatória','warn');return false;}
+    if(!competencia){toast('Competência obrigatória','warn');return false;}
+    if(!desc){toast('Descrição obrigatória','warn');return false;}
+    // Verifica saldo da categoria (apenas EXE)
+    const saldoCategoria=saldoCat(e.categoria);
+    if(valor>saldoCategoria+0.01){
+      toast('Saldo insuficiente em '+e.categoria+': '+fmtBR(saldoCategoria),'warn');
+      return false;
+    }
+    const l={
+      id: shortId('R'),
+      tipo: 'Empenho',
+      tipoRegistro: 'REFORCO',
+      tipoRecurso: e.tipoEmp||'EXE',
+      categoria: e.categoria,
+      subcategoria: subcat,
+      descricao: 'REFORÇO: '+desc,
+      valor, data, competencia,
+      empenhoCadId: e.id,
+      numeroEmpenho: e.numero,
+      fonte: e.fonte||'',
+      ptres: e.ptres||'',
+      nd: e.nd||'',
+      pi: e.pi||'',
+      fornNome: e.fornNome||'',
+      referencia: e.numero,
+      status: 'Ativo',
+      ts: new Date().toISOString()
+    };
+    state.lancamentos.push(l);
+    auditLog('CREATE','LANCAMENTO',l.id,'[REFORCO] '+e.numero+' · '+e.categoria+' · '+fmtBR(valor),l);
+    salvar();
+    renderCadastroEmpenhos();
+    if(typeof renderSidebar==='function')renderSidebar();
+    if(typeof renderDashboard==='function')renderDashboard();
+    if(typeof renderEntradas==='function')renderEntradas();
+    if(typeof renderCatGrid==='function')renderCatGrid();
+    toast('✅ Reforço de '+fmtBR(valor)+' adicionado!','success');
+  });
+  const now=new Date().toISOString().slice(0,10);
+  const compAtual=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+  document.getElementById('modal-form-area').innerHTML=`
+    <div class="info-box info" style="margin-bottom:10px"><span class="info-icon">ℹ</span><div>O reforço <strong>incrementa</strong> o saldo do empenho. Não substitui o valor inicial. Saldo atual: <strong>${fmtBR(t.saldo)}</strong></div></div>
+    <div class="form-grid cols2">
+      <div class="field"><label>Empenho</label><input type="text" value="${e.numero}" readonly style="background:var(--bg2)"></div>
+      <div class="field"><label>Categoria</label><input type="text" value="${e.categoria}" readonly style="background:var(--bg2)"></div>
+    </div>
+    <div class="form-grid cols3 mt4">
+      <div class="field"><label>Valor do Reforço (R$)<span class="required-mark">*</span></label><input type="number" id="mrfn-valor" min="0.01" step="0.01" placeholder="0,00"></div>
+      <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="mrfn-data" value="${now}"></div>
+      <div class="field"><label>Competência<span class="required-mark">*</span></label><select id="mrfn-comp">${_buildCompetenciaOptions(compAtual)}</select></div>
+    </div>
+    <div class="form-grid cols2 mt4">
+      <div class="field"><label>Subcategoria</label><input type="text" id="mref-subcat" placeholder="Opcional"></div>
+      <div class="field"><label>Descrição<span class="required-mark">*</span></label><input type="text" id="mrfn-desc" placeholder="Motivo do reforço..."></div>
+    </div>`;
+  document.getElementById('modal-confirm-btn').textContent='✓ Registrar Reforço';
+}
+
+// ★ MODAL ANULAR — anula parcial ou total
+function abrirModalAnular(empCadId){
+  const e=(state.empenhosCad||[]).find(x=>x.id===empCadId);
+  if(!e){toast('Empenho não encontrado','error');return;}
+  if(e.tipoEmp==='RAP'){toast('Anulação não permitida para empenhos RAP','warn');return;}
+  const t=calcEmpenhoTotais(e.id,e.numero);
+  if(t.saldo<=0){toast('Empenho sem saldo para anular','warn');return;}
+  document.getElementById('modal-inner').className='modal modal-lg';
+  openModal('➖ Anular Saldo do Empenho',`Anular valor (parcial ou total) do empenho ${e.numero}`,()=>{
+    const motivo=document.getElementById('manul-motivo')?.value;
+    const valor=parseFloat(document.getElementById('manul-valor')?.value)||0;
+    const data=document.getElementById('manul-data')?.value;
+    const competencia=document.getElementById('manul-comp')?.value||'';
+    const desc=document.getElementById('manul-desc')?.value.trim()||'';
+    const obs=document.getElementById('manul-obs')?.value.trim()||'';
+    const ref=document.getElementById('manul-ref')?.value.trim()||'';
+    if(!motivo){toast('Selecione o motivo da anulação','warn');return false;}
+    if(!valor||valor<=0){toast('Valor deve ser maior que zero','warn');return false;}
+    if(valor>t.saldo+0.01){toast('Valor de anulação excede o saldo do empenho ('+fmtBR(t.saldo)+')','warn');return false;}
+    if(!data){toast('Data obrigatória','warn');return false;}
+    if(!competencia){toast('Competência obrigatória','warn');return false;}
+    if(!desc){toast('Descrição obrigatória','warn');return false;}
+    const l={
+      id: shortId('AN'),
+      tipo: 'Anulação',
+      tipoRegistro: 'ANULACAO',
+      tipoRecurso: e.tipoEmp||'EXE',
+      categoria: e.categoria,
+      subcategoria: '',
+      descricao: 'ANULAÇÃO ['+motivo+']: '+desc,
+      valor, data, competencia,
+      empenhoCadId: e.id,
+      referenciaId: e.id,
+      numeroEmpenho: e.numero,
+      fonte: e.fonte||'',
+      ptres: e.ptres||'',
+      nd: e.nd||'',
+      referencia: e.numero,
+      motivo,
+      observacoes: obs,
+      processoRef: ref,
+      status: 'Ativo',
+      ts: new Date().toISOString()
+    };
+    state.lancamentos.push(l);
+    auditLog('CREATE','LANCAMENTO',l.id,'[ANULACAO] '+e.numero+' · '+motivo+' · '+fmtBR(valor),l);
+    salvar();
+    renderCadastroEmpenhos();
+    if(typeof renderSidebar==='function')renderSidebar();
+    if(typeof renderDashboard==='function')renderDashboard();
+    if(typeof renderEntradas==='function')renderEntradas();
+    if(typeof renderCatGrid==='function')renderCatGrid();
+    toast('✅ Anulação de '+fmtBR(valor)+' registrada!','success');
+  });
+  const now=new Date().toISOString().slice(0,10);
+  const compAtual=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+  document.getElementById('modal-form-area').innerHTML=`
+    <div class="info-box warn" style="margin-bottom:10px"><span class="info-icon">⚠</span><div>A anulação reduz o saldo do empenho e <strong>devolve</strong> o valor à categoria. Saldo atual: <strong>${fmtBR(t.saldo)}</strong></div></div>
+    <div class="form-grid cols2">
+      <div class="field"><label>Empenho</label><input type="text" value="${e.numero}" readonly style="background:var(--bg2)"></div>
+      <div class="field"><label>Motivo<span class="required-mark">*</span></label><select id="manul-motivo"><option value="">— Selecione —</option><option>Correção</option><option>Cancelamento</option><option>Remanejamento</option><option>Outro</option></select></div>
+    </div>
+    <div class="form-grid cols3 mt4">
+      <div class="field"><label>Valor a Anular (R$)<span class="required-mark">*</span></label><input type="number" id="manul-valor" min="0.01" step="0.01" max="${t.saldo}" placeholder="0,00"></div>
+      <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="manul-data" value="${now}"></div>
+      <div class="field"><label>Competência<span class="required-mark">*</span></label><select id="manul-comp">${_buildCompetenciaOptions(compAtual)}</select></div>
+    </div>
+    <div class="form-grid cols2 mt4">
+      <div class="field"><label>N° Processo / Ref.</label><input type="text" id="manul-ref" placeholder="Ex: 23112.000001/2025"></div>
+      <div class="field"><label>Descrição / Justificativa<span class="required-mark">*</span></label><input type="text" id="manul-desc" placeholder="Motivo detalhado..."></div>
+    </div>
+    <div class="field mt4"><label>Observações</label><textarea id="manul-obs" rows="2"></textarea></div>`;
+  document.getElementById('modal-confirm-btn').textContent='↩ Registrar Anulação';
+}
+
+// ★ MODAL TRANSFERIR (migrado de Registrar Saída → Registrar Crédito)
+function abrirModalTransferencia(){
+  document.getElementById('modal-inner').className='modal modal-lg';
+  openModal('⇄ Transferência de Saldo entre Categorias','Transferência interna — não gera novo crédito, apenas reclassifica saldo',()=>{
+    const origem=document.getElementById('mtr-origem')?.value;
+    const destino=document.getElementById('mtr-destino')?.value;
+    if(!origem||!destino){toast('Selecione origem e destino','warn');return false;}
+    if(origem===destino){toast('Origem e destino não podem ser iguais','warn');return false;}
+    const valor=parseFloat(document.getElementById('mtr-valor')?.value)||0;
+    const data=document.getElementById('mtr-data')?.value;
+    const desc=document.getElementById('mtr-desc')?.value.trim()||'';
+    const proc=document.getElementById('mtr-proc')?.value.trim()||'';
+    const obs=document.getElementById('mtr-obs')?.value.trim()||'';
+    if(!valor||valor<=0){toast('Valor deve ser maior que zero','warn');return false;}
+    const saldoOrigem=saldoCat(origem);
+    if(valor>saldoOrigem+0.01){toast('Saldo insuficiente em '+origem+': '+fmtBR(saldoOrigem),'warn');return false;}
+    if(!data){toast('Data obrigatória','warn');return false;}
+    if(!desc){toast('Descrição obrigatória','warn');return false;}
+    const saida={id:shortId('TS'),tipo:'Transferência Saída',categoria:origem,subcategoria:'',descricao:'TRANSF→'+destino+': '+desc,valor,data,fonte:'',ptres:'',nd:'',referencia:proc,referenciaId:null,observacoes:obs,status:'Ativo',ts:new Date().toISOString()};
+    const entrada={id:shortId('TE'),tipo:'Transferência Entrada',categoria:destino,subcategoria:'',descricao:'TRANSF←'+origem+': '+desc,valor,data,fonte:'',ptres:'',nd:'',referencia:proc,referenciaId:saida.id,observacoes:obs,status:'Ativo',ts:new Date().toISOString()};
+    state.lancamentos.push(saida,entrada);
+    auditLog('CREATE','LANCAMENTO',saida.id,'Transferência: '+origem+'→'+destino+' '+fmtBR(valor),{saida,entrada});
+    salvar();
+    if(typeof renderSidebar==='function')renderSidebar();
+    if(typeof renderDashboard==='function')renderDashboard();
+    if(typeof renderEntradas==='function')renderEntradas();
+    if(typeof renderCatGrid==='function')renderCatGrid();
+    if(typeof renderTransferencias==='function')renderTransferencias();
+    toast('✅ Transferência de '+fmtBR(valor)+' registrada!','success');
+  });
+  const now=new Date().toISOString().slice(0,10);
+  const cats=state.cats||DEFAULT_CATS;
+  const optsCat=cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  document.getElementById('modal-form-area').innerHTML=`
+    <div class="info-box info" style="margin-bottom:10px"><span class="info-icon">ℹ</span><div>Transferências entre categorias <strong>não geram novo crédito</strong> — apenas reclassificam saldo já existente.</div></div>
+    <div class="form-grid cols2">
+      <div class="field"><label>Categoria Origem<span class="required-mark">*</span></label><select id="mtr-origem" onchange="mtrUpdateSaldo()"><option value="">— Selecione —</option>${optsCat}</select></div>
+      <div class="field"><label>Categoria Destino<span class="required-mark">*</span></label><select id="mtr-destino"><option value="">— Selecione —</option>${optsCat}</select></div>
+    </div>
+    <div id="mtr-saldo-info" style="margin-top:8px"></div>
+    <div class="form-grid cols3 mt4">
+      <div class="field"><label>Valor (R$)<span class="required-mark">*</span></label><input type="number" id="mtr-valor" min="0.01" step="0.01" placeholder="0,00"></div>
+      <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="mtr-data" value="${now}"></div>
+      <div class="field"><label>N° Processo</label><input type="text" id="mtr-proc" placeholder="Opcional"></div>
+    </div>
+    <div class="field mt4"><label>Descrição<span class="required-mark">*</span></label><input type="text" id="mtr-desc" placeholder="Motivo da transferência..."></div>
+    <div class="field mt4"><label>Observações</label><textarea id="mtr-obs" rows="2"></textarea></div>`;
+  document.getElementById('modal-confirm-btn').textContent='⇄ Registrar Transferência';
+}
+
+function mtrUpdateSaldo(){
+  const origem=document.getElementById('mtr-origem')?.value;
+  const box=document.getElementById('mtr-saldo-info');
+  if(!box)return;
+  if(!origem){box.innerHTML='';return;}
+  const s=saldoCat(origem);
+  const cor=s<=0?'danger':'ok';
+  box.innerHTML=`<div class="saldo-bar-card"><div class="sb-top"><span class="sb-nome">${catIcon(origem)} Saldo disponível em ${origem}</span><span class="sb-val ${cor}">${fmtBR(s)}</span></div></div>`;
+}
+
+// ★ HISTÓRICO DE UM EMPENHO — modal somente leitura
+function abrirHistoricoEmpenho(empCadId){
+  const e=(state.empenhosCad||[]).find(x=>x.id===empCadId);
+  if(!e)return;
+  const lancs=state.lancamentos.filter(l=>l.status==='Ativo'&&(l.empenhoCadId===empCadId||l.referencia===e.numero)).slice().sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
+  const t=calcEmpenhoTotais(e.id,e.numero);
+  const valorIni=e.valorInicial!=null?e.valorInicial:t.inicial;
+
+  const linhas=lancs.map(l=>{
+    let badge='',cor='var(--text)';
+    if(l.tipo==='Empenho'&&l.tipoRegistro==='INICIAL'){badge='<span class="kpi-badge badge-blue">📝 INICIAL</span>';cor='var(--blue)';}
+    else if(l.tipo==='Empenho'&&l.tipoRegistro==='REFORCO'){badge='<span class="kpi-badge badge-ok">➕ REFORÇO</span>';cor='var(--green)';}
+    else if(l.tipo==='Empenho'){badge='<span class="kpi-badge badge-blue">📝 EMPENHO</span>';cor='var(--blue)';}
+    else if(l.tipo==='Anulação'){badge='<span class="kpi-badge badge-warn">➖ ANULAÇÃO</span>';cor='var(--amber)';}
+    else if(l.tipo==='Liquidação'){badge='<span class="kpi-badge badge-warn">💰 LIQUIDAÇÃO</span>';cor='var(--amber)';}
+    else if(l.tipo==='Pagamento'){badge='<span class="kpi-badge badge-ok">💳 PAGAMENTO</span>';cor='var(--green)';}
+    const compLabel=l.competencia?(()=>{const p=l.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:l.competencia;})():'—';
+    return`<tr>
+      <td style="padding:8px 10px"><code style="font-size:10px;color:var(--text3)">${l.id}</code></td>
+      <td style="padding:8px 10px">${badge}</td>
+      <td style="padding:8px 10px;font-size:11px;white-space:nowrap">${fmtData(l.data)}</td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--gold);white-space:nowrap">${compLabel}</td>
+      <td style="padding:8px 10px;font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(l.descricao||'').replace(/"/g,"'")}">${l.descricao||'—'}</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;font-size:12px;color:${cor};white-space:nowrap">${fmtBR(l.valor)}</td>
+    </tr>`;
+  }).join('');
+
+  // Usar modal dedicado dedicado para não truncar conteúdo
+  const existing=document.getElementById('modal-historico-emp');
+  if(existing)existing.remove();
+
+  const el=document.createElement('div');
+  el.id='modal-historico-emp';
+  el.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:600';
+  el.innerHTML=`
+    <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:16px;width:92%;max-width:760px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 64px rgba(0,0,0,.7)">
+      <!-- Header fixo -->
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-radius:16px 16px 0 0;background:var(--bg2)">
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--text)">📋 Histórico do Empenho <span style="color:var(--blue)">${e.numero}</span></div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">${e.categoria} · ${e.fornNome||'—'}</div>
+        </div>
+        <button onclick="document.getElementById('modal-historico-emp').remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:22px;padding:4px 8px;border-radius:6px;line-height:1" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">×</button>
+      </div>
+      <!-- KPIs -->
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
+          <div style="background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:10px;padding:10px 14px">
+            <div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Valor Inicial</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--blue)">${fmtBR(valorIni)}</div>
+          </div>
+          <div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:10px;padding:10px 14px">
+            <div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Total de Reforços</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--green)">${fmtBR(t.reforcos)}</div>
+          </div>
+          <div style="background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:10px;padding:10px 14px">
+            <div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Total de Anulações</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--amber)">${fmtBR(t.anulacoes)}</div>
+          </div>
+          <div style="background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:10px;padding:10px 14px">
+            <div style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Saldo Atual</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--gold)">${fmtBR(t.saldo)}</div>
+          </div>
+        </div>
+      </div>
+      <!-- Tabela com scroll -->
+      <div style="flex:1;overflow-y:auto;padding:0 0 4px">
+        <div style="padding:10px 20px 6px;display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase">Linha do Tempo</span>
+          <span style="font-size:11px;color:var(--text3)">${lancs.length} movimentações</span>
+        </div>
+        <div style="overflow-x:auto;padding:0 20px">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:var(--bg4)">
+              <th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">ID</th>
+              <th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">Operação</th>
+              <th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">Data</th>
+              <th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">Comp.</th>
+              <th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">Descrição</th>
+              <th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--text3);font-weight:700;border-bottom:1px solid var(--border)">Valor</th>
+            </tr></thead>
+            <tbody style="border-collapse:collapse">
+              ${linhas||'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Nenhuma movimentação registrada</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Footer fixo -->
+      <div style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;text-align:right;border-radius:0 0 16px 16px;background:var(--bg2)">
+        <button onclick="document.getElementById('modal-historico-emp').remove()" style="padding:9px 24px;border-radius:8px;font-size:13px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;font-family:'IBM Plex Sans',sans-serif">Fechar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  // Fechar só pelo botão X ou Fechar, NÃO por clique no backdrop
+}
+
 
 function initCadastroEmpenho(){
   populateSelect('cemp-fonte',state.fontes);
   populateSelect('cemp-ptres',state.ptres);
+  // Popular select de competência
+  const compSel=document.getElementById('cemp-comp');
+  if(compSel){
+    compSel.innerHTML=_buildCompetenciaOptions(compSel.value);
+    if(!compSel.value){
+      const now=new Date();
+      compSel.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+    }
+  }
   const grid=document.getElementById('cemp-cat-grid');
   if(!grid)return;
   grid.innerHTML=DEFAULT_CATS.map(c=>`
@@ -4696,13 +5332,17 @@ function registrarCadastroEmpenho(){
   if(!_cempCat){toast('Selecione uma categoria','warn');return;}
   const numero=document.getElementById('cemp-numero')?.value.trim();
   const data=document.getElementById('cemp-data')?.value;
+  const competencia=document.getElementById('cemp-comp')?.value||'';
+  const valorInicial=parseFloat(document.getElementById('cemp-valor-inicial')?.value)||0;
   const fonte=document.getElementById('cemp-fonte')?.value;
   const ptres=document.getElementById('cemp-ptres')?.value;
   const nd=document.getElementById('cemp-nd')?.value.trim();
+  const subcat=document.getElementById('cemp-subcat')?.value.trim()||'';
   if(!numero){toast('Número do empenho obrigatório','warn');return;}
   if(!data){toast('Data obrigatória','warn');return;}
+  if(!competencia){toast('Competência (mês) obrigatória','warn');return;}
+  if(!valorInicial||valorInicial<=0){toast('Valor inicial deve ser maior que zero','warn');return;}
   if(!fonte){toast('Fonte de recurso obrigatória','warn');return;}
-  // ITEM 6: PTRES e ND são obrigatórios somente para EXE; RAP não usa campos do exercício corrente
   const tipoEmp=document.querySelector('input[name="cemp-exe-rap"]:checked')?.value||'EXE';
   if(tipoEmp==='EXE'){
     if(!ptres){toast('PTRES obrigatório para empenho EXE','warn');return;}
@@ -4716,8 +5356,11 @@ function registrarCadastroEmpenho(){
       toast('❌ Bloqueado: categoria "'+_cempCat+'" sem saldo no exercício. Registre um crédito antes de empenhar (EXE).','warn');
       return;
     }
+    if(valorInicial>saldoDisp+0.01){
+      toast('Valor inicial ('+fmtBR(valorInicial)+') excede o saldo disponível em '+_cempCat+': '+fmtBR(saldoDisp),'warn');
+      return;
+    }
   }
-  // RAP: sem verificação de saldo — prossegue livremente
   // Coletar vínculo
   let cnpj='',fornNome='',contratoId='',acaoId='',pnaeDocumento='',pnaeContratoId='';
   const CATS_SEM=['DIÁRIAS E PASSAGENS'];
@@ -4739,27 +5382,67 @@ function registrarCadastroEmpenho(){
     id:shortId('CE'),numero,tipoEmp,categoria:normalizarCategoria(_cempCat),cnpj,fornNome,
     contratoId,acaoId,pnaeDocumento,pnaeContratoId,
     fonte,ptres,nd,pi:document.getElementById('cemp-pi')?.value.trim()||'',
+    valorInicial,        // ★ NOVO CAMPO: valor inicial do empenho
+    competencia,         // ★ NOVO CAMPO: mês de competência (referência única para AE)
     desc:document.getElementById('cemp-desc')?.value.trim()||'',
     obs:document.getElementById('cemp-obs')?.value.trim()||'',
     data,status:'Ativo',ts:new Date().toISOString()
   };
   if(!state.empenhosCad)state.empenhosCad=[];
   state.empenhosCad.push(obj);
-  auditLog('CREATE','EMPENHO_CAD',obj.id,'Empenho cadastrado: '+numero+' · '+_cempCat,obj);
-  salvar();renderCadastroEmpenhos();limparCadastroEmpenho();
-  toast('Empenho '+numero+' cadastrado com sucesso!','success');
+  // ★ Criar automaticamente o lançamento INICIAL na tabela consolidada
+  const lInicial={
+    id: shortId('S'),
+    tipo: 'Empenho',
+    tipoRegistro: 'INICIAL',  // ★ discriminador da tabela consolidada
+    tipoRecurso: tipoEmp,
+    categoria: obj.categoria,
+    subcategoria: subcat,
+    descricao: obj.desc || ('Empenho inicial: '+numero),
+    valor: valorInicial,
+    data,
+    competencia,
+    empenhoCadId: obj.id,
+    numeroEmpenho: numero,
+    fonte: fonte||'',
+    ptres: ptres||'',
+    nd: nd||'',
+    pi: obj.pi||'',
+    fornNome: fornNome||'',
+    referencia: numero,
+    status: 'Ativo',
+    ts: new Date().toISOString()
+  };
+  state.lancamentos.push(lInicial);
+  auditLog('CREATE','EMPENHO_CAD',obj.id,'Empenho cadastrado: '+numero+' · '+_cempCat+' · Inicial '+fmtBR(valorInicial),obj);
+  auditLog('CREATE','LANCAMENTO',lInicial.id,'[INICIAL] Lançamento criado para empenho '+numero,lInicial);
+  salvar();
+  renderCadastroEmpenhos();
+  if(typeof renderSidebar==='function')renderSidebar();
+  if(typeof renderDashboard==='function')renderDashboard();
+  if(typeof renderEntradas==='function')renderEntradas();
+  if(typeof renderCatGrid==='function')renderCatGrid();
+  limparCadastroEmpenho();
+  toast('Empenho '+numero+' cadastrado · INICIAL '+fmtBR(valorInicial)+'!','success');
 }
 
 function limparCadastroEmpenho(){
   _cempCat=null;
   document.querySelectorAll('#cemp-cat-grid .cat-btn').forEach(b=>b.classList.remove('active'));
-  const ids=['cemp-numero','cemp-nd','cemp-pi','cemp-desc','cemp-obs'];
+  const ids=['cemp-numero','cemp-nd','cemp-pi','cemp-desc','cemp-obs','cemp-valor-inicial','cemp-subcat'];
   ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cemp-saldo-info').innerHTML='';
+  const sb=document.getElementById('cemp-saldo-bar');if(sb)sb.innerHTML='';
   document.getElementById('cemp-vinculo-area').innerHTML='';
   document.getElementById('cemp-campos-area').style.display='none';
   document.getElementById('cemp-ano-alerta').style.display='none';
   document.getElementById('cemp-data').value=new Date().toISOString().slice(0,10);
+  // Resetar competência para mês corrente
+  const compSel=document.getElementById('cemp-comp');
+  if(compSel){
+    const now=new Date();
+    compSel.value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  }
   // Resetar o seletor de tipo para EXE (estado padrão)
   const exeRadio=document.getElementById('cemp-exe');
   if(exeRadio) exeRadio.checked=true;
@@ -4767,10 +5450,10 @@ function limparCadastroEmpenho(){
 }
 
 function cempLimparFiltros(){
-  ['cemp-f-numero','cemp-f-de','cemp-f-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  const sel=document.getElementById('cemp-f-cat');if(sel)sel.value='';
-  const tipoSel=document.getElementById('cemp-f-tipo');if(tipoSel)tipoSel.value='';
-  renderCadastroEmpenhos();
+  ['cemp-f-numero','cemp-f-de','cemp-f-ate','cemp-f-forn','cemp-f-global','cemp-f-vmin','cemp-f-vmax'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['cemp-f-cat','cemp-f-comp','cemp-f-saldo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  cempFiltroOp('');
+  cempFiltroTipo('');
 }
 function renderCadastroEmpenhos(){
   if(!state.empenhosCad)state.empenhosCad=[];
@@ -4780,61 +5463,120 @@ function renderCadastroEmpenhos(){
     const cur=catSel.value;
     catSel.innerHTML='<option value="">Todas</option>'+DEFAULT_CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');
   }
-  // Populate tipo filter (EXE/RAP)
-  const tipoSelEl=document.getElementById('cemp-f-tipo');
-  if(!tipoSelEl){
-    // Inject the tipo filter into the filter panel if not yet present
-    const filterGrid=document.querySelector('#page-cadastro-empenho .filter-panel .form-grid');
-    if(filterGrid){
-      const div=document.createElement('div');
-      div.className='field';
-      div.innerHTML=`<label>Tipo</label>
-        <select id="cemp-f-tipo" onchange="renderCadastroEmpenhos()" style="padding:5px 8px;font-size:12px">
-          <option value="">Todos</option>
-          <option value="EXE">EXE — Exercício</option>
-          <option value="RAP">RAP — Restos a Pagar</option>
-        </select>`;
-      filterGrid.appendChild(div);
-    }
+  // Populate competência filter
+  const compSel=document.getElementById('cemp-f-comp');
+  if(compSel){
+    const cur=compSel.value;
+    const comps=new Set();
+    state.empenhosCad.forEach(e=>{if(e.competencia)comps.add(e.competencia);});
+    state.lancamentos.forEach(l=>{if(l.competencia)comps.add(l.competencia);});
+    const compsSorted=[...comps].sort().reverse();
+    compSel.innerHTML='<option value="">Todas</option>'+compsSorted.map(c=>{
+      const p=c.split('-');
+      const label=p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:c;
+      return`<option value="${c}" ${c===cur?'selected':''}>${label}</option>`;
+    }).join('');
   }
   // Read filters
   const fNum=(document.getElementById('cemp-f-numero')?.value||'').toLowerCase().trim();
   const fCat=document.getElementById('cemp-f-cat')?.value||'';
-  const fTipo=document.getElementById('cemp-f-tipo')?.value||'';
+  const fComp=document.getElementById('cemp-f-comp')?.value||'';
   const fDe=document.getElementById('cemp-f-de')?.value||'';
   const fAte=document.getElementById('cemp-f-ate')?.value||'';
+  const fForn=(document.getElementById('cemp-f-forn')?.value||'').toLowerCase().trim();
+  const fGlobal=(document.getElementById('cemp-f-global')?.value||'').toLowerCase().trim();
+  const fVmin=parseFloat(document.getElementById('cemp-f-vmin')?.value||'') || 0;
+  const fVmax=parseFloat(document.getElementById('cemp-f-vmax')?.value||'') || 0;
+  const fSaldo=document.getElementById('cemp-f-saldo')?.value||'';
+  const fOp=_cempFiltroOp;
+  const fTipo=_cempFiltroTipo;
+
   let listaAll=state.empenhosCad.filter(e=>{
     if(e.status==='Excluído')return false;
     if(fNum&&!(e.numero||'').toLowerCase().includes(fNum))return false;
     if(fCat&&e.categoria!==fCat)return false;
-    if(fTipo&&e.tipoEmp!==fTipo)return false;
+    if(fTipo&&(e.tipoEmp||'EXE')!==fTipo)return false;
+    if(fComp&&(e.competencia||'')!==fComp)return false;
     if(fDe&&e.data<fDe)return false;
     if(fAte&&e.data>fAte)return false;
+    if(fForn&&!(e.fornNome||'').toLowerCase().includes(fForn))return false;
+    // Busca global
+    if(fGlobal){
+      const haystack=((e.numero||'')+' '+(e.fornNome||'')+' '+(e.categoria||'')+' '+(e.nd||'')+' '+(e.pi||'')+' '+(e.descricao||'')+' '+(e.observacoes||'')).toLowerCase();
+      // Busca também nos lançamentos vinculados
+      const lancsTexto=(state.lancamentos||[]).filter(l=>l.empenhoCadId===e.id||l.referencia===e.numero)
+        .map(l=>(l.descricao||'')+' '+(l.subcategoria||'')).join(' ').toLowerCase();
+      if(!haystack.includes(fGlobal)&&!lancsTexto.includes(fGlobal))return false;
+    }
+    // Filtro faixa de valor (sobre saldo atual)
+    if(fVmin>0||fVmax>0){
+      const t2=calcEmpenhoTotais(e.id,e.numero);
+      if(fVmin>0&&t2.saldo<fVmin)return false;
+      if(fVmax>0&&t2.saldo>fVmax)return false;
+    }
+    // Filtro situação do saldo
+    if(fSaldo){
+      const t2=calcEmpenhoTotais(e.id,e.numero);
+      if(fSaldo==='disponivel'&&t2.saldo<=0)return false;
+      if(fSaldo==='zerado'&&t2.saldo>0)return false;
+      if(fSaldo==='anulado'&&t2.anulacoes<=0)return false;
+      if(fSaldo==='parcial'&&!(t2.anulacoes>0&&t2.saldo>0))return false;
+    }
+    // Filtro por tipo de operação
+    if(fOp){
+      const lancs=state.lancamentos.filter(l=>l.status==='Ativo'&&(l.empenhoCadId===e.id||l.referencia===e.numero));
+      if(fOp==='INICIAL'){
+        if(!lancs.some(l=>l.tipo==='Empenho'&&l.tipoRegistro==='INICIAL'))return false;
+      } else if(fOp==='REFORCO'){
+        if(!lancs.some(l=>l.tipo==='Empenho'&&(l.tipoRegistro==='REFORCO'||(!l.tipoRegistro))))return false;
+      } else if(fOp==='ANULACAO'){
+        if(!lancs.some(l=>l.tipo==='Anulação'))return false;
+      }
+    }
     return true;
   }).slice().reverse();
+
   const {slice,pg,totalPgs,total}=paginar(listaAll,'empenhosCad');
   const el=document.getElementById('cemp-count');if(el)el.textContent=total+' empenho(s)';
   const tbody=document.getElementById('cemp-tbody');if(!tbody)return;
   tbody.innerHTML=total?slice.map(e=>{
-    const totalEmpLanc=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.empenhoCadId===e.id));
-    const saldoLiq=calcSaldoEmpenho(e.numero);
-    const saldoColor=saldoLiq<=0?'var(--red)':saldoLiq<totalEmpLanc*0.2?'var(--amber)':'var(--green)';
-    const tipoBadge=e.tipoEmp==='RAP'
-      ?`<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap">▣ RAP</span>`
-      :`<span style="background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap">◆ EXE</span>`;
-    return`<tr>
-      <td style="padding:10px 12px">${tipoBadge}</td>
-      <td style="padding:10px 12px"><code style="font-size:11.5px;font-weight:700;color:var(--text)">${e.numero||'—'}</code></td>
-      <td style="padding:10px 12px;color:var(--text3);font-size:12px">${fmtData(e.data)}</td>
-      <td style="padding:10px 12px">${catIcon(e.categoria)} <span style="font-size:12px;font-weight:500">${e.categoria}</span></td>
-      <td style="padding:10px 12px;font-size:11.5px;color:var(--text2)">${e.fornNome||e.acaoId&&state.acoes.find(a=>a.id===e.acaoId)?.nome||'—'}</td>
-      <td style="padding:10px 12px;font-size:11px;color:var(--text3)">${e.fonte?e.fonte.split('–')[0].trim():'—'}</td>
-      <td style="padding:10px 12px;font-size:11px;color:var(--text3)">${e.ptres||'—'}</td>
-      <td style="padding:10px 12px" class="r fw6" style="font-size:12px;color:${saldoColor}">${fmtBR(saldoLiq)}</td>
-      <td style="padding:10px 12px"><span style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">Ativo</span></td>
-      <td style="padding:10px 12px;white-space:nowrap"><button class="btn btn-sec btn-xs" onclick="editarCadastroEmpenho('${e.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirCadastroEmpenho('${e.id}')">✕</button></td>
+    const t=calcEmpenhoTotais(e.id,e.numero);
+    const valorIni=e.valorInicial!=null?e.valorInicial:t.inicial;
+    const saldoColor=t.saldo<=0?'var(--red)':t.saldo<t.totalEmp*0.2?'var(--amber)':'var(--green)';
+    const isRAP=e.tipoEmp==='RAP';
+    const tipoBadge=isRAP
+      ?`<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 6px;border-radius:8px;font-size:9px;font-weight:700">RAP</span>`
+      :`<span style="background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border);padding:2px 6px;border-radius:8px;font-size:9px;font-weight:700">EXE</span>`;
+    const compLabel=e.competencia?(()=>{const p=e.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:e.competencia;})():'—';
+    const fornNome=e.fornNome||(e.acaoId&&state.acoes.find(a=>a.id===e.acaoId)?.nome)||'—';
+    // Células de movimentações compactas
+    const movBadges=`
+      <span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;padding:2px 7px;font-size:10px;white-space:nowrap" title="Valor Inicial">
+        <span style="color:var(--text3)">Ini</span> <span style="color:var(--text);font-weight:700">${fmtBR(valorIni)}</span>
+      </span>
+      ${t.reforcos>0?`<span style="display:inline-flex;align-items:center;gap:3px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:6px;padding:2px 7px;font-size:10px;white-space:nowrap" title="Reforços">
+        <span style="color:var(--green)">➕</span><span style="color:var(--green);font-weight:700">${fmtBR(t.reforcos)}</span>
+      </span>`:''}
+      ${t.anulacoes>0?`<span style="display:inline-flex;align-items:center;gap:3px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:6px;padding:2px 7px;font-size:10px;white-space:nowrap" title="Anulações">
+        <span style="color:var(--amber)">➖</span><span style="color:var(--amber);font-weight:700">${fmtBR(t.anulacoes)}</span>
+      </span>`:''}`;
+    const btnReforco=!isRAP?`<button class="btn btn-xs" style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green)" onclick="abrirModalReforco('${e.id}')" title="Reforço">➕</button>`:'';
+    const btnAnular=!isRAP?`<button class="btn btn-xs" style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)" onclick="abrirModalAnular('${e.id}')" title="Anular">➖</button>`:'';
+    // Tooltip com detalhes secundários
+    const tooltip=`Data: ${fmtData(e.data)} | Comp.: ${compLabel} | Fonte: ${e.fonte?e.fonte.split('–')[0].trim():'—'} | PTRES: ${e.ptres||'—'} | ND: ${e.nd||'—'}`;
+    return`<tr title="${tooltip}" style="cursor:default">
+      <td style="padding:8px 10px;text-align:center">${tipoBadge}</td>
+      <td style="padding:8px 10px"><code style="font-size:11px;font-weight:700;color:var(--text)">${e.numero||'—'}</code></td>
+      <td style="padding:8px 10px;font-size:11.5px">${catIcon(e.categoria)} ${e.categoria}</td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px" title="${fornNome}">${fornNome}</td>
+      <td class="r" style="padding:8px 10px"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">${movBadges}</div></td>
+      <td class="r fw7" style="padding:8px 10px;font-size:12px;color:${saldoColor};white-space:nowrap">${fmtBR(t.saldo)}</td>
+      <td style="padding:6px 6px;white-space:nowrap;text-align:right">
+        <button class="btn btn-xs" style="background:var(--blue-bg);border:1px solid var(--blue-border);color:var(--blue);font-weight:700;margin-bottom:3px;display:block;width:100%" onclick="abrirModalEditarEmpenho('${e.id}')" title="Editar empenho inicial">✎ Editar</button>
+        <div style="display:flex;gap:2px;justify-content:flex-end">${btnReforco}${btnAnular}<button class="btn btn-sec btn-xs" onclick="abrirHistoricoEmpenho('${e.id}')" title="Histórico">📋</button><button class="btn btn-red btn-xs" onclick="excluirCadastroEmpenho('${e.id}')" title="Excluir">✕</button></div>
+      </td>
     </tr>`;
-  }).join(''):'<tr class="empty-row"><td colspan="10">Nenhum empenho encontrado.</td></tr>';
+  }).join(''):'<tr class="empty-row"><td colspan="7">Nenhum empenho encontrado.</td></tr>';
   const wrap=tbody.closest('.tbl-wrap');
   if(wrap){const old=wrap.querySelector('.pagination');if(old)old.remove();if(totalPgs>1)wrap.insertAdjacentHTML('beforeend',renderPagination('empenhosCad',totalPgs,pg,total,"renderCadastroEmpenhos()"));}
 }
@@ -4906,7 +5648,159 @@ function editarCadastroEmpenho(id){
 
 
 // ═══════════════════════════════════════════════════════════
-//  MÓDULO LIQUIDAÇÃO INDEPENDENTE
+//  MODAL EDIÇÃO COMPLETA DO EMPENHO INICIAL
+// ═══════════════════════════════════════════════════════════
+function abrirModalEditarEmpenho(id){
+  const e=state.empenhosCad.find(x=>x.id===id);
+  if(!e){toast('Empenho não encontrado','error');return;}
+
+  const modal=document.getElementById('modal-edit-empenho');
+  if(!modal){toast('Modal não encontrado','error');return;}
+
+  // Preencher campos
+  document.getElementById('mee-id').value=id;
+  document.getElementById('mee-numero').value=e.numero||'';
+  document.getElementById('mee-data').value=e.data||'';
+  document.getElementById('mee-fornNome').value=e.fornNome||'';
+  document.getElementById('mee-nd').value=e.nd||'';
+  document.getElementById('mee-pi').value=e.pi||'';
+  document.getElementById('mee-desc').value=e.desc||e.descricao||'';
+  document.getElementById('mee-obs').value=e.obs||e.observacoes||'';
+  document.getElementById('mee-subcat').value=e.subcat||e.subcategoria||'';
+
+  // Valor inicial
+  const t=calcEmpenhoTotais(e.id,e.numero);
+  const valorIni=e.valorInicial!=null?e.valorInicial:t.inicial;
+  document.getElementById('mee-valor').value=valorIni||'';
+
+  // Tipo EXE/RAP
+  document.getElementById('mee-tipo-exe').checked=e.tipoEmp!=='RAP';
+  document.getElementById('mee-tipo-rap').checked=e.tipoEmp==='RAP';
+  meeAtualizarTipo();
+
+  // Categoria
+  const catSel=document.getElementById('mee-categoria');
+  catSel.innerHTML=DEFAULT_CATS.map(c=>`<option value="${c}" ${c===e.categoria?'selected':''}>${c}</option>`).join('');
+
+  // Fonte e PTRES
+  const fonteSel=document.getElementById('mee-fonte');
+  fonteSel.innerHTML=state.fontes.map(f=>`<option value="${f}" ${f===e.fonte?'selected':''}>${f}</option>`).join('');
+  const ptresSel=document.getElementById('mee-ptres');
+  ptresSel.innerHTML=state.ptres.map(p=>`<option value="${p}" ${p===e.ptres?'selected':''}>${p}</option>`).join('');
+
+  // Competência
+  const compSel=document.getElementById('mee-comp');
+  compSel.innerHTML='';
+  const now=new Date();
+  for(let i=-4;i<=14;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+    const val=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const lbl=MESES_FULL[d.getMonth()]+'/'+d.getFullYear();
+    const opt=document.createElement('option');
+    opt.value=val; opt.textContent=lbl;
+    if(val===e.competencia)opt.selected=true;
+    compSel.appendChild(opt);
+  }
+
+  // Info de contexto no header do modal
+  document.getElementById('mee-context').innerHTML=
+    `<span style="font-size:11px;color:var(--text3)">Editando: </span><code style="font-size:12px;color:var(--blue);font-weight:700">${e.numero}</code>
+     <span style="font-size:11px;color:var(--text3);margin-left:8px">· ${catIcon(e.categoria)} ${e.categoria}</span>
+     ${t.reforcos>0||t.anulacoes>0?`<span style="font-size:10px;color:var(--amber);margin-left:8px">⚠ Possui reforços/anulações — altere com cuidado</span>`:''}`;
+
+  modal.classList.add('show');
+}
+
+function meeAtualizarTipo(){
+  const isRAP=document.getElementById('mee-tipo-rap').checked;
+  const exeCard=document.getElementById('mee-card-exe');
+  const rapCard=document.getElementById('mee-card-rap');
+  if(exeCard) exeCard.style.borderColor=isRAP?'var(--border2)':'var(--blue-border)';
+  if(exeCard) exeCard.style.background=isRAP?'var(--bg4)':'var(--blue-bg)';
+  if(rapCard) rapCard.style.borderColor=isRAP?'var(--purple-border)':'var(--border2)';
+  if(rapCard) rapCard.style.background=isRAP?'var(--purple-bg)':'var(--bg4)';
+}
+
+function fecharModalEditarEmpenho(){
+  const modal=document.getElementById('modal-edit-empenho');
+  if(modal)modal.classList.remove('show');
+}
+
+function salvarEdicaoEmpenho(){
+  const id=document.getElementById('mee-id').value;
+  const e=state.empenhosCad.find(x=>x.id===id);
+  if(!e){toast('Empenho não encontrado','error');return;}
+
+  const numero=document.getElementById('mee-numero').value.trim().toUpperCase();
+  const data=document.getElementById('mee-data').value;
+  const tipoEmp=document.getElementById('mee-tipo-rap').checked?'RAP':'EXE';
+  const categoria=document.getElementById('mee-categoria').value;
+  const fornNome=document.getElementById('mee-fornNome').value.trim();
+  const fonte=document.getElementById('mee-fonte').value;
+  const ptres=document.getElementById('mee-ptres').value;
+  const competencia=document.getElementById('mee-comp').value;
+  const valorNovo=parseFloat(document.getElementById('mee-valor').value)||0;
+  const nd=document.getElementById('mee-nd').value.trim();
+  const pi=document.getElementById('mee-pi').value.trim();
+  const subcat=document.getElementById('mee-subcat').value.trim();
+  const desc=document.getElementById('mee-desc').value.trim();
+  const obs=document.getElementById('mee-obs').value.trim();
+
+  if(!numero){toast('Número do empenho obrigatório','warn');return;}
+  if(!data){toast('Data obrigatória','warn');return;}
+  if(!categoria){toast('Selecione a categoria','warn');return;}
+  if(!fonte){toast('Fonte de recurso obrigatória','warn');return;}
+  if(!ptres){toast('PTRES obrigatório','warn');return;}
+  if(!competencia){toast('Competência obrigatória','warn');return;}
+  if(valorNovo<=0){toast('Valor inicial deve ser maior que zero','warn');return;}
+
+  // Verificar número duplicado (exceto o próprio)
+  const duplicado=state.empenhosCad.find(x=>x.id!==id&&x.status!=='Excluído'&&x.numero===numero);
+  if(duplicado){toast('Já existe outro empenho com o número '+numero,'warn');return;}
+
+  const antes={numero:e.numero,data:e.data,tipoEmp:e.tipoEmp,categoria:e.categoria,
+    fornNome:e.fornNome,fonte:e.fonte,ptres:e.ptres,competencia:e.competencia,
+    valorInicial:e.valorInicial,nd:e.nd,pi:e.pi,subcat:e.subcat,desc:e.desc,obs:e.obs};
+
+  // Atualizar empenho
+  e.numero=numero; e.data=data; e.tipoEmp=tipoEmp; e.categoria=categoria;
+  e.fornNome=fornNome; e.fonte=fonte; e.ptres=ptres; e.competencia=competencia;
+  e.valorInicial=valorNovo; e.nd=nd; e.pi=pi; e.subcat=subcat; e.desc=desc; e.obs=obs;
+  e.tsModif=new Date().toISOString();
+
+  // Atualizar lançamento INICIAL vinculado (valor e referência)
+  const lancInicial=state.lancamentos.find(l=>
+    l.status==='Ativo'&&l.tipo==='Empenho'&&l.tipoRegistro==='INICIAL'&&
+    (l.empenhoCadId===id||l.referencia===antes.numero)
+  );
+  if(lancInicial){
+    lancInicial.valor=valorNovo;
+    lancInicial.referencia=numero;
+    lancInicial.numeroEmpenho=numero;
+    lancInicial.categoria=categoria;
+    lancInicial.tipoRecurso=tipoEmp;
+    lancInicial.fonte=fonte;
+    lancInicial.ptres=ptres;
+    lancInicial.competencia=competencia;
+    lancInicial.nd=nd;
+    lancInicial.pi=pi;
+    lancInicial.fornNome=fornNome;
+  }
+
+  // Atualizar referências nos demais lançamentos vinculados (reforços/anulações)
+  if(antes.numero!==numero){
+    state.lancamentos.filter(l=>l.referencia===antes.numero&&(l.empenhoCadId===id||!l.empenhoCadId))
+      .forEach(l=>{ l.referencia=numero; l.numeroEmpenho=numero; });
+  }
+
+  auditLog('UPDATE','EMPENHO_CAD',id,'Empenho editado: '+antes.numero+' → '+numero,{antes,depois:e});
+  salvar();
+  fecharModalEditarEmpenho();
+  renderCadastroEmpenhos();
+  if(typeof renderDashboard==='function')renderDashboard();
+  if(typeof renderSidebar==='function')renderSidebar();
+  toast('✓ Empenho '+numero+' atualizado com sucesso!','success');
+}
 // ═══════════════════════════════════════════════════════════
 let _liqGrupo='',_liqEmpId='',_liqEmpCosipId='';
 
@@ -4947,13 +5841,56 @@ function liqAtualizarGrupo(){
   }
 }
 
-// Calcular saldo de um empenho pelo número (soma dos lançamentos de empenho - liquidações - anulações)
+// Calcular saldo de um empenho — modelo unificado:
+// saldo = (valorInicial OU lançamentos INICIAL+REFORÇO) − Σ ANULAÇÕES − Σ LIQUIDADO
+// Busca por nEmp (referencia) E por empenhoCadId para máxima compatibilidade
 function calcSaldoEmpenho(nEmp){
-  const empLancs=state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.referencia===nEmp);
-  const totalEmp=sum(empLancs);
+  // Buscar empenho cadastrado para ter valorInicial
+  const empCad=(state.empenhosCad||[]).find(e=>e.numero===nEmp&&e.status!=='Excluído');
+  const empCadId=empCad?.id;
+  // Lançamentos de empenho (INICIAL + REFORÇOS): por referencia OU por empenhoCadId
+  const lancsEmp=state.lancamentos.filter(l=>
+    l.status==='Ativo'&&l.tipo==='Empenho'&&
+    (l.referencia===nEmp||(empCadId&&l.empenhoCadId===empCadId))
+  );
+  let totalEmp=sum(lancsEmp);
+  // Fallback: se não há lançamentos mas existe valorInicial no cadastro, usa ele
+  if(totalEmp===0&&empCad?.valorInicial>0) totalEmp=empCad.valorInicial;
+  // Anulações: por referencia OU por empenhoCadId
+  const anulaFeitas=sum(state.lancamentos.filter(l=>
+    l.status==='Ativo'&&l.tipo==='Anulação'&&
+    (l.referencia===nEmp||(empCadId&&(l.empenhoCadId===empCadId||l.referenciaId===empCadId)))
+  ));
   const liqFeitas=totalLiquidadoPorEmpenho(nEmp);
-  const anulaFeitas=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Anulação'&&l.referencia===nEmp));
-  return totalEmp-liqFeitas-anulaFeitas;
+  return Math.max(0, totalEmp-liqFeitas-anulaFeitas);
+}
+
+// ★ Totais por tipoRegistro para um empenho (usado nas tabelas)
+function calcEmpenhoTotais(empCadId, nEmp){
+  const inicial=sum(state.lancamentos.filter(l=>
+    l.status==='Ativo'&&l.tipo==='Empenho'&&
+    l.tipoRegistro==='INICIAL'&&
+    (l.empenhoCadId===empCadId||l.referencia===nEmp)
+  ));
+  const reforcos=sum(state.lancamentos.filter(l=>
+    l.status==='Ativo'&&l.tipo==='Empenho'&&
+    l.tipoRegistro==='REFORCO'&&
+    (l.empenhoCadId===empCadId||l.referencia===nEmp)
+  ));
+  // Lançamentos antigos sem tipoRegistro são tratados como REFORCO (compatibilidade)
+  const legacy=sum(state.lancamentos.filter(l=>
+    l.status==='Ativo'&&l.tipo==='Empenho'&&
+    !l.tipoRegistro&&
+    (l.empenhoCadId===empCadId||l.referencia===nEmp)
+  ));
+  const anulacoes=sum(state.lancamentos.filter(l=>
+    l.status==='Ativo'&&l.tipo==='Anulação'&&
+    (l.empenhoCadId===empCadId||l.referencia===nEmp)
+  ));
+  const liqFeitas=totalLiquidadoPorEmpenho(nEmp);
+  const totalEmp=inicial+reforcos+legacy;
+  const saldo=totalEmp-liqFeitas-anulacoes;
+  return{inicial,reforcos:reforcos+legacy,anulacoes,liqFeitas,totalEmp,saldo};
 }
 
 function liqCarregarEmpenho(){
@@ -6267,6 +7204,7 @@ function registrarSaida(){
   const l = {
     id: shortId('S'),
     tipo: 'Empenho',
+    tipoRegistro: 'REFORCO',  // ★ marca como reforço (formulário legado da Saída)
     tipoRecurso,          // herdado do cadastro
     categoria: cat,       // herdado do cadastro
     subcategoria: subcat,
@@ -6728,6 +7666,946 @@ document.addEventListener('DOMContentLoaded',()=>{
   init();
   initNovosModulos();
   window.addEventListener('load',()=>setTimeout(showDriveWelcome,1500));
+});
+</script>
+
+<!-- ════════ MODAL REFORÇO DE EMPENHO ════════ -->
+<style>
+#modal-reforco{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity .22s}
+#modal-reforco.show{opacity:1;pointer-events:all}
+#modal-reforco-inner{background:var(--bg2);border:1px solid var(--border2);border-radius:18px;padding:0;max-width:720px;width:95%;max-height:92vh;overflow-y:auto;box-shadow:0 16px 64px rgba(0,0,0,.7);display:flex;flex-direction:column}
+.mref-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;background:var(--bg2);z-index:2;border-radius:18px 18px 0 0}
+.mref-title{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.06em;display:flex;align-items:center;gap:8px}
+.mref-title-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);animation:pulse 2s infinite}
+.mref-body{padding:20px 24px;flex:1}
+.mref-tipo-btns{display:flex;gap:8px;margin-bottom:18px}
+.mref-tipo-btn{flex:1;padding:9px 12px;border-radius:9px;font-size:12px;font-weight:800;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.04em;transition:all .15s;font-family:'IBM Plex Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px}
+.mref-tipo-btn:hover{border-color:var(--border3);color:var(--text2)}
+.mref-tipo-btn.active-all{border-color:var(--gold-border)!important;background:var(--gold-bg)!important;color:var(--gold)!important;box-shadow:0 0 14px rgba(245,200,66,.18);transform:translateY(-1px)}
+.mref-tipo-btn.active-exe{border-color:var(--blue-border)!important;background:var(--blue-bg)!important;color:var(--blue)!important;box-shadow:0 0 14px rgba(68,138,255,.2);transform:translateY(-1px)}
+.mref-tipo-btn.active-rap{border-color:var(--purple-border)!important;background:var(--purple-bg)!important;color:var(--purple)!important;box-shadow:0 0 14px rgba(170,102,255,.2);transform:translateY(-1px)}
+.mref-section-label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.mref-required{color:var(--red);margin-left:2px}
+.mref-search-wrap{position:relative;margin-bottom:4px}
+.mref-search-input{width:100%;padding:10px 14px 10px 38px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:9px;color:var(--text);font-size:13px;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;outline:none}
+.mref-search-input:focus{border-color:var(--gold-border);box-shadow:0 0 0 3px var(--gold-bg)}
+.mref-search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text3);pointer-events:none}
+.mref-dropdown{background:var(--bg3);border:1.5px solid var(--border2);border-radius:9px;max-height:220px;overflow-y:auto;display:none;margin-top:4px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.mref-dropdown-item{padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px;transition:background .12s}
+.mref-dropdown-item:hover{background:var(--bg4)}
+.mref-dropdown-item:last-child{border-bottom:none}
+.mref-selected-box{background:var(--bg4);border:1.5px solid var(--border2);border-radius:9px;padding:10px 14px;margin-top:6px;display:none;align-items:center;gap:10px}
+.mref-selected-box.show{display:flex}
+.mref-derived-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;margin-bottom:16px}
+.mref-derived-field{background:var(--bg4);border:1px solid var(--border);border-radius:8px;padding:10px 12px;position:relative}
+.mref-derived-label{font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px;display:flex;align-items:center;gap:5px}
+.mref-derived-label .mref-lock{font-size:10px;color:var(--text4)}
+.mref-derived-badge{font-size:9px;color:var(--amber);font-weight:700;letter-spacing:.06em;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:4px;padding:2px 6px;display:inline-flex;align-items:center;gap:3px;margin-bottom:5px}
+.mref-derived-value{font-size:13px;font-weight:700;color:var(--text2)}
+.mref-derived-hint{font-size:10px;color:var(--text4);margin-top:2px;font-style:italic}
+.mref-op-info{background:var(--bg4);border:1.5px solid var(--border2);border-radius:9px;padding:12px 14px;margin-bottom:16px;display:none}
+.mref-op-info.show{display:block}
+.mref-data-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px}
+.mref-field label{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px}
+.mref-field input,.mref-field select{width:100%;padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;font-family:'IBM Plex Sans',sans-serif;outline:none;transition:border-color .15s}
+.mref-field input:focus,.mref-field select:focus{border-color:var(--gold-border);box-shadow:0 0 0 3px var(--gold-bg)}
+.mref-field textarea{width:100%;padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;font-family:'IBM Plex Sans',sans-serif;outline:none;resize:vertical;min-height:72px;transition:border-color .15s}
+.mref-field textarea:focus{border-color:var(--gold-border);box-shadow:0 0 0 3px var(--gold-bg)}
+.mref-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-shrink:0;background:var(--bg2);border-radius:0 0 18px 18px;position:sticky;bottom:0}
+.btn-reforco-registrar{flex:1;padding:11px 20px;border-radius:9px;font-size:13px;font-weight:800;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;letter-spacing:.04em;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-reforco-registrar:hover{background:rgba(245,200,66,.18);box-shadow:0 0 18px rgba(245,200,66,.2);transform:translateY(-1px)}
+.btn-reforco-limpar{padding:11px 18px;border-radius:9px;font-size:12px;font-weight:700;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .15s;display:flex;align-items:center;gap:6px}
+.btn-reforco-limpar:hover{border-color:var(--border3);color:var(--text2)}
+</style>
+<div id="modal-reforco">
+  <div id="modal-reforco-inner">
+    <!-- Cabeçalho -->
+    <div class="mref-header">
+      <div class="mref-title">
+        <span class="mref-title-dot"></span>
+        REGISTRAR SAÍDA (INCLUSÃO DE SALDO NO EMPENHO)
+      </div>
+      <button onclick="fecharModalReforco()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:20px;line-height:1;padding:4px 8px;border-radius:6px;transition:all .15s" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">×</button>
+    </div>
+    <!-- Corpo -->
+    <div class="mref-body">
+      <!-- Filtros de Tipo -->
+      <div style="margin-bottom:14px">
+        <div class="mref-section-label" style="margin-bottom:8px">🔍 Filtrar por Tipo</div>
+        <div class="mref-tipo-btns">
+          <button class="mref-tipo-btn active-all" id="mrfn-btn-all" onclick="mrefSetFiltro('')">
+            <span>◉</span> Todos
+          </button>
+          <button class="mref-tipo-btn" id="mrfn-btn-exe" onclick="mrefSetFiltro('EXE')">
+            <span style="color:var(--blue)">◆</span> EXE — Exercício
+          </button>
+          <button class="mref-tipo-btn" id="mrfn-btn-rap" onclick="mrefSetFiltro('RAP')">
+            <span style="color:var(--purple)">▣</span> RAP — Restos a Pagar
+          </button>
+        </div>
+        <input type="hidden" id="mrfn-filtro-tipo" value="">
+      </div>
+
+      <!-- Empenho Referenciado -->
+      <div style="margin-bottom:14px">
+        <div class="mref-section-label">Empenho Referenciado<span class="mref-required">*</span></div>
+        <div class="mref-search-wrap">
+          <span class="mref-search-icon">🔍</span>
+          <input type="text" class="mref-search-input" id="mrfn-emp-busca"
+            placeholder="Digite número, categoria ou fornecedor..."
+            oninput="mrefFiltrarEmpenhos()"
+            onfocus="mrefAbrirDropdown()">
+        </div>
+        <div class="mref-dropdown" id="mrfn-emp-dropdown"></div>
+        <div class="mref-selected-box" id="mrfn-emp-selecionado"></div>
+        <input type="hidden" id="mrfn-emp-id">
+      </div>
+
+      <!-- Campos derivados do cadastro -->
+      <div class="mref-derived-grid" id="mrfn-derived-area" style="display:none">
+        <div class="mref-derived-field">
+          <div class="mref-derived-label"><span class="mref-lock">🔒</span> Tipo de Empenho</div>
+          <div class="mref-derived-badge">🔒 DERIVADO DO CADASTRO</div>
+          <div class="mref-derived-value" id="mrfn-derived-tipo">—</div>
+          <div class="mref-derived-hint">Selecionado automaticamente</div>
+        </div>
+        <div class="mref-derived-field">
+          <div class="mref-derived-label"><span class="mref-lock">🔒</span> Categoria</div>
+          <div class="mref-derived-badge">🔒 DERIVADA DO CADASTRO</div>
+          <div class="mref-derived-value" id="mrfn-derived-cat">—</div>
+          <div class="mref-derived-hint">Selecionado automaticamente</div>
+        </div>
+      </div>
+
+      <!-- Info do empenho selecionado -->
+      <div class="mref-op-info" id="mrfn-op-info"></div>
+
+      <!-- Dados da Operação -->
+      <div class="mref-data-grid">
+        <div class="mref-field">
+          <label>📅 Data<span class="mref-required">*</span></label>
+          <input type="date" id="mrfn-data">
+        </div>
+        <div class="mref-field">
+          <label>📆 Competência (Mês)<span class="mref-required">*</span></label>
+          <select id="mrfn-comp"><option value="">Selecione</option></select>
+        </div>
+        <div class="mref-field">
+          <label>💰 Valor (R$)<span class="mref-required">*</span></label>
+          <input type="number" id="mrfn-valor" min="0.01" step="0.01" placeholder="0,00">
+        </div>
+      </div>
+
+      <!-- Descrição -->
+      <div class="mref-field" style="margin-bottom:6px">
+        <label>📝 Descrição<span class="mref-required">*</span></label>
+        <textarea id="mrfn-desc" placeholder="Descreva o motivo do reforço financeiro (obrigatório)"></textarea>
+      </div>
+    </div>
+
+    <!-- Rodapé -->
+    <div class="mref-footer">
+      <button class="btn-reforco-registrar" onclick="registrarReforco()">
+        ✓ Registrar Reforço
+      </button>
+      <button class="btn-reforco-limpar" onclick="limparModalReforco()">
+        ↺ Limpar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════ MÓDULO REFORÇO DE EMPENHO ════════
+
+let _mrefDropdownAberto = false;
+
+function abrirModalReforcoNovo(){
+  const modal = document.getElementById('modal-reforco');
+  if(!modal) return;
+  limparModalReforco();
+  // Pré-preencher data atual
+  document.getElementById('mrfn-data').value = new Date().toISOString().slice(0,10);
+  // Popular competências
+  mrefPopularCompetencias();
+  modal.classList.add('show');
+}
+
+function fecharModalReforco(){
+  const modal = document.getElementById('modal-reforco');
+  if(modal) modal.classList.remove('show');
+}
+
+// Fechar ao clicar fora do inner
+document.getElementById('modal-reforco').addEventListener('click', function(e){
+  // Fechamento apenas pelo botão X ou botão Fechar — NÃO por clique no backdrop
+});
+
+// Fechar dropdown ao clicar fora
+document.addEventListener('click', function(e){
+  const inp = document.getElementById('mrfn-emp-busca');
+  const dd = document.getElementById('mrfn-emp-dropdown');
+  if(dd && inp && !inp.contains(e.target) && !dd.contains(e.target)){
+    dd.style.display = 'none';
+    _mrefDropdownAberto = false;
+  }
+});
+
+function mrefPopularCompetencias(){
+  const sel = document.getElementById('mrfn-comp');
+  if(!sel) return;
+  const now = new Date();
+  const meses = [];
+  for(let i = -2; i <= 12; i++){
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const val = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const label = MESES_FULL[d.getMonth()] + '/' + d.getFullYear();
+    meses.push({val, label});
+  }
+  const atual = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  sel.innerHTML = '<option value="">Selecione</option>' +
+    meses.map(m => `<option value="${m.val}" ${m.val===atual?'selected':''}>${m.label}</option>`).join('');
+}
+
+function mrefSetFiltro(tipo){
+  document.getElementById('mrfn-filtro-tipo').value = tipo;
+  // Atualizar estilos dos botões
+  const btns = {
+    '': {id:'mrfn-btn-all', cls:'active-all'},
+    'EXE': {id:'mrfn-btn-exe', cls:'active-exe'},
+    'RAP': {id:'mrfn-btn-rap', cls:'active-rap'}
+  };
+  Object.entries(btns).forEach(([k, b]) => {
+    const el = document.getElementById(b.id);
+    if(!el) return;
+    el.className = 'mref-tipo-btn' + (k === tipo ? ' ' + b.cls : '');
+  });
+  // Limpar seleção anterior e refiltrar
+  document.getElementById('mrfn-emp-busca').value = '';
+  mrefLimparSelecao();
+  if(_mrefDropdownAberto) mrefFiltrarEmpenhos();
+}
+
+function mrefAbrirDropdown(){
+  _mrefDropdownAberto = true;
+  mrefFiltrarEmpenhos();
+}
+
+function mrefFiltrarEmpenhos(){
+  const busca = (document.getElementById('mrfn-emp-busca')?.value || '').toLowerCase();
+  const tipo = document.getElementById('mrfn-filtro-tipo')?.value || '';
+  const dd = document.getElementById('mrfn-emp-dropdown');
+  if(!dd) return;
+
+  const empenhos = (state.empenhosCad || []).filter(e => {
+    if(e.status === 'Excluído') return false;
+    if(tipo && e.tipoEmp !== tipo) return false;
+    if(!busca) return true;
+    return (e.numero||'').toLowerCase().includes(busca)
+      || (e.categoria||'').toLowerCase().includes(busca)
+      || (e.fornNome||'').toLowerCase().includes(busca);
+  }).slice(0, 40);
+
+  if(!empenhos.length){
+    dd.style.display = 'block';
+    dd.innerHTML = '<div style="padding:12px 14px;font-size:12px;color:var(--text3)">Nenhum empenho encontrado</div>';
+    return;
+  }
+
+  dd.style.display = 'block';
+  dd.innerHTML = empenhos.map(e => {
+    const saldo = calcSaldoEmpenho(e.numero);
+    const sc = saldo <= 0 ? 'var(--red)' : saldo < 1000 ? 'var(--amber)' : 'var(--green)';
+    const badge = e.tipoEmp === 'RAP'
+      ? '<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;flex-shrink:0">RAP</span>'
+      : '<span style="background:rgba(68,138,255,.12);color:var(--blue);border:1px solid rgba(68,138,255,.3);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;flex-shrink:0">EXE</span>';
+    return `<div class="mref-dropdown-item" onclick="mrefSelecionarEmpenho('${e.id}')">
+      ${badge}
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text)">${e.numero}</div>
+        <div style="font-size:10.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${catIcon(e.categoria)} ${e.categoria}${e.fornNome?' · '+e.fornNome:''}</div>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:${sc};white-space:nowrap">${fmtBR(saldo)}</div>
+    </div>`;
+  }).join('');
+}
+
+function mrefSelecionarEmpenho(id){
+  const e = (state.empenhosCad || []).find(x => x.id === id);
+  if(!e) return;
+
+  document.getElementById('mrfn-emp-id').value = id;
+  document.getElementById('mrfn-emp-dropdown').style.display = 'none';
+  _mrefDropdownAberto = false;
+
+  // Atualizar campo de busca
+  const inp = document.getElementById('mrfn-emp-busca');
+  if(inp) inp.value = e.numero + (e.fornNome ? ' — ' + e.fornNome : '');
+
+  // Exibir box selecionado
+  const saldo = calcSaldoEmpenho(e.numero);
+  const sc = saldo <= 0 ? 'var(--red)' : saldo < 1000 ? 'var(--amber)' : 'var(--green)';
+  const badge = e.tipoEmp === 'RAP'
+    ? '<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700">RAP</span>'
+    : '<span style="background:rgba(68,138,255,.12);color:var(--blue);border:1px solid rgba(68,138,255,.3);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700">EXE</span>';
+
+  const selBox = document.getElementById('mrfn-emp-selecionado');
+  selBox.innerHTML = `
+    ${badge}
+    <div style="flex:1;min-width:0">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--text)">${e.numero}</span>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px">${catIcon(e.categoria)} ${e.categoria}</span>
+      ${e.fornNome?`<span style="font-size:11px;color:var(--text3);margin-left:6px">· ${e.fornNome}</span>`:''}
+    </div>
+    <span style="font-size:12px;font-weight:700;color:${sc};white-space:nowrap">Saldo: ${fmtBR(saldo)}</span>
+    <button onclick="mrefLimparSelecao()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:2px 6px" title="Limpar seleção">×</button>`;
+  selBox.classList.add('show');
+
+  // Campos derivados
+  const derivedArea = document.getElementById('mrfn-derived-area');
+  derivedArea.style.display = 'grid';
+  document.getElementById('mrfn-derived-tipo').textContent =
+    e.tipoEmp === 'RAP' ? 'RAP — Restos a Pagar' : 'EXE — Exercício Corrente';
+  document.getElementById('mrfn-derived-cat').textContent = e.categoria || '—';
+
+  // Info operacional
+  const infoEl = document.getElementById('mrfn-op-info');
+  const totalLancs = (state.lancamentos || []).filter(l =>
+    l.status === 'Ativo' && l.tipo === 'Empenho' &&
+    (l.empenhoCadId === id || l.referencia === e.numero)
+  ).reduce((s, l) => s + (l.valor||0), 0);
+  infoEl.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px">
+          ⚡ ${e.numero} · <span style="color:${e.tipoEmp==='RAP'?'var(--purple)':'var(--blue)'}">${e.tipoEmp}</span> · ${e.categoria}
+        </div>
+        <div style="font-size:11px;color:var(--text3)">
+          ${e.fornNome?'Fornecedor: <strong style="color:var(--text2)">'+e.fornNome+'</strong>':''}
+          ${e.fonte?' · Fonte: '+e.fonte:''}
+          ${e.ptres?' · PTRES: '+e.ptres:''}
+          ${e.nd?' · ND: '+e.nd:''}
+        </div>
+        <div style="font-size:10.5px;color:var(--amber);margin-top:4px">🔒 Tipo e Categoria herdados do cadastro — não editáveis nesta tela</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--green)">${fmtBR(totalLancs)}<span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:4px">empenhado</span></div>
+        <div style="font-size:10px;color:var(--text3)">Saldo disponível: <span style="color:${sc};font-weight:700">${fmtBR(saldo)}</span></div>
+      </div>
+    </div>`;
+  infoEl.classList.add('show');
+}
+
+function mrefLimparSelecao(){
+  document.getElementById('mrfn-emp-id').value = '';
+  document.getElementById('mrfn-emp-busca').value = '';
+  const selBox = document.getElementById('mrfn-emp-selecionado');
+  selBox.innerHTML = '';
+  selBox.classList.remove('show');
+  document.getElementById('mrfn-derived-area').style.display = 'none';
+  document.getElementById('mrfn-derived-tipo').textContent = '—';
+  document.getElementById('mrfn-derived-cat').textContent = '—';
+  const info = document.getElementById('mrfn-op-info');
+  info.innerHTML = '';
+  info.classList.remove('show');
+}
+
+function limparModalReforco(){
+  mrefLimparSelecao();
+  mrefSetFiltro('');
+  document.getElementById('mrfn-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('mrfn-valor').value = '';
+  document.getElementById('mrfn-desc').value = '';
+  document.getElementById('mrfn-emp-busca').value = '';
+  document.getElementById('mrfn-emp-dropdown').style.display = 'none';
+  mrefPopularCompetencias();
+}
+
+function registrarReforco(){
+  const empCadId = document.getElementById('mrfn-emp-id').value;
+  if(!empCadId){ toast('Selecione um empenho referenciado','warn'); return; }
+
+  const empCad = (state.empenhosCad || []).find(e => e.id === empCadId);
+  if(!empCad){ toast('Empenho não encontrado','error'); return; }
+
+  const tipoRecurso = empCad.tipoEmp || 'EXE';
+  const cat = empCad.categoria;
+
+  const valor = parseFloat(document.getElementById('mrfn-valor').value) || 0;
+  const data = document.getElementById('mrfn-data').value;
+  const competencia = document.getElementById('mrfn-comp').value;
+  const desc = document.getElementById('mrfn-desc').value.trim();
+
+  if(!valor || valor <= 0){ toast('Valor deve ser maior que zero','warn'); return; }
+  if(!data){ toast('Data obrigatória','warn'); return; }
+  if(!competencia){ toast('Competência (mês) é obrigatória','warn'); return; }
+  if(!desc){ toast('Descrição do reforço é obrigatória','warn'); return; }
+
+  // Verificação de saldo apenas para EXE
+  if(tipoRecurso === 'EXE'){
+    const saldo = saldoCat(cat);
+    if(valor > saldo + 0.01){
+      toast('Saldo insuficiente na categoria ' + cat + ' (' + fmtBR(saldo) + ' disponível)','warn');
+      return;
+    }
+  }
+
+  const l = {
+    id: shortId('RF'),
+    tipo: 'Empenho',
+    tipoRegistro: 'REFORCO',
+    tipoRecurso,
+    categoria: cat,
+    subcategoria: '',
+    descricao: '[REFORÇO] ' + desc,
+    valor, data, competencia,
+    empenhoCadId: empCadId,
+    numeroEmpenho: empCad.numero,
+    fonte: empCad.fonte || '',
+    ptres: empCad.ptres || '',
+    nd: empCad.nd || '',
+    pi: empCad.pi || '',
+    fornNome: empCad.fornNome || '',
+    referencia: empCad.numero,
+    referenciaId: empCadId,
+    status: 'Ativo',
+    ts: new Date().toISOString()
+  };
+
+  state.lancamentos.push(l);
+  auditLog('CREATE','LANCAMENTO', l.id,
+    '[REFORÇO][' + tipoRecurso + '] ' + empCad.numero + ' · ' + cat + ' · ' + fmtBR(valor) + ' · competência ' + competencia, l);
+
+  salvar();
+  fecharModalReforco();
+  renderSaidaForms(); renderSaidas(); renderSidebar(); renderDashboard(); renderEntradas(); renderCatGrid();
+  if(typeof renderCadastroEmpenhos === 'function') renderCadastroEmpenhos();
+  toast('[REFORÇO] Saldo de ' + fmtBR(valor) + ' adicionado ao empenho ' + empCad.numero + '!','success');
+}
+</script>
+
+<!-- ════════ MODAL ANULAÇÃO DE EMPENHO ════════ -->
+<style>
+#modal-anulacao-novo{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity .22s}
+#modal-anulacao-novo.show{opacity:1;pointer-events:all}
+#modal-anulacao-novo-inner{background:var(--bg2);border:1px solid var(--red-border);border-radius:18px;padding:0;max-width:720px;width:95%;max-height:92vh;overflow-y:auto;box-shadow:0 16px 64px rgba(255,68,68,.15);display:flex;flex-direction:column}
+.manv-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;background:var(--bg2);z-index:2;border-radius:18px 18px 0 0}
+.manv-title{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--red);letter-spacing:.06em;display:flex;align-items:center;gap:8px}
+.manv-title-dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulse 2s infinite}
+.manv-body{padding:20px 24px;flex:1}
+.manv-field label{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:5px}
+.manv-field input,.manv-field select,.manv-field textarea{width:100%;padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;font-family:'IBM Plex Sans',sans-serif;outline:none;transition:border-color .15s}
+.manv-field input:focus,.manv-field select:focus,.manv-field textarea:focus{border-color:var(--red-border);box-shadow:0 0 0 3px var(--red-bg)}
+.manv-field textarea{resize:vertical;min-height:72px}
+.manv-search-wrap{position:relative}
+.manv-search-input{width:100%;padding:10px 14px 10px 38px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:9px;color:var(--text);font-size:13px;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;outline:none}
+.manv-search-input:focus{border-color:var(--red-border);box-shadow:0 0 0 3px var(--red-bg)}
+.manv-search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--text3);pointer-events:none}
+.manv-dropdown{background:var(--bg3);border:1.5px solid var(--border2);border-radius:9px;max-height:220px;overflow-y:auto;display:none;margin-top:4px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.manv-dropdown-item{padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px;transition:background .12s}
+.manv-dropdown-item:hover{background:var(--bg4)}
+.manv-dropdown-item:last-child{border-bottom:none}
+.manv-selected-box{background:var(--bg4);border:1.5px solid var(--border2);border-radius:9px;padding:10px 14px;margin-top:6px;display:none;align-items:center;gap:10px}
+.manv-selected-box.show{display:flex}
+.manv-saldo-bar{background:var(--bg4);border:1.5px solid var(--red-border);border-radius:9px;padding:12px 14px;margin:10px 0;display:none}
+.manv-saldo-bar.show{display:block}
+.manv-motivo-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.manv-motivo-btn{padding:8px 12px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;transition:all .15s;font-family:'IBM Plex Sans',sans-serif;text-align:center}
+.manv-motivo-btn:hover{border-color:var(--red-border);color:var(--red2)}
+.manv-motivo-btn.active{border-color:var(--red-border);background:var(--red-bg);color:var(--red);box-shadow:0 0 12px rgba(255,68,68,.15)}
+.manv-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;flex-shrink:0;background:var(--bg2);border-radius:0 0 18px 18px;position:sticky;bottom:0}
+.btn-anulacao-registrar{flex:1;padding:11px 20px;border-radius:9px;font-size:13px;font-weight:800;border:2px solid var(--red-border);background:var(--red-bg);color:var(--red);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;letter-spacing:.04em;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-anulacao-registrar:hover{background:rgba(255,68,68,.18);box-shadow:0 0 18px rgba(255,68,68,.2);transform:translateY(-1px)}
+.btn-anulacao-limpar{padding:11px 18px;border-radius:9px;font-size:12px;font-weight:700;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .15s;display:flex;align-items:center;gap:6px}
+.btn-anulacao-limpar:hover{border-color:var(--border3);color:var(--text2)}
+</style>
+
+<div id="modal-anulacao-novo">
+  <div id="modal-anulacao-novo-inner">
+    <div class="manv-header">
+      <div class="manv-title">
+        <span class="manv-title-dot"></span>
+        ➖ ANULAÇÃO DE SALDO DE EMPENHO
+      </div>
+      <button onclick="fecharModalAnulacaoNovo()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:20px;padding:4px 8px;border-radius:6px;transition:all .15s" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">×</button>
+    </div>
+
+    <div class="manv-body">
+      <!-- Seleção de empenho -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">
+          Selecionar Empenho <span style="color:var(--red)">*</span>
+        </div>
+        <div class="manv-search-wrap">
+          <span class="manv-search-icon">🔍</span>
+          <input type="text" class="manv-search-input" id="manv-emp-busca"
+            placeholder="Digite número, categoria ou fornecedor..."
+            oninput="manvFiltrarEmpenhos()"
+            onfocus="manvAbrirDropdown()">
+        </div>
+        <div class="manv-dropdown" id="manv-emp-dropdown"></div>
+        <div class="manv-selected-box" id="manv-emp-selecionado"></div>
+        <input type="hidden" id="manv-emp-id">
+      </div>
+
+      <!-- Saldo disponível -->
+      <div class="manv-saldo-bar" id="manv-saldo-info"></div>
+
+      <!-- Motivo da anulação -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">
+          Motivo da Anulação <span style="color:var(--red)">*</span>
+        </div>
+        <div class="manv-motivo-grid">
+          <button class="manv-motivo-btn" id="manv-mot-Correção" onclick="manvSetMotivo('Correção')">✏️ Correção</button>
+          <button class="manv-motivo-btn" id="manv-mot-Cancelamento" onclick="manvSetMotivo('Cancelamento')">🚫 Cancelamento</button>
+          <button class="manv-motivo-btn" id="manv-mot-Remanejamento" onclick="manvSetMotivo('Remanejamento')">🔀 Remanejamento</button>
+          <button class="manv-motivo-btn" id="manv-mot-Outros" onclick="manvSetMotivo('Outros')">📋 Outros</button>
+        </div>
+        <input type="hidden" id="manv-motivo">
+      </div>
+
+      <!-- Dados quantitativos -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+        <div class="manv-field">
+          <label>💰 Valor a Anular (R$) <span style="color:var(--red)">*</span></label>
+          <input type="number" id="manv-valor" min="0.01" step="0.01" placeholder="0,00" oninput="manvValidarValor()">
+        </div>
+        <div class="manv-field">
+          <label>📅 Data <span style="color:var(--red)">*</span></label>
+          <input type="date" id="manv-data">
+        </div>
+        <div class="manv-field">
+          <label>📄 Nº Processo / Justificativa</label>
+          <input type="text" id="manv-processo" placeholder="Ex: 23218.001234/2026-01">
+        </div>
+      </div>
+
+      <!-- Alerta de saldo -->
+      <div id="manv-alerta-saldo" style="display:none;background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--red);margin-bottom:10px">
+        ⚠ Valor superior ao saldo disponível do empenho.
+      </div>
+
+      <!-- Descrição e observações -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="manv-field">
+          <label>📝 Descrição / Justificativa <span style="color:var(--red)">*</span></label>
+          <textarea id="manv-desc" placeholder="Descreva detalhadamente o motivo da anulação (obrigatório)"></textarea>
+        </div>
+        <div class="manv-field">
+          <label>💬 Observações</label>
+          <textarea id="manv-obs" placeholder="Informações complementares (opcional)"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="manv-footer">
+      <button class="btn-anulacao-registrar" onclick="registrarAnulacaoNovo()">
+        ↩ Registrar Anulação
+      </button>
+      <button class="btn-anulacao-limpar" onclick="limparModalAnulacaoNovo()">
+        ↺ Limpar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════ MÓDULO ANULAÇÃO DE EMPENHO (NOVO MODAL) ════════
+
+let _manvDropdownAberto = false;
+let _manvSaldoAtual = 0;
+
+// Calcula saldo real do empenho considerando valorInicial do cadastro + lançamentos + reforços - anulações - liquidações
+function manvCalcSaldo(e){
+  if(!e) return 0;
+  const t = calcEmpenhoTotais(e.id, e.numero);
+  // Se há lançamentos (totalEmp > 0), usa calcEmpenhoTotais que já considera tudo
+  if(t.totalEmp > 0) return Math.max(0, t.saldo);
+  // Fallback: empenho cadastrado mas sem lançamentos ainda — usa valorInicial
+  const vi = e.valorInicial || 0;
+  const anulacoes = sum((state.lancamentos||[]).filter(l=>
+    l.status==='Ativo' && l.tipo==='Anulação' &&
+    (l.empenhoCadId===e.id || l.referencia===e.numero)
+  ));
+  const liqFeitas = totalLiquidadoPorEmpenho(e.numero);
+  return Math.max(0, vi - anulacoes - liqFeitas);
+}
+
+function abrirModalAnulacaoNovo(){
+  const modal = document.getElementById('modal-anulacao-novo');
+  if(!modal) return;
+  limparModalAnulacaoNovo();
+  document.getElementById('manv-data').value = new Date().toISOString().slice(0,10);
+  modal.classList.add('show');
+}
+
+function fecharModalAnulacaoNovo(){
+  const modal = document.getElementById('modal-anulacao-novo');
+  if(modal) modal.classList.remove('show');
+}
+
+document.getElementById('modal-anulacao-novo').addEventListener('click', function(e){
+  // Fechamento apenas pelo botão X ou botão Limpar/Registrar — NÃO por clique no backdrop
+});
+
+document.addEventListener('click', function(e){
+  const inp = document.getElementById('manv-emp-busca');
+  const dd = document.getElementById('manv-emp-dropdown');
+  if(dd && inp && !inp.contains(e.target) && !dd.contains(e.target)){
+    dd.style.display = 'none';
+    _manvDropdownAberto = false;
+  }
+});
+
+function manvAbrirDropdown(){
+  _manvDropdownAberto = true;
+  manvFiltrarEmpenhos();
+}
+
+function manvFiltrarEmpenhos(){
+  const busca = (document.getElementById('manv-emp-busca')?.value || '').toLowerCase();
+  const dd = document.getElementById('manv-emp-dropdown');
+  if(!dd) return;
+
+  // Calcula saldo real usando calcEmpenhoTotais (considera valorInicial + lançamentos)
+  // Exibe empenhos com saldo > 0 (com ou sem liquidações)
+  const empenhos = (state.empenhosCad || []).filter(e => {
+    if(e.status === 'Excluído') return false;
+    const t = calcEmpenhoTotais(e.id, e.numero);
+    // Saldo = (valorInicial ou lançamentos) − anulações − liquidado
+    const saldoReal = manvCalcSaldo(e);
+    if(saldoReal <= 0.001) return false;
+    if(!busca) return true;
+    return (e.numero||'').toLowerCase().includes(busca)
+      || (e.categoria||'').toLowerCase().includes(busca)
+      || (e.fornNome||'').toLowerCase().includes(busca);
+  }).slice(0, 40);
+
+  if(!empenhos.length){
+    dd.style.display = 'block';
+    dd.innerHTML = '<div style="padding:12px 14px;font-size:12px;color:var(--text3)">Nenhum empenho com saldo disponível encontrado</div>';
+    return;
+  }
+
+  dd.style.display = 'block';
+  dd.innerHTML = empenhos.map(e => {
+    const saldo = manvCalcSaldo(e);
+    const t = calcEmpenhoTotais(e.id, e.numero);
+    const sc = saldo < 500 ? 'var(--amber)' : 'var(--green)';
+    const badge = e.tipoEmp === 'RAP'
+      ? '<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;flex-shrink:0">RAP</span>'
+      : '<span style="background:rgba(68,138,255,.12);color:var(--blue);border:1px solid rgba(68,138,255,.3);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;flex-shrink:0">EXE</span>';
+    const hasReforco = t.reforcos > 0
+      ? '<span style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;margin-left:4px">➕ RF</span>' : '';
+    return `<div class="manv-dropdown-item" onclick="manvSelecionarEmpenho('${e.id}')">
+      ${badge}
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text)">${e.numero}${hasReforco}</div>
+        <div style="font-size:10.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${catIcon(e.categoria)} ${e.categoria}${e.fornNome?' · '+e.fornNome:''}</div>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:${sc};white-space:nowrap">Saldo: ${fmtBR(saldo)}</div>
+    </div>`;
+  }).join('');
+}
+
+function manvSelecionarEmpenho(id){
+  const e = (state.empenhosCad || []).find(x => x.id === id);
+  if(!e) return;
+
+  document.getElementById('manv-emp-id').value = id;
+  document.getElementById('manv-emp-dropdown').style.display = 'none';
+  _manvDropdownAberto = false;
+
+  const inp = document.getElementById('manv-emp-busca');
+  if(inp) inp.value = e.numero + (e.fornNome ? ' — ' + e.fornNome : '');
+
+  const saldo = manvCalcSaldo(e);
+  _manvSaldoAtual = saldo;
+  const t = calcEmpenhoTotais(e.id, e.numero);
+  const sc = saldo <= 0 ? 'var(--red)' : saldo < 1000 ? 'var(--amber)' : 'var(--green)';
+  const badge = e.tipoEmp === 'RAP'
+    ? '<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700">RAP</span>'
+    : '<span style="background:rgba(68,138,255,.12);color:var(--blue);border:1px solid rgba(68,138,255,.3);padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700">EXE</span>';
+
+  const selBox = document.getElementById('manv-emp-selecionado');
+  selBox.innerHTML = `
+    ${badge}
+    <div style="flex:1;min-width:0">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--text)">${e.numero}</span>
+      <span style="font-size:11px;color:var(--text3);margin-left:8px">${catIcon(e.categoria)} ${e.categoria}</span>
+      ${e.fornNome?`<span style="font-size:11px;color:var(--text3);margin-left:6px">· ${e.fornNome}</span>`:''}
+    </div>
+    <button onclick="manvLimparSelecao()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:2px 6px">×</button>`;
+  selBox.classList.add('show');
+
+  // Saldo info
+  const infoEl = document.getElementById('manv-saldo-info');
+  infoEl.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:700;color:var(--text)">⚡ ${e.numero} · ${e.categoria}</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:700;color:${sc}">${fmtBR(saldo)} <span style="font-size:10px;color:var(--text3);font-weight:400">disponível para anular</span></div>
+    </div>
+    <div style="height:6px;background:var(--bg5);border-radius:6px;overflow:hidden;margin-bottom:6px">
+      <div style="height:100%;border-radius:6px;background:${sc};width:${t.totalEmp>0?Math.min(100,Math.round(saldo/t.totalEmp*100)):0}%;transition:width .4s"></div>
+    </div>
+    <div style="font-size:10.5px;color:var(--text3)">
+      Empenhado: <strong style="color:var(--text2)">${fmtBR(t.totalEmp)}</strong>
+      ${t.reforcos>0?' · Reforços: <strong style="color:var(--green)">'+fmtBR(t.reforcos)+'</strong>':''}
+      ${t.anulacoes>0?' · Já anulado: <strong style="color:var(--amber)">'+fmtBR(t.anulacoes)+'</strong>':''}
+      · Liquidado: <strong style="color:var(--text2)">${fmtBR(t.liquidado)}</strong>
+    </div>`;
+  infoEl.classList.add('show');
+}
+
+function manvLimparSelecao(){
+  document.getElementById('manv-emp-id').value = '';
+  document.getElementById('manv-emp-busca').value = '';
+  const selBox = document.getElementById('manv-emp-selecionado');
+  selBox.innerHTML = ''; selBox.classList.remove('show');
+  const info = document.getElementById('manv-saldo-info');
+  info.innerHTML = ''; info.classList.remove('show');
+  _manvSaldoAtual = 0;
+  document.getElementById('manv-alerta-saldo').style.display = 'none';
+}
+
+function manvSetMotivo(motivo){
+  document.getElementById('manv-motivo').value = motivo;
+  ['Correção','Cancelamento','Remanejamento','Outros'].forEach(m => {
+    const btn = document.getElementById('manv-mot-'+m);
+    if(btn) btn.className = 'manv-motivo-btn' + (m===motivo?' active':'');
+  });
+}
+
+function manvValidarValor(){
+  const val = parseFloat(document.getElementById('manv-valor')?.value) || 0;
+  const alerta = document.getElementById('manv-alerta-saldo');
+  if(alerta) alerta.style.display = (_manvSaldoAtual > 0 && val > _manvSaldoAtual + 0.01) ? 'block' : 'none';
+}
+
+function limparModalAnulacaoNovo(){
+  manvLimparSelecao();
+  manvSetMotivo('');
+  document.getElementById('manv-motivo').value = '';
+  ['Correção','Cancelamento','Remanejamento','Outros'].forEach(m=>{
+    const btn=document.getElementById('manv-mot-'+m);
+    if(btn) btn.className='manv-motivo-btn';
+  });
+  ['manv-valor','manv-processo','manv-desc','manv-obs'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('manv-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('manv-emp-dropdown').style.display = 'none';
+  document.getElementById('manv-alerta-saldo').style.display = 'none';
+}
+
+function registrarAnulacaoNovo(){
+  const empCadId = document.getElementById('manv-emp-id').value;
+  if(!empCadId){ toast('Selecione um empenho','warn'); return; }
+  const empCad = (state.empenhosCad||[]).find(e=>e.id===empCadId);
+  if(!empCad){ toast('Empenho não encontrado','error'); return; }
+
+  const motivo = document.getElementById('manv-motivo').value;
+  if(!motivo){ toast('Selecione o motivo da anulação','warn'); return; }
+
+  const valor = parseFloat(document.getElementById('manv-valor').value) || 0;
+  const data = document.getElementById('manv-data').value;
+  const desc = document.getElementById('manv-desc').value.trim();
+  const obs = document.getElementById('manv-obs').value.trim();
+  const processo = document.getElementById('manv-processo').value.trim();
+
+  if(!valor||valor<=0){ toast('Valor deve ser maior que zero','warn'); return; }
+  if(!data){ toast('Data obrigatória','warn'); return; }
+  if(!desc){ toast('Descrição/Justificativa obrigatória','warn'); return; }
+
+  const saldoDisp = manvCalcSaldo(empCad);
+  if(valor > saldoDisp + 0.01){
+    toast('Valor de anulação ('+fmtBR(valor)+') excede o saldo disponível ('+fmtBR(saldoDisp)+')','warn');
+    return;
+  }
+
+  const l = {
+    id: shortId('AN'),
+    tipo: 'Anulação',
+    tipoRegistro: 'ANULACAO',
+    tipoRecurso: empCad.tipoEmp || 'EXE',
+    categoria: empCad.categoria,
+    subcategoria: '',
+    descricao: 'ANULAÇÃO ['+motivo+']: '+desc,
+    valor, data,
+    motivo,
+    observacoes: obs,
+    referencia: processo || empCad.numero,
+    referenciaId: empCadId,
+    empenhoCadId: empCadId,
+    numeroEmpenho: empCad.numero,
+    fonte: empCad.fonte||'',
+    ptres: empCad.ptres||'',
+    nd: empCad.nd||'',
+    fornNome: empCad.fornNome||'',
+    status: 'Ativo',
+    ts: new Date().toISOString()
+  };
+
+  state.lancamentos.push(l);
+  auditLog('CREATE','LANCAMENTO',l.id,
+    '[ANULAÇÃO]['+motivo+'] '+empCad.numero+' · '+empCad.categoria+' · '+fmtBR(valor), l);
+
+  salvar();
+  fecharModalAnulacaoNovo();
+  renderCadastroEmpenhos();
+  if(typeof renderSidebar==='function') renderSidebar();
+  if(typeof renderDashboard==='function') renderDashboard();
+  if(typeof renderEntradas==='function') renderEntradas();
+  if(typeof renderCatGrid==='function') renderCatGrid();
+  if(typeof renderAnulacoes==='function') renderAnulacoes();
+
+  toast('↩ Anulação de '+fmtBR(valor)+' registrada no empenho '+empCad.numero+'!','warn');
+}
+</script>
+
+<!-- ════════ MODAL EDIÇÃO COMPLETA DE EMPENHO INICIAL ════════ -->
+<style>
+#modal-edit-empenho{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:500;opacity:0;pointer-events:none;transition:opacity .22s}
+#modal-edit-empenho.show{opacity:1;pointer-events:all}
+#modal-edit-empenho-inner{background:var(--bg2);border:1px solid var(--blue-border);border-radius:18px;width:95%;max-width:780px;max-height:93vh;overflow-y:auto;box-shadow:0 16px 64px rgba(68,138,255,.15);display:flex;flex-direction:column}
+.mee-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg2);z-index:2;border-radius:18px 18px 0 0;flex-shrink:0}
+.mee-title{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--blue);display:flex;align-items:center;gap:8px}
+.mee-body{padding:20px 24px;flex:1}
+.mee-section{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.14em;text-transform:uppercase;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.mee-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.mee-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px}
+.mee-field label{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;display:block;margin-bottom:5px}
+.mee-field input,.mee-field select,.mee-field textarea{width:100%;padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border2);border-radius:8px;color:var(--text);font-size:13px;font-family:'IBM Plex Sans',sans-serif;outline:none;transition:border-color .15s}
+.mee-field input:focus,.mee-field select:focus,.mee-field textarea:focus{border-color:var(--blue-border);box-shadow:0 0 0 3px var(--blue-bg)}
+.mee-tipo-card{border-radius:10px;padding:10px 14px;border:2px solid var(--border2);background:var(--bg4);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:10px}
+.mee-footer{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;position:sticky;bottom:0;background:var(--bg2);border-radius:0 0 18px 18px;flex-shrink:0}
+.btn-mee-salvar{flex:1;padding:11px;border-radius:9px;font-size:13px;font-weight:800;border:2px solid var(--blue-border);background:var(--blue-bg);color:var(--blue);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .18s}
+.btn-mee-salvar:hover{background:rgba(68,138,255,.18);box-shadow:0 0 18px rgba(68,138,255,.2);transform:translateY(-1px)}
+.btn-mee-cancelar{padding:11px 18px;border-radius:9px;font-size:12px;font-weight:700;border:1.5px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .15s}
+.btn-mee-cancelar:hover{border-color:var(--border3);color:var(--text2)}
+</style>
+
+<div id="modal-edit-empenho">
+  <div id="modal-edit-empenho-inner">
+    <div class="mee-header">
+      <div>
+        <div class="mee-title">✎ Editar Empenho Inicial</div>
+        <div id="mee-context" style="margin-top:4px"></div>
+      </div>
+      <button onclick="fecharModalEditarEmpenho()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:20px;padding:4px 8px;border-radius:6px;transition:background .15s" onmouseover="this.style.background='var(--bg4)'" onmouseout="this.style.background=''">×</button>
+    </div>
+    <input type="hidden" id="mee-id">
+
+    <div class="mee-body">
+      <!-- Tipo de Empenho -->
+      <div class="mee-section">Tipo de Empenho</div>
+      <div class="mee-grid2" style="margin-bottom:18px">
+        <label class="mee-tipo-card" id="mee-card-exe" onclick="document.getElementById('mee-tipo-exe').checked=true;meeAtualizarTipo()" style="border-color:var(--blue-border);background:var(--blue-bg)">
+          <input type="radio" name="mee-tipo" id="mee-tipo-exe" value="EXE" checked style="display:none">
+          <span style="font-size:22px">📅</span>
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--blue)">EXE</div>
+            <div style="font-size:10px;color:var(--text3)">Exercício Corrente</div>
+          </div>
+        </label>
+        <label class="mee-tipo-card" id="mee-card-rap" onclick="document.getElementById('mee-tipo-rap').checked=true;meeAtualizarTipo()" style="border-color:var(--border2);background:var(--bg4)">
+          <input type="radio" name="mee-tipo" id="mee-tipo-rap" value="RAP" style="display:none">
+          <span style="font-size:22px">🗂️</span>
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;color:var(--purple)">RAP</div>
+            <div style="font-size:10px;color:var(--text3)">Restos a Pagar</div>
+          </div>
+        </label>
+      </div>
+
+      <!-- Identificação -->
+      <div class="mee-section">Identificação</div>
+      <div class="mee-grid3">
+        <div class="mee-field">
+          <label>Nº Empenho <span style="color:var(--red)">*</span></label>
+          <input type="text" id="mee-numero" placeholder="Ex: 2026NE000123" style="font-family:'IBM Plex Mono',monospace;font-weight:700">
+        </div>
+        <div class="mee-field">
+          <label>Data <span style="color:var(--red)">*</span></label>
+          <input type="date" id="mee-data">
+        </div>
+        <div class="mee-field">
+          <label>Competência <span style="color:var(--red)">*</span></label>
+          <select id="mee-comp"></select>
+        </div>
+      </div>
+
+      <!-- Categoria e Fornecedor -->
+      <div class="mee-grid2">
+        <div class="mee-field">
+          <label>Categoria <span style="color:var(--red)">*</span></label>
+          <select id="mee-categoria"></select>
+        </div>
+        <div class="mee-field">
+          <label>Fornecedor</label>
+          <input type="text" id="mee-fornNome" placeholder="Nome do fornecedor">
+        </div>
+      </div>
+
+      <!-- Financeiro -->
+      <div class="mee-section">Dados Financeiros</div>
+      <div class="mee-grid3">
+        <div class="mee-field">
+          <label>Valor Inicial (R$) <span style="color:var(--red)">*</span></label>
+          <input type="number" id="mee-valor" min="0.01" step="0.01" placeholder="0,00">
+        </div>
+        <div class="mee-field">
+          <label>Fonte de Recurso <span style="color:var(--red)">*</span></label>
+          <select id="mee-fonte"></select>
+        </div>
+        <div class="mee-field">
+          <label>PTRES <span style="color:var(--red)">*</span></label>
+          <select id="mee-ptres"></select>
+        </div>
+      </div>
+
+      <!-- Classificação -->
+      <div class="mee-section">Classificação</div>
+      <div class="mee-grid3">
+        <div class="mee-field">
+          <label>Natureza da Despesa (ND)</label>
+          <input type="text" id="mee-nd" placeholder="Ex: 33903702">
+        </div>
+        <div class="mee-field">
+          <label>Plano Interno (PI)</label>
+          <input type="text" id="mee-pi" placeholder="Opcional">
+        </div>
+        <div class="mee-field">
+          <label>Subcategoria</label>
+          <input type="text" id="mee-subcat" placeholder="Opcional">
+        </div>
+      </div>
+
+      <!-- Descrição -->
+      <div class="mee-section">Descrição e Observações</div>
+      <div class="mee-grid2">
+        <div class="mee-field">
+          <label>Descrição</label>
+          <input type="text" id="mee-desc" placeholder="Descrição do empenho">
+        </div>
+        <div class="mee-field">
+          <label>Observações</label>
+          <input type="text" id="mee-obs" placeholder="Opcional">
+        </div>
+      </div>
+    </div>
+
+    <div class="mee-footer">
+      <button class="btn-mee-salvar" onclick="salvarEdicaoEmpenho()">✓ Salvar Alterações</button>
+      <button class="btn-mee-cancelar" onclick="fecharModalEditarEmpenho()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('modal-edit-empenho').addEventListener('click',function(e){
+  // Fechamento apenas pelo botão Cancelar ou X — NÃO por clique no backdrop
 });
 </script>
 
