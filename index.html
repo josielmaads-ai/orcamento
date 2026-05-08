@@ -19,6 +19,8 @@
   --amber:#ffab40;--amber2:#ffc26a;--amber-bg:rgba(255,171,64,.08);--amber-border:rgba(255,171,64,.25);
   --purple:#aa66ff;--purple2:#cc99ff;--purple-bg:rgba(170,102,255,.08);--purple-border:rgba(170,102,255,.25);
   --teal:#00e5cc;--cyan:#00cfff;
+  --exe:#00a651;--exe2:#33c67a;--exe-bg:rgba(0,166,81,.10);--exe-border:rgba(0,166,81,.35);
+  --rap-m:#8b2466;--rap-m2:#b83d8a;--rap-bg:rgba(139,36,102,.10);--rap-border:rgba(139,36,102,.35);
   --accent-teal:rgba(0,229,204,.08);
   --radius:6px;--radius-lg:10px;--radius-xl:16px;
   --shadow:0 12px 48px rgba(0,0,0,.8);--shadow-sm:0 4px 20px rgba(0,0,0,.6);
@@ -106,15 +108,15 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .card-title-dot{width:5px;height:5px;border-radius:50%;background:var(--border3)}
 
 /* ═══ KPI GRID ═══ */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-bottom:22px}
-.kpi{background:var(--bg3);border:1px solid var(--border2);border-radius:16px;padding:20px 26px 18px;position:relative;overflow:hidden;transition:all .22s cubic-bezier(.34,1.2,.64,1);box-shadow:0 4px 24px rgba(0,0,0,.45);min-width:0;min-height:120px;display:flex;flex-direction:column;justify-content:space-between;cursor:default}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;margin-bottom:22px}
+.kpi{background:var(--bg3);border:1px solid var(--border2);border-radius:14px;padding:16px 22px 14px;position:relative;overflow:hidden;transition:all .22s cubic-bezier(.34,1.2,.64,1);box-shadow:0 4px 24px rgba(0,0,0,.45);min-width:0;min-height:100px;display:flex;flex-direction:column;justify-content:space-between;cursor:default}
 .kpi:hover{border-color:var(--kpi-accent,var(--border3));transform:translateY(-4px) scale(1.012);box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 0 1px var(--kpi-accent,transparent)}
 .kpi::after{content:'';position:absolute;top:-30px;right:-30px;width:110px;height:110px;border-radius:50%;background:var(--kpi-accent,transparent);opacity:.07;filter:blur(28px);pointer-events:none;transition:opacity .22s}
 .kpi:hover::after{opacity:.14}
 .kpi::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:var(--kpi-accent,var(--border2));border-radius:16px 0 0 16px}
 .kpi.accent-green{--kpi-accent:var(--green)}.kpi.accent-red{--kpi-accent:var(--red)}.kpi.accent-gold{--kpi-accent:var(--gold)}.kpi.accent-blue{--kpi-accent:var(--blue)}.kpi.accent-amber{--kpi-accent:var(--amber)}.kpi.accent-purple{--kpi-accent:var(--purple)}.kpi.accent-teal{--kpi-accent:var(--teal)}.kpi.accent-cyan{--kpi-accent:var(--cyan)}
 .kpi-label{font-size:11px;color:var(--text3);font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:6px;letter-spacing:.06em;text-transform:uppercase;flex-wrap:wrap;line-height:1.3}
-.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:clamp(22px,2.6vw,36px);font-weight:700;margin-bottom:8px;line-height:1.15;word-break:break-word;overflow-wrap:anywhere;white-space:normal;letter-spacing:-.02em}
+.kpi-value{font-family:'IBM Plex Mono',monospace;font-size:clamp(18px,2.2vw,30px);font-weight:700;margin-bottom:8px;line-height:1.15;word-break:break-word;overflow-wrap:anywhere;white-space:normal;letter-spacing:-.02em}
 .kpi-sub{font-size:13px;color:var(--text3);margin-top:auto;padding-top:7px;border-top:1px solid var(--border)}
 .kpi-badge{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:700;white-space:nowrap;letter-spacing:.03em}
 .badge-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
@@ -181,8 +183,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 .saida-tipo-btn{min-height:42px;padding:9px 16px;border-radius:8px;font-size:12px;font-weight:800;border:1px solid var(--border2);background:var(--bg3);cursor:pointer;color:var(--text2);display:inline-flex;align-items:center;gap:8px;letter-spacing:.02em;transition:all .15s}
 .saida-tipo-btn:hover{transform:translateY(-1px);border-color:var(--gold);color:var(--gold)}
 .saida-tipo-btn.saida-tipo-active{background:var(--gold-bg);border-color:var(--gold-border);color:var(--gold);box-shadow:var(--glow-gold)}
-.saida-tipo-btn.tipo-exe{border-color:var(--blue-border);background:var(--blue-bg);color:var(--blue)}
-.saida-tipo-btn.tipo-rap{border-color:var(--purple-border);background:var(--purple-bg);color:var(--purple)}
+.saida-tipo-btn.tipo-exe{border-color:var(--exe-border);background:var(--exe-bg);color:var(--exe);font-weight:800}
+.saida-tipo-btn.tipo-rap{border-color:var(--rap-border);background:var(--rap-bg);color:var(--rap-m);font-weight:800}
 .saida-tipo-ico{font-size:16px;line-height:1}
 
 /* ═══ CAT GRID ═══ */
@@ -214,6 +216,22 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 
 /* ═══ TABLES ═══ */
 .tbl-wrap{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:18px;overflow:hidden}
+
+/* ═══ NÚMERO DO EMPENHO — alta visibilidade ═══ */
+.emp-num-exe{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:15px;font-weight:800;
+  color:var(--exe2);
+  letter-spacing:.03em;
+  text-shadow:0 0 14px rgba(51,198,122,.5);
+}
+.emp-num-rap{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:15px;font-weight:800;
+  color:var(--rap-m2);
+  letter-spacing:.03em;
+  text-shadow:0 0 14px rgba(184,61,138,.5);
+}
 .tbl-head{display:flex;justify-content:space-between;align-items:center;padding:13px 20px;border-bottom:1px solid var(--border);background:var(--bg4)}
 .tbl-title{font-size:11.5px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase}
 .tbl-count{font-size:11px;color:var(--text3)}
@@ -678,8 +696,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
           <span style="font-size:10px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap">Tipo:</span>
           <button id="saida-f-tipo-all" onclick="saidaFiltroTipo('')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;letter-spacing:.03em;transition:all .15s">◉ Todos</button>
-          <button id="saida-f-tipo-exe" onclick="saidaFiltroTipo('EXE')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">◆ EXE — Exercício</button>
-          <button id="saida-f-tipo-rap" onclick="saidaFiltroTipo('RAP')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">▣ RAP — Restos a Pagar</button>
+          <button id="saida-f-tipo-exe" onclick="saidaFiltroTipo('EXE')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--exe-border);background:var(--exe-bg);color:var(--exe);cursor:pointer;letter-spacing:.03em;transition:all .15s">◆ EXE — Exercício</button>
+          <button id="saida-f-tipo-rap" onclick="saidaFiltroTipo('RAP')" type="button" style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;border:2px solid var(--rap-border);background:var(--rap-bg);color:var(--rap-m);cursor:pointer;letter-spacing:.03em;transition:all .15s">▣ RAP — Restos a Pagar</button>
           <input type="hidden" id="saida-f-tipo-val" value="">
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px">
@@ -838,9 +856,9 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         <!-- Card EXE -->
         <div id="card-tipo-exe" onclick="selecionarTipoEmpenho('EXE')" style="
           cursor:pointer;border-radius:12px;padding:16px 18px;
-          border:2px solid var(--blue-border);
-          background:var(--blue-bg);
-          box-shadow:0 0 0 3px rgba(68,138,255,.18),0 4px 18px rgba(0,0,0,.35);
+          border:2px solid var(--exe-border);
+          background:var(--exe-bg);
+          box-shadow:0 0 0 3px rgba(0,166,81,.20),0 4px 18px rgba(0,0,0,.35);
           transition:all .18s cubic-bezier(.34,1.2,.64,1);
           position:relative;overflow:hidden;
         ">
@@ -848,13 +866,13 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
             <div style="font-size:26px;line-height:1">📅</div>
             <div>
-              <div id="card-exe-title" style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--blue);letter-spacing:.04em">EXE</div>
+              <div id="card-exe-title" style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--exe);letter-spacing:.04em">EXE</div>
               <div style="font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-top:1px">Exercício Corrente</div>
             </div>
-            <div id="card-exe-check" style="margin-left:auto;width:20px;height:20px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700;flex-shrink:0">✓</div>
+            <div id="card-exe-check" style="margin-left:auto;width:20px;height:20px;border-radius:50%;background:var(--exe);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700;flex-shrink:0">✓</div>
           </div>
           <div style="font-size:11.5px;color:var(--text2);line-height:1.55">Empenho vinculado ao <strong style="color:var(--blue)">ano corrente</strong>. Impacta normalmente créditos, saldo e indicadores do exercício.</div>
-          <div style="margin-top:8px;font-size:10px;color:var(--blue);background:rgba(68,138,255,.1);border-radius:6px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px">
+          <div style="margin-top:8px;font-size:10px;color:var(--exe);background:var(--exe-bg);border-radius:6px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px">
             ✦ Computa no Dashboard EXE
           </div>
         </div>
@@ -867,7 +885,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
           transition:all .18s cubic-bezier(.34,1.2,.64,1);
           position:relative;overflow:hidden;
         ">
-          <div style="position:absolute;top:-18px;right:-18px;width:64px;height:64px;border-radius:50%;background:var(--purple);opacity:.05;filter:blur(14px);pointer-events:none"></div>
+          <div style="position:absolute;top:-18px;right:-18px;width:64px;height:64px;border-radius:50%;background:var(--rap-m);opacity:.05;filter:blur(14px);pointer-events:none"></div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
             <div style="font-size:26px;line-height:1">🗂️</div>
             <div>
@@ -877,7 +895,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
             <div id="card-rap-check" style="margin-left:auto;width:20px;height:20px;border-radius:50%;background:var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text4);font-weight:700;flex-shrink:0">○</div>
           </div>
           <div style="font-size:11.5px;color:var(--text3);line-height:1.55">Pendências de <strong style="color:var(--text2)">anos anteriores</strong>. Não afeta créditos do exercício — controle e saldo segregados.</div>
-          <div style="margin-top:8px;font-size:10px;color:var(--purple);background:var(--purple-bg);border-radius:6px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px">
+          <div style="margin-top:8px;font-size:10px;color:var(--rap-m);background:var(--rap-bg);border-radius:6px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px">
             🗃 Painel RAP independente
           </div>
         </div>
@@ -933,8 +951,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         <input type="hidden" id="cemp-f-op-val" value="">
         <span style="font-size:11px;color:var(--text3);font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;margin-left:12px">Tipo:</span>
         <button id="cemp-f-tipo-all" onclick="cempFiltroTipo('')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--gold-border);background:var(--gold-bg);color:var(--gold);cursor:pointer;letter-spacing:.03em;transition:all .15s">◉ Todos</button>
-        <button id="cemp-f-tipo-EXE" onclick="cempFiltroTipo('EXE')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">◆ EXE</button>
-        <button id="cemp-f-tipo-RAP" onclick="cempFiltroTipo('RAP')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--border2);background:var(--bg3);color:var(--text3);cursor:pointer;letter-spacing:.03em;transition:all .15s">▣ RAP</button>
+        <button id="cemp-f-tipo-EXE" onclick="cempFiltroTipo('EXE')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--exe-border);background:var(--exe-bg);color:var(--exe);cursor:pointer;letter-spacing:.03em;transition:all .15s">◆ EXE</button>
+        <button id="cemp-f-tipo-RAP" onclick="cempFiltroTipo('RAP')" type="button" style="padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;border:2px solid var(--rap-border);background:var(--rap-bg);color:var(--rap-m);cursor:pointer;letter-spacing:.03em;transition:all .15s">▣ RAP</button>
         <input type="hidden" id="cemp-f-tipo-val" value="">
       </div>
       <!-- Busca global -->
@@ -1495,7 +1513,19 @@ function renderPagination(modulo,totalPgs,pg,total,fnRender){
 function salvar(){
   state.meta.lastSaved=new Date().toISOString();
   try{
-    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
+    // ★ VALIDAÇÃO DE INTEGRIDADE: garantir que todos os módulos estão presentes antes de salvar
+    if(!Array.isArray(state.lancamentos))state.lancamentos=[];
+    if(!Array.isArray(state.empenhosCad))state.empenhosCad=[];
+    if(!Array.isArray(state.liquidacoes))state.liquidacoes=[];
+    if(!Array.isArray(state.contratos))state.contratos=[];
+    if(!Array.isArray(state.acoes))state.acoes=[];
+    if(!Array.isArray(state.fornecedores))state.fornecedores=[];
+    if(!Array.isArray(state.contratosPnae))state.contratosPnae=[];
+    if(!Array.isArray(state.auditLog))state.auditLog=[];
+    const json=JSON.stringify(state);
+    // Validar que o JSON gerado é parseável (previne corrupção)
+    JSON.parse(json);
+    localStorage.setItem(STORAGE_KEY,json);
     const t=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('save-text').textContent='Salvo às '+t;
   }catch(e){toast('Erro ao salvar! localStorage cheio?','error')}
@@ -1673,6 +1703,31 @@ function carregar(){
       });
       if(_syncVI>0)
         console.info('Migração: valorInicial sincronizado para '+_syncVI+' empenho(s) cadastrados.');
+
+      // ── Migração AE: propagar acaoId de empenhosCad para lançamentos vinculados
+      // Após ajustes, lançamentos de AE podem ter perdido o vínculo referenciaId → acaoId.
+      // Percorre empenhosCad que têm acaoId e propaga para todos os lançamentos filhos.
+      let _aeVinc=0;
+      (state.empenhosCad||[]).forEach(e=>{
+        if(!e.acaoId||e.status==='Excluído') return;
+        state.lancamentos.forEach(l=>{
+          if(l.status!=='Ativo') return;
+          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.referenciaId===e.id);
+          if(isFilho&&l.tipo==='Empenho'&&l.referenciaId!==e.acaoId){
+            // Não sobrescreve referenciaId se já aponta para algum lançamento
+            if(!state.lancamentos.find(x=>x.id===l.referenciaId)){
+              // referenciaId provavelmente é o empenhoCadId ou nulo — seguro propagar acaoId via empenhoCadId
+            }
+            if(!l.empenhoCadId) l.empenhoCadId=e.id;
+            _aeVinc++;
+          }
+          if(isFilho&&(l.tipo==='Liquidação'||l.tipo==='Pagamento')){
+            if(!l.empenhoCadId) { l.empenhoCadId=e.id; _aeVinc++; }
+          }
+        });
+      });
+      if(_aeVinc>0)
+        console.info('Migração AE: '+_aeVinc+' lançamento(s) com empenhoCadId restaurado/atualizado.');
 
       // Log de migração automática
       console.log('✅ Categorias normalizadas automaticamente ao carregar');
@@ -1923,10 +1978,15 @@ function sumLancsByAcao(tipo, acaoId){
       const empCad=(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId);
       return empCad && empCad.acaoId===acaoId;
     }
-    // Para liquidações: via empenho cadastrado
-    if(tipo==='Liquidação'){
-      const empCad=(state.empenhosCad||[]).find(e=>e.id===l.referenciaId);
-      return empCad && empCad.acaoId===acaoId;
+    // Para liquidações/pagamentos: via empenho cadastrado vinculado
+    if(tipo==='Liquidação'||tipo==='Pagamento'){
+      // Primeiro: referenciaId pode ser o id do empenho cadastrado
+      const empCadByRef=(state.empenhosCad||[]).find(e=>e.id===l.referenciaId);
+      if(empCadByRef && empCadByRef.acaoId===acaoId) return true;
+      // Segundo: empenhoCadId direto
+      const empCadById=(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId);
+      if(empCadById && empCadById.acaoId===acaoId) return true;
+      return false;
     }
     return false;
   });
@@ -1964,19 +2024,46 @@ function totalEmpenhos(cat,refId){
   return sum(getLancsAtivos('Empenho',cat||null));
 }
 // ── RAP-SEGREGATED: somente EXE (para dashboard do exercício corrente) ──
+// Considera lançamentos de tipo Empenho + fallback em empenhosCad sem lançamento INICIAL
 function totalEmpenhosEXE(cat){
-  return sum(state.lancamentos.filter(l=>
+  const fromLancs = sum(state.lancamentos.filter(l=>
     l.status==='Ativo' && l.tipo==='Empenho' &&
     (cat ? l.categoria===cat : true) &&
     (l.tipoRecurso||'EXE') === 'EXE'
   ));
+  // Fallback: empenhos EXE cadastrados que por algum motivo não geraram lançamento INICIAL
+  // (evita que saldo apareça incorreto após importação de backup antigo)
+  const fromCad = (state.empenhosCad||[]).filter(e=>{
+    if(e.status==='Excluído') return false;
+    if((e.tipoEmp||'EXE')!=='EXE') return false;
+    if(cat && normalizarCategoria(e.categoria||'')!==normalizarCategoria(cat)) return false;
+    // Só conta se NÃO há lançamento INICIAL correspondente (evita dupla contagem)
+    const temInicial = state.lancamentos.some(l=>
+      l.status==='Ativo' && l.tipo==='Empenho' &&
+      (l.empenhoCadId===e.id || l.referencia===e.numero)
+    );
+    return !temInicial && (e.valorInicial||0) > 0;
+  }).reduce((s,e)=>s+(e.valorInicial||0), 0);
+  return fromLancs + fromCad;
 }
 function totalEmpenhosRAP(cat){
-  return sum(state.lancamentos.filter(l=>
+  const fromLancs = sum(state.lancamentos.filter(l=>
     l.status==='Ativo' && l.tipo==='Empenho' &&
     (cat ? l.categoria===cat : true) &&
     l.tipoRecurso === 'RAP'
   ));
+  // Fallback: empenhos RAP cadastrados sem lançamento INICIAL
+  const fromCad = (state.empenhosCad||[]).filter(e=>{
+    if(e.status==='Excluído') return false;
+    if(e.tipoEmp!=='RAP') return false;
+    if(cat && normalizarCategoria(e.categoria||'')!==normalizarCategoria(cat)) return false;
+    const temInicial = state.lancamentos.some(l=>
+      l.status==='Ativo' && l.tipo==='Empenho' &&
+      (l.empenhoCadId===e.id || l.referencia===e.numero)
+    );
+    return !temInicial && (e.valorInicial||0) > 0;
+  }).reduce((s,e)=>s+(e.valorInicial||0), 0);
+  return fromLancs + fromCad;
 }
 function totalLiquidacoes(cat,refId){
   if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Liquidação'&&(cat?l.categoria===cat:true)&&l.referenciaId===refId));
@@ -2047,10 +2134,12 @@ function saldoCatEfetivo(cat){
   return creditosEnergia+transfEEnergia+anulEnergia+anulCosip-empEnergia-empCosip-transfSEnergia;
 }
 
-// Saldo empenhado disponível para liquidação (empenhado - liquidado)
-// IMPORTANTE: Pagamento NÃO é subtraído pois já foi liquidado antes
-// Fluxo: EMPENHO → LIQUIDAÇÃO → PAGAMENTO (o pagamento marca a liquidação como paga)
+// Saldo empenhado disponível para liquidação
+// ★ REGRA OFICIAL: SALDO = INICIAL + REFORÇOS − ANULAÇÕES − LIQUIDADO
+// Inclui liquidações do módulo especializado (state.liquidacoes) via totalLiquidadoPorEmpenho
 function saldoEmpenhado(cat){
+  // Para compatibilidade com o módulo de saída legado (liqPag)
+  // usa empenho total − liquidacoes via state.lancamentos (Liquidação)
   return totalEmpenhos(cat)-totalLiquidacoes(cat);
 }
 
@@ -2225,7 +2314,9 @@ function renderDashboard(){
   }));
   const totLiq=totalLiquidacoesEXE();       // apenas EXE (módulo lancamentos)
   const totPag=totalPagamentosEXE();        // apenas EXE
-  // Saldo disponível: Créditos - Empenhos EXE brutos + Anulações (que reduzem comprometimento)
+  // ★ SALDO DISPONÍVEL = TOTAL CRÉDITOS EXE − TOTAL EMPENHADO LÍQUIDO
+  // onde EMPENHADO LÍQUIDO = EMPENHO INICIAL + REFORÇOS − ANULAÇÕES
+  // equiv: SALDO = CRÉDITOS − EMPENHO_BRUTO + ANULAÇÕES
   const saldoDisp=totCred-totEmp+totAnul;
   // Totais RAP (para badge informativo no dashboard)
   const totEmpRapGlobal=totalEmpenhosRAP();
@@ -2245,17 +2336,17 @@ function renderDashboard(){
     <div class="kpi accent-green">
       <div class="kpi-label">Total de Créditos Recebidos <span class="kpi-badge badge-ok">Entradas</span></div>
       <div class="kpi-value text-green">${fmtBR(totCred)}</div>
-      <div class="kpi-sub">recursos orçamentários acumulados</div>
+      <div class="kpi-sub">soma de todas as entradas — todas as categorias · exercício corrente</div>
     </div>
     <div class="kpi ${saldoDisp<0?'accent-red':'accent-gold'}">
       <div class="kpi-label">Saldo Disponível Geral <span class="kpi-badge ${saldoDisp<0?'badge-danger':'badge-gold'}">${saldoDisp<0?'⚠ NEGATIVO':'OK'}</span></div>
       <div class="kpi-value ${saldoDisp<0?'text-red':'text-gold'}">${fmtBR(saldoDisp)}</div>
-      <div class="kpi-sub">Créditos − Empenhado + Anulações <span style="color:var(--blue);font-size:9px;margin-left:4px">EXE</span></div>
+      <div class="kpi-sub">Créditos EXE − Empenhado Líquido (Inicial+Reforços−Anulações) <span style="color:var(--blue);font-size:9px;margin-left:4px">EXE</span></div>
     </div>
     <div class="kpi accent-blue">
-      <div class="kpi-label">Total Empenhado Líquido <span class="kpi-badge badge-blue">EXE</span></div>
+      <div class="kpi-label">Total Empenhado Líquido <span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);padding:3px 8px;border-radius:10px;font-size:10px;font-weight:800">EXE</span></div>
       <div class="kpi-value text-blue">${fmtBR(totEmp-totAnul)}</div>
-      <div class="kpi-sub">${pctBar(totEmp-totAnul,totCred)}% do crédito empenhado${totAnul>0?` · <span style="color:var(--amber);font-size:9px">−${fmtBR(totAnul)} anulado</span>`:''}${totEmpRapGlobal>0?` · <span style="color:var(--purple);font-size:9px">+ ${fmtBR(totEmpRapGlobal)} RAP (segregado)</span>`:''}</div>
+      <div class="kpi-sub">Inicial + Reforços − Anulações · ${pctBar(totEmp-totAnul,totCred)}% do crédito${totAnul>0?` · <span style="color:var(--amber);font-size:9px">−${fmtBR(totAnul)} anulado</span>`:''}${totEmpRapGlobal>0?` · <span style="color:var(--purple);font-size:9px">+ ${fmtBR(totEmpRapGlobal)} RAP (segregado)</span>`:''}</div>
     </div>
     <div class="kpi accent-amber">
       <div class="kpi-label">Total Liquidado <span class="kpi-badge badge-warn">EXE</span></div>
@@ -2293,7 +2384,7 @@ function renderDashboard(){
         <div style="font-size:11px;font-weight:700;color:var(--purple);letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px">Restos a Pagar (RAP) — Segregado do Exercício Corrente</div>
         <div style="font-size:12px;color:var(--text2)">Total empenhado RAP: <strong style="color:var(--purple)">${fmtBR(totEmpRapGlobal)}</strong> · Valores <strong>não incluídos</strong> nos indicadores acima · Ver painel RAP abaixo.</div>
       </div>
-      <span class="kpi-badge badge-purple">RAP</span>
+      <span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);padding:3px 10px;border-radius:10px;font-size:10px;font-weight:800">RAP</span>
     </div>`:''}
   `;
 
@@ -2669,10 +2760,10 @@ function saidaFiltroTipo(tipo){
     if(!btn)return;
     const ativo=(tipo===''&&k==='all')||(tipo.toLowerCase()===k);
     if(ativo){
-      if(k==='exe'){btn.style.borderColor='var(--blue-border)';btn.style.background='var(--blue-bg)';btn.style.color='var(--blue)';}
-      else if(k==='rap'){btn.style.borderColor='var(--purple-border)';btn.style.background='var(--purple-bg)';btn.style.color='var(--purple)';}
-      else{btn.style.borderColor='var(--gold-border)';btn.style.background='var(--gold-bg)';btn.style.color='var(--gold)';}
-    }else{btn.style.borderColor='var(--border2)';btn.style.background='var(--bg3)';btn.style.color='var(--text3)';}
+      if(k==='exe'){btn.style.borderColor='var(--exe-border)';btn.style.background='var(--exe-bg)';btn.style.color='var(--exe)';btn.style.fontWeight='800';btn.style.boxShadow='0 0 10px rgba(0,166,81,.25)';}
+      else if(k==='rap'){btn.style.borderColor='var(--rap-border)';btn.style.background='var(--rap-bg)';btn.style.color='var(--rap-m)';btn.style.fontWeight='800';btn.style.boxShadow='0 0 10px rgba(139,36,102,.25)';}
+      else{btn.style.borderColor='var(--gold-border)';btn.style.background='var(--gold-bg)';btn.style.color='var(--gold)';btn.style.fontWeight='800';btn.style.boxShadow='';}
+    }else{btn.style.borderColor='var(--border2)';btn.style.background='var(--bg3)';btn.style.color='var(--text3)';btn.style.fontWeight='700';btn.style.boxShadow='';}
   });
   renderSaidas();
 }
@@ -3592,11 +3683,13 @@ function gae_confirmarExclusao(){
   toast('Ação "'+nomeAcao+'" excluída','warn');
 }
 function renderAeAcoes(){
+  const el=document.getElementById('ae-acoes');
+  if(!el)return; // guarda: elemento pode não estar no DOM
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
   const comp=_aeFiltroComp; // '' = todas
   const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
   const headerFiltro=comp?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">📅</span><div>Mostrando dados da competência: <strong>${labelFiltro}</strong> · Apuração por <strong>mês de competência</strong> do empenho.</div></div>`:'';
-  document.getElementById('ae-acoes').innerHTML=headerFiltro+(acoes.length?acoes.map(a=>{
+  el.innerHTML=headerFiltro+(acoes.length?acoes.map(a=>{
     // ★ REGRA AE: usar competência (não data de cadastro/pagamento/liquidação)
     const emp=sum(sumLancsByAcaoComp('Empenho',a.id,comp));
     const liq=sum(sumLancsByAcaoComp('Liquidação',a.id,comp));
@@ -3633,6 +3726,8 @@ function renderAeAcoes(){
   }).join(''):'<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhuma ação cadastrada. Clique em "+ Nova Ação" para começar.</div></div>');
 }
 function renderAeMensal(){
+  const elMensal=document.getElementById('ae-mensal');
+  if(!elMensal)return;
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
   const anoAtual=new Date().getFullYear();
   // Resumo mensal consolidado (todas as ações)
@@ -3650,8 +3745,15 @@ function renderAeMensal(){
       return s+(arr[mi]||0);
     },0);
     const emp=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Empenho'&&(state.acoes.some(a=>a.status!=='Excluído'&&(l.referenciaId===a.id||(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId)?.acaoId===a.id)))));
-    const liq=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Liquidação'&&(state.acoes.some(a=>a.status!=='Excluído'&&(l.referenciaId===a.id||((state.empenhosCad||[]).find(e=>e.id===l.referenciaId)?.acaoId===a.id))))));
-    const pag=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Pagamento'&&(state.acoes.some(a=>a.status!=='Excluído'&&l.referenciaId===a.id))));
+    // Liquidações e Pagamentos: usa competência do empenho cadastrado vinculado (não data do lançamento)
+    const filtMesLiq=l=>{
+      if(l.status!=='Ativo')return false;
+      const empCadId=l.empenhoCadId||l.referenciaId;
+      const empCad=(state.empenhosCad||[]).find(e=>e.id===empCadId);
+      return empCad?((empCad.competencia||'')===prefixo):(l.competencia||'')===prefixo;
+    };
+    const liq=sum(state.lancamentos.filter(l=>filtMesLiq(l)&&l.tipo==='Liquidação'&&(state.acoes.some(a=>a.status!=='Excluído'&&(l.referenciaId===a.id||((state.empenhosCad||[]).find(e=>e.id===l.referenciaId)?.acaoId===a.id))))));
+    const pag=sum(state.lancamentos.filter(l=>filtMesLiq(l)&&l.tipo==='Pagamento'&&(state.acoes.some(a=>a.status!=='Excluído'&&l.referenciaId===a.id))));
     return{prev,emp,liq,pag};
   });
   const totPrev=dadosMensais.reduce((s,d)=>s+d.prev,0);
@@ -3676,8 +3778,8 @@ function renderAeMensal(){
     const pPag=emp2>0?Math.round(pag2/emp2*100):0;
     return`<tr><td>${a.nome}</td><td class="r text-green">${fmtBR(prev2)}</td><td class="r text-blue">${fmtBR(emp2)}</td><td class="r" style="color:var(--amber)">${fmtBR(liq2)}</td><td class="r text-green">${fmtBR(pag2)}</td><td class="r">${prev2>0?semaforo(pEmp):'—'}</td><td class="r">${emp2>0?semaforo(pPag):'—'}</td></tr>`;
   });
-  document.getElementById('ae-mensal').innerHTML=`
-    <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>Linha <strong>Empenhado</strong> considera exclusivamente o <strong>mês de competência</strong> definido no momento do registro da saída (aba Empenho).</div></div>
+  elMensal.innerHTML=`
+    <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>As linhas <strong>Empenhado</strong>, <strong>Liquidado</strong> e <strong>Pago</strong> exibem o valor no <strong>mês de competência do registro original</strong> — independente da data de alteração ou sincronização.</div></div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo Mensal Consolidado — ${anoAtual}</div></div>
     <div class="scroll-h"><table class="month-table"><thead><tr><th>Fase</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead><tbody>${mensalHtml}</tbody></table></div></div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Valores Mensais Previstos vs Executados</div></div>
@@ -3695,6 +3797,8 @@ function renderAeMensal(){
   `;
 }
 function renderAeDash(){
+  const elDash=document.getElementById('ae-dashboard');
+  if(!elDash)return;
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
   const comp=_aeFiltroComp; // '' = todas
   const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
@@ -3761,7 +3865,7 @@ function renderAeDash(){
   const totTabelaSaldo=linhasAcoes.reduce((s,r)=>s+(r.prev-r.emp),0);
   const headerFiltro=comp?`<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📅</span><div>Apuração por <strong>mês de competência</strong> · Filtrando: <strong>${labelFiltro}</strong></div></div>`:'<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>Empenhado, Liquidado e Pago apurados pelo <strong>mês de competência</strong> do empenho — conforme regra do módulo Assistência Estudantil.</div></div>';
 
-  document.getElementById('ae-dashboard').innerHTML=`
+  elDash.innerHTML=`
     ${headerFiltro}
     <div class="kpi-grid">
       <div class="kpi accent-gold"><div class="kpi-label">Total Previsto${comp?' · '+labelFiltro:' (anual)'}</div><div class="kpi-value text-gold">${fmtBR(totPrev)}</div><div class="kpi-sub">${acoes.length} ações cadastradas</div></div>
@@ -4017,7 +4121,7 @@ function gerarRelatorio(){
       <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Lançamentos filtrados — ${l.length} registros</div></div>
       <div class="scroll-h"><table><thead><tr><th>ID</th><th>Data</th><th>Competência</th><th>Fase</th><th>Tipo</th><th>Categoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th></tr></thead>
       <tbody>${l.length?l.slice().reverse().map(x=>{
-        const tipoTag=x.tipo==='Empenho'?(x.tipoRecurso==='RAP'?'<span class="kpi-badge badge-purple" style="font-size:9px">RAP</span>':'<span class="kpi-badge badge-blue" style="font-size:9px">EXE</span>'):'';
+        const tipoTag=x.tipo==='Empenho'?(x.tipoRecurso==='RAP'?'<span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:800">RAP</span>':'<span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:800">EXE</span>'):'';
         const compLabel=x.competencia?(()=>{const p=x.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:x.competencia;})():'—';
         return`<tr><td><code style="font-size:10px">${x.id}</code></td><td>${fmtData(x.data)}</td><td style="font-size:11px;color:var(--gold);white-space:nowrap">${compLabel}</td><td>${tagFase(x.tipo)}</td><td>${tipoTag}</td><td>${catIcon(x.categoria)} ${x.categoria}</td><td style="font-size:11px;color:var(--text3)">${(x.fonte||'').split('–')[0]||'—'}</td><td style="font-size:11px;color:var(--text3)">${x.ptres||'—'}</td><td>${x.descricao}</td><td class="r ${x.tipo==='Entrada'?'text-green':'text-red'}">${fmtBR(x.valor)}</td></tr>`;
       }).join(''):'<tr class="empty-row"><td colspan="10">Nenhum registro encontrado</td></tr>'}
@@ -4279,27 +4383,83 @@ function renderAeDetalhe(){
       <div class="kpi ${saldoNEmp<0?'accent-red':'accent-green'}"><div class="kpi-label">Saldo Não Empenhado</div><div class="kpi-value ${saldoNEmp<0?'text-red':'text-green'}" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(saldoNEmp)}</div></div>
       <div class="kpi accent-purple"><div class="kpi-label">Tipo</div><div class="kpi-value" style="color:var(--purple);font-size:14px;padding-top:4px">${a.tipo||'Benefício'}</div></div>
     </div>
-    <div class="card">
-      <div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Valores Mensais Previstos vs Executados</div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
-        ${pm.map((v,i)=>{
+    <div style="margin-top:0">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:10px 16px;background:rgba(0,166,81,.06);border:1px solid rgba(0,166,81,.2);border-radius:10px">
+        <span style="font-size:18px">📅</span>
+        <div style="font-size:12px;color:var(--text2);line-height:1.5">
+          O mês exibido é sempre o <strong style="color:var(--exe)">mês de competência do registro original</strong>
+          — independente da data de alteração ou sincronização.
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:6px 14px;background:var(--bg4);border-radius:8px;border:1px solid var(--border2)">
+          <div style="font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase">MÊS</div>
+          <div style="font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;text-align:right">PREVISTO</div>
+          <div style="font-size:9.5px;font-weight:700;color:var(--exe);letter-spacing:.1em;text-transform:uppercase;text-align:right">EMP.INICIAL</div>
+          <div style="font-size:9.5px;font-weight:700;color:var(--green2);letter-spacing:.1em;text-transform:uppercase;text-align:right">REFORÇOS</div>
+          <div style="font-size:9.5px;font-weight:700;color:var(--blue2);letter-spacing:.1em;text-transform:uppercase;text-align:right">TOTAL EMP.</div>
+          <div style="font-size:9.5px;font-weight:700;color:var(--amber2);letter-spacing:.1em;text-transform:uppercase;text-align:right">LIQUIDADO</div>
+          <div style="font-size:9.5px;font-weight:700;color:var(--green2);letter-spacing:.1em;text-transform:uppercase;text-align:right">PAGO</div>
+          <div style="font-size:9.5px;font-weight:700;color:var(--gold2);letter-spacing:.1em;text-transform:uppercase;text-align:right">SALDO</div>
+        </div>
+        ${(()=>{
+          const MESES_ABR2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
           const anoAtual=new Date().getFullYear();
-          const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
-          // ★ REGRA AE: mês determinado EXCLUSIVAMENTE pelo campo competencia do lançamento
-          const empM=sum(sumLancsByAcao('Empenho',a.id).filter(l=>l.competencia===prefix));
-          const liqM=sum([...sumLancsByAcao('Liquidação',a.id),...sumLancsByAcao('Pagamento',a.id)].filter(l=>{
-            // Liquidações: herdar competência do empenho cadastrado vinculado
-            if(l.competencia) return l.competencia===prefix;
-            const empCad=(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId||e.id===l.referenciaId);
-            return empCad&&(empCad.competencia||'')===prefix;
-          }));
-          return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;text-align:center">
-            <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px">${MESES_ABR[i]}</div>
-            <div style="font-size:11px;color:var(--gold);font-family:'IBM Plex Mono',monospace">${v>0?fmtBR(v).replace('R$ ',''):'—'}</div>
-            <div style="font-size:9.5px;color:var(--blue);margin-top:2px">emp: ${empM>0?fmtBR(empM).replace('R$ ',''):'—'}</div>
-            <div style="font-size:9.5px;color:var(--amber)">liq: ${liqM>0?fmtBR(liqM).replace('R$ ',''):'—'}</div>
-          </div>`;
-        }).join('')}
+          return pm.map((v,i)=>{
+            const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
+            const empsDoMes=sumLancsByAcao('Empenho',a.id).filter(l=>l.competencia===prefix);
+            const inicialM=sum(empsDoMes.filter(l=>l.tipoRegistro==='INICIAL'));
+            const reforcoM=sum(empsDoMes.filter(l=>l.tipoRegistro==='REFORCO'||(!l.tipoRegistro&&l.tipo==='Empenho')));
+            const empM=inicialM+reforcoM;
+            const filtLiqPag=l=>{
+              const empCadId=l.empenhoCadId||l.referenciaId;
+              const empCad=(state.empenhosCad||[]).find(e=>e.id===empCadId);
+              return empCad?((empCad.competencia||'')===prefix):((l.competencia||'')===prefix);
+            };
+            const liqM=sum(sumLancsByAcao('Liquidação',a.id).filter(filtLiqPag));
+            const pagM=sum(sumLancsByAcao('Pagamento',a.id).filter(filtLiqPag));
+            const saldoM=v-empM;
+            const temDados=v>0||empM>0||liqM>0||pagM>0;
+            const pct=v>0?Math.min(100,Math.round(empM/v*100)):0;
+            const pctColor=pct>=80?'var(--green)':pct>=40?'var(--amber)':'var(--red)';
+            const mesAbr=MESES_ABR2[i];
+            if(!temDados){
+              return '<div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:8px 14px;border-radius:8px;opacity:.3">'
+                +'<div style="font-size:11px;font-weight:600;color:var(--text4)">'+mesAbr+'/'+anoAtual+'</div>'
+                +'<div style="text-align:right;font-size:11px;color:var(--text4)">—</div>'.repeat(7)
+                +'</div>';
+            }
+            const fmtV=val=>val>0?fmtBR(val):'—';
+            const colV=(val,clr)=>val>0
+              ?'<span style="font-size:12px;font-weight:700;color:'+clr+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(val)+'</span>'
+              :'<span style="color:var(--text4);font-size:11px">—</span>';
+            const saldoColor=saldoM<0?'var(--red)':'var(--gold)';
+            const saldoVal=(v>0||empM>0)?'<span style="font-size:12px;font-weight:800;color:'+saldoColor+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(saldoM)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>';
+            const barHtml=(v>0||empM>0)
+              ?'<div style="padding:0 14px 8px;display:flex;align-items:center;gap:8px"><div style="flex:1;height:3px;background:var(--bg5);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px;transition:width .4s"></div></div><span style="font-size:9px;color:'+pctColor+';font-weight:700;white-space:nowrap">'+pct+'% emp.</span></div>'
+              :'';
+            return '<div style="border-radius:10px;border:1px solid var(--border2);background:var(--bg3);overflow:hidden;transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--exe-border)\'" onmouseout="this.style.borderColor=\'var(--border2)\'">'
+              +'<div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:10px 14px;align-items:center">'
+              +'<div><div style="font-size:12px;font-weight:700;color:var(--gold)">'+mesAbr+'</div><div style="font-size:9px;color:var(--text4)">'+anoAtual+'</div></div>'
+              +'<div style="text-align:right">'+(v>0?'<span style="font-size:12px;font-weight:600;color:var(--text2);font-family:\'IBM Plex Mono\',monospace">'+fmtBR(v)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>')+'</div>'
+              +'<div style="text-align:right">'+colV(inicialM,'var(--exe)')+'</div>'
+              +'<div style="text-align:right">'+colV(reforcoM,'var(--green2)')+'</div>'
+              +'<div style="text-align:right">'+colV(empM,'var(--blue2)')+'</div>'
+              +'<div style="text-align:right">'+colV(liqM,'var(--amber)')+'</div>'
+              +'<div style="text-align:right">'+colV(pagM,'var(--green)')+'</div>'
+              +'<div style="text-align:right">'+saldoVal+'</div>'
+              +'</div>'+barHtml+'</div>';
+          }).join('');
+        })()}
+        <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:12px 14px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border:2px solid var(--gold-border);border-radius:10px;margin-top:4px">
+          <div style="font-size:11px;font-weight:800;color:var(--gold);letter-spacing:.06em">TOTAL</div>
+          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--gold);font-family:'IBM Plex Mono',monospace">${fmtBR(totPrev)}</span></div>
+          <div style="text-align:right;grid-column:span 2"></div>
+          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--blue2);font-family:'IBM Plex Mono',monospace">${fmtBR(emp)}</span></div>
+          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--amber);font-family:'IBM Plex Mono',monospace">${fmtBR(liq)}</span></div>
+          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--green);font-family:'IBM Plex Mono',monospace">${fmtBR(pag)}</span></div>
+          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:${saldoNEmp<0?'var(--red)':'var(--gold)'};font-family:'IBM Plex Mono',monospace">${fmtBR(saldoNEmp)}</span></div>
+        </div>
       </div>
     </div>`;
 }
@@ -4351,24 +4511,49 @@ function renderContratoDetalhe(){
       <div class="kpi accent-purple"><div class="kpi-label">Prev. Mensal Total</div><div class="kpi-value" style="color:var(--purple);font-size:clamp(13px,1.8vw,22px)">${fmtBR(totPrevMensal)}</div></div>
     </div>
     <div class="card">
-      <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Distribuição Mensal Prevista vs Executada</div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">
-        ${pm.map((v,i)=>{
-          const anoAtual=new Date().getFullYear();
-          const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
-          // ★ REGRA: Contratos Continuados — mês determinado EXCLUSIVAMENTE pela competência
-          // Fallback por data removido — se não há competência, não computa no mês
-          const filtMes=l=>l.competencia===prefix;
-          const empM=sum(sumLancsByContratoEXE('Empenho',c.id).filter(filtMes));
-          const liqM=sum([...sumLancsByContratoEXE('Liquidação',c.id),...sumLancsByContratoEXE('Pagamento',c.id)].filter(filtMes));
-          return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px;text-align:center">
-            <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px">${MESES_ABR[i]}</div>
-            <div style="font-size:11px;color:var(--gold);font-family:'IBM Plex Mono',monospace">${v>0?fmtBR(v).replace('R$ ',''):'—'}</div>
-            <div style="font-size:9.5px;color:var(--blue);margin-top:2px">emp: ${empM>0?fmtBR(empM).replace('R$ ',''):'—'}</div>
-            <div style="font-size:9.5px;color:var(--amber)">liq: ${liqM>0?fmtBR(liqM).replace('R$ ',''):'—'}</div>
-          </div>`;
-        }).join('')}
-      </div>
+      <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Detalhe por Contrato — Competência · Previsto · Empenho Inicial · Reforços <span style="font-size:9px;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:4px;padding:1px 6px;margin-left:6px">EXE only</span></div>
+      <div class="scroll-h"><table style="min-width:700px">
+        <thead><tr>
+          <th>Mês / Competência</th><th class="r">Previsto</th>
+          <th class="r">Emp. Inicial</th><th class="r">Reforços</th>
+          <th class="r">Total Empenhado</th><th class="r">Liquidado/Pago</th>
+          <th class="r">Saldo Emp.</th><th>Empenhos Vinculados</th>
+        </tr></thead>
+        <tbody>
+          ${pm.map((v,i)=>{
+            const anoAtual=new Date().getFullYear();
+            const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
+            const filtMes=l=>l.competencia===prefix;
+            const empsDoMes=sumLancsByContratoEXE('Empenho',c.id).filter(filtMes);
+            const inicialM=sum(empsDoMes.filter(l=>l.tipoRegistro==='INICIAL'));
+            const reforcoM=sum(empsDoMes.filter(l=>l.tipoRegistro==='REFORCO'||(!l.tipoRegistro&&l.tipo==='Empenho')));
+            const empM=inicialM+reforcoM;
+            const liqM=sum([...sumLancsByContratoEXE('Liquidação',c.id),...sumLancsByContratoEXE('Pagamento',c.id)].filter(filtMes));
+            const saldoM=empM-liqM;
+            const nEmpsMes=[...new Set(empsDoMes.map(l=>l.referencia||l.numeroEmpenho||'').filter(Boolean))].join(', ')||'—';
+            const temDados=v>0||empM>0||liqM>0;
+            return`<tr style="${!temDados?'opacity:.35':''}">
+              <td style="font-weight:600;color:var(--gold);white-space:nowrap;font-size:11px">${MESES_ABR[i]}/${anoAtual}</td>
+              <td class="r" style="font-size:11px;color:var(--text2)">${v>0?fmtBR(v):'—'}</td>
+              <td class="r text-blue" style="font-size:11px">${inicialM>0?fmtBR(inicialM):'—'}</td>
+              <td class="r text-green" style="font-size:11px">${reforcoM>0?fmtBR(reforcoM):'—'}</td>
+              <td class="r text-blue fw7" style="font-size:11px">${empM>0?fmtBR(empM):'—'}</td>
+              <td class="r" style="color:var(--amber);font-size:11px">${liqM>0?fmtBR(liqM):'—'}</td>
+              <td class="r ${saldoM<0?'text-red':'text-gold'}" style="font-size:11px">${empM>0?fmtBR(saldoM):'—'}</td>
+              <td style="font-size:10px;color:var(--text3);max-width:180px;overflow:hidden;text-overflow:ellipsis">${nEmpsMes}</td>
+            </tr>`;
+          }).join('')}
+          <tr style="font-weight:700;background:var(--bg4);border-top:2px solid var(--gold-border)">
+            <td style="color:var(--gold)">TOTAL</td>
+            <td class="r text-gold" style="font-size:11px">${fmtBR(totPrevMensal)}</td>
+            <td class="r text-blue" style="font-size:11px" colspan="2"></td>
+            <td class="r text-blue" style="font-size:11px">${fmtBR(emp)}</td>
+            <td class="r" style="color:var(--amber);font-size:11px">${fmtBR(liqPag)}</td>
+            <td class="r ${saldoNEmp<0?'text-red':'text-gold'}" style="font-size:11px">${fmtBR(saldoNEmp)}</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table></div>
     </div>`;
 }
 
@@ -4498,7 +4683,25 @@ async function driveBuscarArquivo(){
 async function driveSalvarSilencioso(){
   if(!driveAccessToken)return;
   try{
-    const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+    // ★ AUDITORIA DE BACKUP: garante que TODOS os módulos estão incluídos
+    const backupPayload = {
+      meta: state.meta,
+      fontes: state.fontes,
+      ptres: state.ptres,
+      cats: state.cats,
+      nd: state.nd,
+      pi: state.pi,
+      ts: state.ts,
+      lancamentos: state.lancamentos,
+      contratos: state.contratos,
+      acoes: state.acoes,
+      auditLog: state.auditLog,
+      fornecedores: state.fornecedores,
+      empenhosCad: state.empenhosCad,
+      liquidacoes: state.liquidacoes,
+      contratosPnae: state.contratosPnae
+    };
+    const blob=new Blob([JSON.stringify(backupPayload,null,2)],{type:'application/json'});
     if(!driveFileId)await driveBuscarArquivo();
     let res;
     if(driveFileId){
@@ -4515,9 +4718,13 @@ async function driveSalvarSilencioso(){
     const data=await res.json();
     if(data.id){
       driveFileId=data.id;
+      // ★ Validação pós-upload: verificar que o arquivo foi salvo corretamente
       const agora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
       const el=document.getElementById('drive-sync-time');
       if(el)el.textContent='☁ '+agora;
+      console.info('✅ Drive sync OK — '+agora+' · empenhosCad: '+(state.empenhosCad||[]).length+' · lancamentos: '+state.lancamentos.length);
+    } else {
+      console.warn('⚠ Drive sync: resposta sem ID', data);
     }
   }catch(e){console.warn('Auto-sync Drive falhou:',e);}
 }
@@ -4835,9 +5042,11 @@ function cempFiltroTipo(tipo){
     const btn=document.getElementById('cemp-f-tipo-'+k);
     if(!btn)return;
     const ativo=(k==='all'&&_cempFiltroTipo==='')||k===_cempFiltroTipo;
-    btn.style.borderColor=ativo?'var(--gold-border)':'var(--border2)';
-    btn.style.background=ativo?'var(--gold-bg)':'var(--bg3)';
-    btn.style.color=ativo?'var(--gold)':'var(--text3)';
+    if(ativo){
+      if(k==='EXE'){btn.style.borderColor='var(--exe-border)';btn.style.background='var(--exe-bg)';btn.style.color='var(--exe)';btn.style.boxShadow='0 0 10px rgba(0,166,81,.25)';}
+      else if(k==='RAP'){btn.style.borderColor='var(--rap-border)';btn.style.background='var(--rap-bg)';btn.style.color='var(--rap-m)';btn.style.boxShadow='0 0 10px rgba(139,36,102,.25)';}
+      else{btn.style.borderColor='var(--gold-border)';btn.style.background='var(--gold-bg)';btn.style.color='var(--gold)';btn.style.boxShadow='';}
+    }else{btn.style.borderColor='var(--border2)';btn.style.background='var(--bg3)';btn.style.color='var(--text3)';btn.style.boxShadow='';}
   });
   renderCadastroEmpenhos();
 }
@@ -5420,21 +5629,22 @@ function registrarCadastroEmpenho(){
     id:shortId('CE'),numero,tipoEmp,categoria:normalizarCategoria(_cempCat),cnpj,fornNome,
     contratoId,acaoId,pnaeDocumento,pnaeContratoId,
     fonte,ptres,nd,pi:document.getElementById('cemp-pi')?.value.trim()||'',
-    valorInicial,        // ★ NOVO CAMPO: valor inicial do empenho
-    competencia,         // ★ NOVO CAMPO: mês de competência (referência única para AE)
+    valorInicial,        // ★ valor inicial do empenho
+    competencia,         // ★ mês de competência
     desc:document.getElementById('cemp-desc')?.value.trim()||'',
     obs:document.getElementById('cemp-obs')?.value.trim()||'',
     data,status:'Ativo',ts:new Date().toISOString()
   };
   if(!state.empenhosCad)state.empenhosCad=[];
   state.empenhosCad.push(obj);
-  // ★ Criar automaticamente o lançamento INICIAL na tabela consolidada
+  // ★ Criar lançamento INICIAL na tabela consolidada
+  // tipoRecurso é OBRIGATORIAMENTE igual a tipoEmp para garantir segregação EXE/RAP correta
   const lInicial={
     id: shortId('S'),
     tipo: 'Empenho',
-    tipoRegistro: 'INICIAL',  // ★ discriminador da tabela consolidada
-    tipoRecurso: tipoEmp,
-    categoria: obj.categoria,
+    tipoRegistro: 'INICIAL',
+    tipoRecurso: tipoEmp,          // ★ EXE ou RAP — determina se consome saldo do crédito
+    categoria: normalizarCategoria(_cempCat),
     subcategoria: subcat,
     descricao: obj.desc || ('Empenho inicial: '+numero),
     valor: valorInicial,
@@ -5583,8 +5793,8 @@ function renderCadastroEmpenhos(){
     const saldoColor=t.saldo<=0?'var(--red)':t.saldo<t.totalEmp*0.2?'var(--amber)':'var(--green)';
     const isRAP=e.tipoEmp==='RAP';
     const tipoBadge=isRAP
-      ?`<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:3px 8px;border-radius:8px;font-size:10px;font-weight:700">RAP</span>`
-      :`<span style="background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border);padding:3px 8px;border-radius:8px;font-size:10px;font-weight:700">EXE</span>`;
+      ?`<span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);padding:3px 10px;border-radius:8px;font-size:10px;font-weight:800;letter-spacing:.06em;box-shadow:0 0 8px rgba(139,36,102,.18)">RAP</span>`
+      :`<span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);padding:3px 10px;border-radius:8px;font-size:10px;font-weight:800;letter-spacing:.06em;box-shadow:0 0 8px rgba(0,166,81,.18)">EXE</span>`;
     const compLabel=e.competencia?(()=>{const p=e.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:e.competencia;})():'—';
     const fornNome=e.fornNome||(e.acaoId&&state.acoes.find(a=>a.id===e.acaoId)?.nome)||'—';
     const fonteLabel=e.fonte?e.fonte.split('–')[0].trim():'—';
@@ -5602,7 +5812,7 @@ function renderCadastroEmpenhos(){
     const btnAnular=!isRAP?`<button class="btn btn-xs" style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)" onclick="abrirModalAnular('${e.id}')" title="Anular">➖</button>`:'';
     return`<tr>
       <td style="padding:10px 12px;text-align:center">${tipoBadge}</td>
-      <td style="padding:10px 12px"><code style="font-size:12px;font-weight:700;color:var(--text)">${e.numero||'—'}</code></td>
+      <td style="padding:10px 12px"><code style="font-size:15px;font-weight:800;color:${isRAP?'var(--rap-m2)':'var(--exe2)'};letter-spacing:.03em;text-shadow:0 0 12px ${isRAP?'rgba(184,61,138,.45)':'rgba(51,198,122,.45)'};font-family:'IBM Plex Mono',monospace">${e.numero||'—'}</code></td>
       <td style="padding:10px 12px;font-size:12px;color:var(--text3);white-space:nowrap">${fmtData(e.data)}</td>
       <td style="padding:10px 12px;font-size:12px;color:var(--gold);font-weight:600;white-space:nowrap">${compLabel}</td>
       <td style="padding:10px 12px;font-size:12.5px">${catIcon(e.categoria)} ${e.categoria}</td>
@@ -5755,10 +5965,10 @@ function meeAtualizarTipo(){
   const isRAP=document.getElementById('mee-tipo-rap').checked;
   const exeCard=document.getElementById('mee-card-exe');
   const rapCard=document.getElementById('mee-card-rap');
-  if(exeCard) exeCard.style.borderColor=isRAP?'var(--border2)':'var(--blue-border)';
-  if(exeCard) exeCard.style.background=isRAP?'var(--bg4)':'var(--blue-bg)';
-  if(rapCard) rapCard.style.borderColor=isRAP?'var(--purple-border)':'var(--border2)';
-  if(rapCard) rapCard.style.background=isRAP?'var(--purple-bg)':'var(--bg4)';
+  if(exeCard) exeCard.style.borderColor=isRAP?'var(--border2)':'var(--exe-border)';
+  if(exeCard) exeCard.style.background=isRAP?'var(--bg4)':'var(--exe-bg)';
+  if(rapCard) rapCard.style.borderColor=isRAP?'var(--rap-border)':'var(--border2)';
+  if(rapCard) rapCard.style.background=isRAP?'var(--rap-bg)':'var(--bg4)';
 }
 
 function fecharModalEditarEmpenho(){
@@ -5894,42 +6104,65 @@ function calcSaldoEmpenho(nEmp){
     (l.referencia===nEmp||(empCadId&&l.empenhoCadId===empCadId))
   );
   let totalEmp=sum(lancsEmp);
-  // Fallback: se não há lançamentos mas existe valorInicial no cadastro, usa ele
-  if(totalEmp===0&&empCad?.valorInicial>0) totalEmp=empCad.valorInicial;
+  // Priorizar valorInicial do cadastro para EXE: garante que o Valor Inicial
+  // informado no formulário principal seja sempre considerado no saldo.
+  // Regra: Saldo = Valor Inicial + Reforço - Anulação
+  if(empCad?.valorInicial>0){
+    // Se há lançamento INICIAL, use o maior entre os dois (prefer cadastro)
+    const inicialLanc=sum(lancsEmp.filter(l=>l.tipoRegistro==='INICIAL'));
+    const reforcos=sum(lancsEmp.filter(l=>l.tipoRegistro==='REFORCO'||!l.tipoRegistro));
+    totalEmp=(empCad.valorInicial)+reforcos;
+  } else if(totalEmp===0&&empCad?.valorInicial>0){
+    totalEmp=empCad.valorInicial;
+  }
   // Anulações: por referencia OU por empenhoCadId
   const anulaFeitas=sum(state.lancamentos.filter(l=>
     l.status==='Ativo'&&l.tipo==='Anulação'&&
     (l.referencia===nEmp||(empCadId&&(l.empenhoCadId===empCadId||l.referenciaId===empCadId)))
   ));
   const liqFeitas=totalLiquidadoPorEmpenho(nEmp);
-  return Math.max(0, totalEmp-liqFeitas-anulaFeitas);
+  // Saldo correto: Valor Inicial + Reforço - Anulação (não desconta liquidação do saldo)
+  return Math.max(0, totalEmp-anulaFeitas);
 }
 
 // ★ Totais por tipoRegistro para um empenho (usado nas tabelas)
+// REGRA CORRETA (EXE): Saldo = Valor Inicial + Reforço - Anulação
 function calcEmpenhoTotais(empCadId, nEmp){
-  const inicial=sum(state.lancamentos.filter(l=>
+  // Buscar empenho cadastrado para usar valorInicial como fonte primária
+  const empCad=(state.empenhosCad||[]).find(e=>e.id===empCadId||(e.numero===nEmp&&e.status!=='Excluído'));
+  const idRef=empCad?.id||empCadId;
+  const numRef=empCad?.numero||nEmp;
+
+  const inicialLanc=sum(state.lancamentos.filter(l=>
     l.status==='Ativo'&&l.tipo==='Empenho'&&
     l.tipoRegistro==='INICIAL'&&
-    (l.empenhoCadId===empCadId||l.referencia===nEmp)
+    (l.empenhoCadId===idRef||l.referencia===numRef)
   ));
   const reforcos=sum(state.lancamentos.filter(l=>
     l.status==='Ativo'&&l.tipo==='Empenho'&&
     l.tipoRegistro==='REFORCO'&&
-    (l.empenhoCadId===empCadId||l.referencia===nEmp)
+    (l.empenhoCadId===idRef||l.referencia===numRef)
   ));
   // Lançamentos antigos sem tipoRegistro são tratados como REFORCO (compatibilidade)
   const legacy=sum(state.lancamentos.filter(l=>
     l.status==='Ativo'&&l.tipo==='Empenho'&&
     !l.tipoRegistro&&
-    (l.empenhoCadId===empCadId||l.referencia===nEmp)
+    (l.empenhoCadId===idRef||l.referencia===numRef)
   ));
   const anulacoes=sum(state.lancamentos.filter(l=>
     l.status==='Ativo'&&l.tipo==='Anulação'&&
-    (l.empenhoCadId===empCadId||l.referencia===nEmp)
+    (l.empenhoCadId===idRef||l.referencia===numRef)
   ));
-  const liqFeitas=totalLiquidadoPorEmpenho(nEmp);
+  const liqFeitas=totalLiquidadoPorEmpenho(numRef);
+
+  // Valor Inicial: prioriza o campo valorInicial do cadastro (EXE/RAP),
+  // fallback para lançamento INICIAL, fallback para 0
+  const valorIniCad=(empCad?.valorInicial!=null&&empCad.valorInicial>0)?empCad.valorInicial:null;
+  const inicial=valorIniCad!=null?valorIniCad:inicialLanc;
+
   const totalEmp=inicial+reforcos+legacy;
-  const saldo=totalEmp-liqFeitas-anulacoes;
+  // SALDO CORRETO: Valor Inicial + Reforço - Anulação (sem descontar liquidação do saldo do empenho)
+  const saldo=Math.max(0, inicial+reforcos+legacy-anulacoes);
   return{inicial,reforcos:reforcos+legacy,anulacoes,liqFeitas,totalEmp,saldo};
 }
 
@@ -7030,19 +7263,19 @@ function selecionarTipoEmpenho(tipo){
   const titleRap = document.getElementById('card-rap-title');
 
   if(tipo === 'EXE'){
-    // Card EXE → ativo
-    Object.assign(cardExe.style,{borderColor:'var(--blue-border)',background:'var(--blue-bg)',boxShadow:'0 0 0 3px rgba(68,138,255,.18),0 4px 18px rgba(0,0,0,.35)'});
-    if(checkExe){checkExe.style.background='var(--blue)';checkExe.style.color='#fff';checkExe.textContent='✓';}
-    if(titleExe) titleExe.style.color='var(--blue)';
+    // Card EXE → ativo (True Green)
+    Object.assign(cardExe.style,{borderColor:'var(--exe-border)',background:'var(--exe-bg)',boxShadow:'0 0 0 3px rgba(0,166,81,.20),0 4px 18px rgba(0,0,0,.35)'});
+    if(checkExe){checkExe.style.background='var(--exe)';checkExe.style.color='#fff';checkExe.textContent='✓';}
+    if(titleExe) titleExe.style.color='var(--exe)';
     // Card RAP → inativo
     Object.assign(cardRap.style,{borderColor:'var(--border2)',background:'var(--bg4)',boxShadow:'0 4px 18px rgba(0,0,0,.25)'});
     if(checkRap){checkRap.style.background='var(--border2)';checkRap.style.color='var(--text4)';checkRap.textContent='○';}
     if(titleRap) titleRap.style.color='var(--text3)';
   } else {
-    // Card RAP → ativo
-    Object.assign(cardRap.style,{borderColor:'var(--purple-border)',background:'var(--purple-bg)',boxShadow:'0 0 0 3px rgba(170,102,255,.18),0 4px 18px rgba(0,0,0,.35)'});
-    if(checkRap){checkRap.style.background='var(--purple)';checkRap.style.color='#fff';checkRap.textContent='✓';}
-    if(titleRap) titleRap.style.color='var(--purple)';
+    // Card RAP → ativo (Deep Magenta)
+    Object.assign(cardRap.style,{borderColor:'var(--rap-border)',background:'var(--rap-bg)',boxShadow:'0 0 0 3px rgba(139,36,102,.22),0 4px 18px rgba(0,0,0,.35)'});
+    if(checkRap){checkRap.style.background='var(--rap-m)';checkRap.style.color='#fff';checkRap.textContent='✓';}
+    if(titleRap) titleRap.style.color='var(--rap-m)';
     // Card EXE → inativo
     Object.assign(cardExe.style,{borderColor:'var(--border2)',background:'var(--bg4)',boxShadow:'0 4px 18px rgba(0,0,0,.25)'});
     if(checkExe){checkExe.style.background='var(--border2)';checkExe.style.color='var(--text4)';checkExe.textContent='○';}
@@ -7166,9 +7399,9 @@ function carregarDadosEmpenhoCadastrado(){
 
   // ── INFO DO EMPENHO ──
   const saldo = calcularSaldoEmpenho(empId);
-  infoEl.innerHTML = `<div class="saldo-bar-card" style="border-color:${emp.tipoEmp==='RAP'?'var(--purple-border)':'var(--blue-border)'}">
+  infoEl.innerHTML = `<div class="saldo-bar-card" style="border-color:${emp.tipoEmp==='RAP'?'var(--rap-border)':'var(--exe-border)'}">
     <div class="sb-top">
-      <span class="sb-nome">${catIcon(emp.categoria)} <strong>${emp.numero}</strong> · <span style="color:${emp.tipoEmp==='RAP'?'var(--purple)':'var(--blue)'}"><strong>${emp.tipoEmp}</strong></span> · ${emp.categoria}</span>
+      <span class="sb-nome">${catIcon(emp.categoria)} <strong>${emp.numero}</strong> · <span style="color:${emp.tipoEmp==='RAP'?'var(--rap-m)':'var(--exe)'}"><strong>${emp.tipoEmp}</strong></span> · ${emp.categoria}</span>
       <span class="sb-val ok">${fmtBR(saldo)} empenhado</span>
     </div>
     <div class="sb-caption">
@@ -7318,12 +7551,12 @@ function renderSaidas(){
   document.getElementById('saida-count').textContent=total+' registros';
   document.getElementById('saida-table').innerHTML=slice.length?slice.map(l=>{
     const badge = l.tipoRecurso==='RAP'
-      ? '<span class="kpi-badge badge-purple" style="font-size:9px">RAP</span>'
-      : '<span class="kpi-badge badge-blue" style="font-size:9px">EXE</span>';
+      ? '<span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:800">RAP</span>'
+      : '<span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:800">EXE</span>';
     const compLabel = l.competencia
       ? (()=>{const p=l.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:l.competencia;})()
       : '<span style="color:var(--amber);font-size:10px">sem comp.</span>';
-    return `<tr><td><code style="font-size:10px">${l.id}</code></td><td>${badge}</td><td>${fmtData(l.data)}</td><td style="font-size:11px;color:var(--gold);font-weight:600;white-space:nowrap">${compLabel}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="font-size:11px;color:var(--text3)">${l.numeroEmpenho||l.referencia||'—'}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.descricao||'—'}</td><td style="font-size:11px;color:var(--text3)">${l.subcategoria||'—'}</td><td class="r text-red fw6">${fmtBR(l.valor)}</td><td style="white-space:nowrap"><button class="btn btn-sec btn-xs" onclick="editarSaida('${l.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>`;
+    return `<tr><td><code style="font-size:10px">${l.id}</code></td><td>${badge}</td><td>${fmtData(l.data)}</td><td style="font-size:11px;color:var(--gold);font-weight:600;white-space:nowrap">${compLabel}</td><td>${catIcon(l.categoria)} ${l.categoria}</td><td style="font-size:11px;font-weight:700;color:${l.tipoRecurso==='RAP'?'var(--rap-m)':'var(--exe)'};font-family:'IBM Plex Mono',monospace;white-space:nowrap">${l.numeroEmpenho||l.referencia||'—'}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${l.descricao||'—'}</td><td style="font-size:11px;color:var(--text3)">${l.subcategoria||'—'}</td><td class="r text-red fw6">${fmtBR(l.valor)}</td><td style="white-space:nowrap"><button class="btn btn-sec btn-xs" onclick="editarSaida('${l.id}')" style="margin-right:4px">✎</button><button class="btn btn-red btn-xs" onclick="excluirLancamento('${l.id}')">✕</button></td></tr>`;
   }).join(''):'<tr class="empty-row"><td colspan="10">Nenhuma saída registrada</td></tr>';
   document.getElementById('saida-table').innerHTML+=`<tr class="total-row"><td colspan="8" class="r fw7">Total filtrado</td><td class="r text-red fw7">${fmtBR(totalSaidaFiltrado)}</td><td></td></tr>`;
   const wrap=document.getElementById('saida-table')?.closest('.tbl-wrap');
@@ -7550,7 +7783,7 @@ function renderRapCardDashboard(){
       <div class="card-title"><span class="card-title-dot" style="background:var(--purple)"></span>RESTOS A PAGAR (RAP) <span class="kpi-badge badge-purple" style="margin-left:6px">RAP</span></div>
       <div class="kpi-grid" style="margin-bottom:0">
         <div class="kpi accent-purple">
-          <div class="kpi-label">Total Empenhado <span class="kpi-badge badge-purple">RAP</span></div>
+          <div class="kpi-label">Total Empenhado <span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);padding:3px 8px;border-radius:10px;font-size:10px;font-weight:800">RAP</span></div>
           <div class="kpi-value" style="color:var(--purple)">${fmtBR(totEmpRap)}</div>
           <div class="kpi-sub">${numEmpRap.length} empenho(s) RAP registrado(s)</div>
         </div>
@@ -7958,12 +8191,12 @@ function mrefFiltrarEmpenhos(){
     const saldo = calcSaldoEmpenho(e.numero);
     const sc = saldo <= 0 ? 'var(--red)' : saldo < 1000 ? 'var(--amber)' : 'var(--green)';
     const badge = e.tipoEmp === 'RAP'
-      ? '<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;flex-shrink:0">RAP</span>'
-      : '<span style="background:rgba(68,138,255,.12);color:var(--blue);border:1px solid rgba(68,138,255,.3);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;flex-shrink:0">EXE</span>';
+      ? '<span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.05em;flex-shrink:0">RAP</span>'
+      : '<span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.05em;flex-shrink:0">EXE</span>';
     return `<div class="mref-dropdown-item" onclick="mrefSelecionarEmpenho('${e.id}')">
       ${badge}
       <div style="flex:1;min-width:0">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text)">${e.numero}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${e.tipoEmp==='RAP'?'var(--rap-m)':' var(--exe)'}">${e.numero}</div>
         <div style="font-size:10.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${catIcon(e.categoria)} ${e.categoria}${e.fornNome?' · '+e.fornNome:''}</div>
       </div>
       <div style="font-size:11px;font-weight:700;color:${sc};white-space:nowrap">${fmtBR(saldo)}</div>
@@ -8019,7 +8252,7 @@ function mrefSelecionarEmpenho(id){
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px">
-          ⚡ ${e.numero} · <span style="color:${e.tipoEmp==='RAP'?'var(--purple)':'var(--blue)'}">${e.tipoEmp}</span> · ${e.categoria}
+          ⚡ ${e.numero} · <span style="color:${e.tipoEmp==='RAP'?'var(--rap-m)':'var(--exe)'}">${e.tipoEmp}</span> · ${e.categoria}
         </div>
         <div style="font-size:11px;color:var(--text3)">
           ${e.fornNome?'Fornecedor: <strong style="color:var(--text2)">'+e.fornNome+'</strong>':''}
@@ -8337,8 +8570,8 @@ function manvFiltrarEmpenhos(){
     const t = calcEmpenhoTotais(e.id, e.numero);
     const sc = saldo < 500 ? 'var(--amber)' : 'var(--green)';
     const badge = e.tipoEmp === 'RAP'
-      ? '<span style="background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;flex-shrink:0">RAP</span>'
-      : '<span style="background:rgba(68,138,255,.12);color:var(--blue);border:1px solid rgba(68,138,255,.3);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;flex-shrink:0">EXE</span>';
+      ? '<span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.05em;flex-shrink:0">RAP</span>'
+      : '<span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.05em;flex-shrink:0">EXE</span>';
     const hasReforco = t.reforcos > 0
       ? '<span style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;margin-left:4px">➕ RF</span>' : '';
     return `<div class="manv-dropdown-item" onclick="manvSelecionarEmpenho('${e.id}')">
