@@ -4872,7 +4872,7 @@ function abrirModalFornecedor(id){
       id:f?f.id:shortId('FN'),tipoDoc:g('tipodoc'),documento:g('documento'),nome:g('nome'),
       simplesNacional:g('simples'),categorias:cats,agencia:g('agencia'),conta:g('conta'),
       objeto:g('objeto'),ultimoRC:g('ultimorc'),nContaVinculada:g('contavinc'),
-      contratoAguaEsgoto:g('contratoagua'),dataCadastro:f?f.dataCadastro:new Date().toISOString().slice(0,10),
+      contratoAguaEsgoto:g('contratoagua'),contrato:g('contrato'),dataCadastro:f?f.dataCadastro:new Date().toISOString().slice(0,10),
       status:'Ativo',ts:f?f.ts:new Date().toISOString(),tsModif:new Date().toISOString()
     };
     if(f){const idx=state.fornecedores.findIndex(x=>x.id===id);state.fornecedores[idx]=obj;auditLog('UPDATE','FORNECEDOR',obj.id,'Fornecedor atualizado: '+obj.nome,obj);}
@@ -4901,6 +4901,7 @@ function abrirModalFornecedor(id){
       </select></div>
     <div class="field"><label>Agência</label><input id="mf-agencia" value="${f?f.agencia||'':''}" placeholder="Nº agência"></div>
     <div class="field"><label>Conta Bancária</label><input id="mf-conta" value="${f?f.conta||'':''}" placeholder="Nº conta"></div>
+    <div class="field" style="grid-column:1/-1"><label>Contrato <span style="color:var(--text3);font-size:11px">(opcional — usado na tela de detalhes Energia Elétrica após "CONFORME CONTRATO")</span></label><input id="mf-contrato" value="${f?f.contrato||'':''}" placeholder="Nº do contrato"></div>
     <div class="field" style="grid-column:1/-1"><label>Objeto (até 300 car.)</label>
       <textarea id="mf-objeto" rows="2" maxlength="300" placeholder="Descrição do objeto/serviço">${f?f.objeto||'':''}</textarea></div>
     <div class="field"><label>Último RC</label><input id="mf-ultimorc" value="${f?f.ultimoRC||'':''}" placeholder="Ex: 2026RC000012"></div>
@@ -5506,6 +5507,7 @@ function cempMontarVinculo(cat){
       </div>
       <div id="cemp-pnae-forn-info" style="margin:6px 0"></div>
       <div class="field" style="max-width:420px"><label>Contrato PNAE</label><select id="cemp-pnae-contrato"><option value="">Nenhum</option></select></div>
+      <div class="field" style="max-width:280px;margin-top:8px"><label>Empenho <span style="color:var(--text3);font-size:11px">(exibido na Descrição 1 — SIAFI)</span></label><input type="text" id="cemp-pnae-empenho" placeholder="Nº do empenho PNAE (opcional)"></div>
     </div>`;
     return;
   }
@@ -5625,9 +5627,10 @@ function registrarCadastroEmpenho(){
     const forn=buscarFornecedorPorDoc(pnaeDocumento);
     fornNome=forn?forn.nome:'';
   }
+  const pnaeEmpenho=_cempCat==='PNAE'?(document.getElementById('cemp-pnae-empenho')?.value.trim()||''):'';
   const obj={
     id:shortId('CE'),numero,tipoEmp,categoria:normalizarCategoria(_cempCat),cnpj,fornNome,
-    contratoId,acaoId,pnaeDocumento,pnaeContratoId,
+    contratoId,acaoId,pnaeDocumento,pnaeContratoId,pnaeEmpenho,
     fonte,ptres,nd,pi:document.getElementById('cemp-pi')?.value.trim()||'',
     valorInicial,        // ★ valor inicial do empenho
     competencia,         // ★ mês de competência
@@ -6121,8 +6124,10 @@ function calcSaldoEmpenho(nEmp){
     (l.referencia===nEmp||(empCadId&&(l.empenhoCadId===empCadId||l.referenciaId===empCadId)))
   ));
   const liqFeitas=totalLiquidadoPorEmpenho(nEmp);
-  // Saldo correto: Valor Inicial + Reforço - Anulação (não desconta liquidação do saldo)
-  return Math.max(0, totalEmp-anulaFeitas);
+  // BLOCO 1 — CORREÇÃO GLOBAL DE SALDO:
+  // Saldo correto = Valor Inicial + Reforço - Anulação - Liquidação
+  // O valor liquidado migra do saldo de empenho para o saldo de liquidação.
+  return Math.max(0, totalEmp-anulaFeitas-liqFeitas);
 }
 
 // ★ Totais por tipoRegistro para um empenho (usado nas tabelas)
@@ -6965,7 +6970,7 @@ function abrirDetalheLiquidacao(id){
         ['Valor Total NF',fmtBR(l.valorBruto),'var(--text)'],
         ['Base de Cálculo INSS',fmtBR(l.bcInss||0),'var(--text)'],
         ...(!isSimples?[['Tributos Federais (9,45%)',fmtBR(tribFed),'var(--red)']]:[[null,null,null]]),
-        ['INSS (11% s/ BC)',fmtBR(inss),'var(--red)'],
+        ['INSS (11% s/ BC)',inss.toFixed(4).replace('.',','),'var(--red)'],
         ['ISS (5%)',fmtBR(iss),'var(--red)'],
         ['Conta Vinculada',fmtBR(cv),'var(--red)'],
         ['Total de Retenções',fmtBR(totalRet),'var(--red)'],
@@ -7008,11 +7013,11 @@ function abrirDetalheLiquidacao(id){
     descricoes=
       descBlock('Descrição 1 — SIAFI (Liquidação)',d1)+
       (d2?descBlock(`Descrição 2 — DDF055 Tributos Federais<br><div style="margin-top:6px;padding:6px 10px;background:rgba(245,200,66,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--gold)">Código DARF IR: ${darfIR} &nbsp;·&nbsp; Natureza de Rendimentos: ${natRend}</div>`,d2):'')+
-      descBlock(`Descrição 3 — DDF050 INSS<br><div style="margin-top:6px;padding:6px 10px;background:rgba(0,230,118,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--green)">Código: 1162 &nbsp;·&nbsp; Data Emissão: ${dataEmissaoBR}</div>`,d3)+
+      descBlock(`Descrição 3 — DDF050 INSS<br><div style="margin-top:6px;padding:6px 10px;background:rgba(0,230,118,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--green)">Código: 1162 &nbsp;·&nbsp; Data Emissão: ${dataEmissaoBR} &nbsp;·&nbsp; APURAÇÃO: 20 MÊS SEGUINTE</div>`,d3)+
       descBlock(`Descrição 4 — ISS<br><div style="margin-top:6px;padding:6px 10px;background:rgba(0,207,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--cyan)">FAVORECIDO ISS: 06553655000173</div>`,d4)+
       descBlock(`Descrição 5 — DOB039 Conta Vinculada<br><div style="margin-top:6px;padding:6px 10px;background:rgba(170,102,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--purple)">CNPJ BB: 00000000000191 &nbsp;·&nbsp; 154704J</div>`,d5)+
       descBlock(`Descrição 6 — REINF<br><div style="margin-top:6px;padding:6px 10px;background:rgba(255,68,68,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--red)">Mês de Pagamento: ${l.mesPag||'—'}</div>`,d6);
-    rodape=`<div style="margin-top:14px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px;font-size:15px;font-weight:700;color:var(--gold);text-align:center;letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</div>`;
+    rodape=`<div style="margin-top:14px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px;font-size:13px;font-weight:700;color:var(--gold);text-align:center;letter-spacing:.04em;margin-bottom:8px">INCLUSÃO DE PRÉ DOC COM OS RESPECTIVOS DADOS BANCÁRIOS</div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px"><span style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</span><button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS').then(()=>toast('Copiado!','success'))">📋 Copiar</button></div>`;
 
   } else if(l.grupo==='pnae'){
     const pnaeCt=(state.contratosPnae||[]).find(c=>c.id===emp?.pnaeContratoId);
@@ -7022,21 +7027,23 @@ function abrirDetalheLiquidacao(id){
     const senar=l.senar||0;
     const totalRet=l.totalRetencoes||0;
     const liquido=l.valorLiquido||0;
+    // BLOCO 4 item 4: número de empenho cadastrado no campo pnaeEmpenho
+    const pnaeEmpNumero=emp?emp.pnaeEmpenho||emp.numero||'—':'—';
 
-    // Seção 2 — Valores (Erro 008)
+    // Seção 2 — Valores (BLOCO 4 item 1: 4 casas decimais)
     sec2=secCard('Seção 2 — Valores',
       sec2Row('Valor Total NF',fmtBR(l.valorBruto))+
-      sec2Row('Contribuição Previdenciária (1,2%)',fmtBR(prev),'var(--red)')+
-      sec2Row('GILRAT (0,1%)',fmtBR(gilrat),'var(--red)')+
-      sec2Row('SENAR (0,2%)',fmtBR(senar),'var(--red)')+
+      sec2Row('Contribuição Previdenciária (1,2%)',prev.toFixed(4).replace('.',','),'var(--red)')+
+      sec2Row('GILRAT (0,1%)',gilrat.toFixed(4).replace('.',','),'var(--red)')+
+      sec2Row('SENAR (0,2%)',senar.toFixed(4).replace('.',','),'var(--red)')+
       sec2Row('Valor Líquido',fmtBR(liquido),'var(--green)')
     );
 
-    // Seção 3 — Dados Bancários (Erro 008)
+    // Seção 3 — Dados Bancários (BLOCO 4 item 2: lidos do módulo Contratos PNAE)
     const pnaeForn=pnaeCt?buscarFornecedorPorDoc(pnaeCt.documento||''):null;
     sec3=secCard('Seção 3 — Dados Bancários',
-      infoRow('Agência',pnaeForn?pnaeForn.agencia||pnaeCt?.agencia||'—':pnaeCt?.agencia||'—')+
-      infoRow('Conta',pnaeForn?pnaeForn.conta||pnaeCt?.conta||'—':pnaeCt?.conta||'—')+
+      infoRow('Agência',pnaeCt?.agencia||pnaeForn?.agencia||'—')+
+      infoRow('Conta',pnaeCt?.conta||pnaeForn?.conta||'—')+
       infoRow('Processo SUAP',l.suap||pnaeCt?.processo||'—')+
       infoRow('Último RC',pnaeCt?pnaeCt.ultimoRC||'—':'—')+
       `<div style="padding:8px 0;margin-top:6px;border-top:1px solid var(--border2)">
@@ -7047,17 +7054,32 @@ function abrirDetalheLiquidacao(id){
       </div>`
     );
 
-    // Descrições (Erros 009, 010)
-    const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADO A ASSISTÊNCIA SOCIAL, P/ O RESTAURANTE INSTITUCIONAL, NO IFPI-CAMPUS SÃO JOÃO/PI, CONF CONTRATO Nº ${nCtPnae}`;
+    // Descrições (BLOCO 4 item 3: cabeçalho DDF050-158146; item 4: empenho na desc1)
+    const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADO A ASSISTÊNCIA SOCIAL, P/ O RESTAURANTE INSTITUCIONAL, NO IFPI-CAMPUS SÃO JOÃO/PI, CONF CONTRATO Nº ${nCtPnae} - EMPENHO ${pnaeEmpNumero}`;
     const d2=`RETENÇÃO DE CONTRIBUIÇÃO PREVIDENCIÁRIA SOBRE PAGTO Nº ${l.nf} - EMIT EM ${dataEmissaoBR} - REF À AQUISIÇÃO DE GÊN ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADO A ASSIST SOCIAL, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     const d3=`RETENÇÃO DE CONTRIBUIÇÃO PREVIDENCIÁRIA (GILRAT) SOBRE PAGTO Nº ${l.nf} - EMIT EM ${dataEmissaoBR} - REF À AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADOS À ASSISTÊNCIA SOCIAL, NO IFPI - CAMPUS SÃO JOÃO/PI`;
     const d4=`RETENÇÃO DE CONTRIBUIÇÃO PREVIDENCIÁRIA (SENAR) SOBRE PAGTO Nº ${l.nf} - EMIT EM ${dataEmissaoBR} - REF À AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADOS À ASSISTÊNCIA SOCIAL, NO IFPI - CAMPUS SÃO JOÃO/PI`;
+    // BLOCO 4 item 3: DDF050 - 158146 como sub-cabeçalho em cada descrição
+    function descBlockPnae(label,texto){
+      const safeText=texto.replace(/'/g,"\\'").replace(/\n/g,' ');
+      return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;overflow:hidden">
+        <div style="padding:8px 12px;background:rgba(0,230,118,.08);border-bottom:1px solid var(--border2)">
+          <div style="font-size:13px;font-weight:700;color:var(--green);letter-spacing:.02em">${label}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:2px">DDF050 - 158146</div>
+        </div>
+        <div style="padding:10px 12px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word">${texto}</div>
+        <div style="padding:6px 12px;border-top:1px solid var(--border)">
+          <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('${safeText}').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+        </div>
+      </div>`;
+    }
     descricoes=
-      descBlock('Descrição 1 — SIAFI',d1)+
-      descBlock('Descrição 2 — Contrib. Previdenciária (1,2%) <small style="color:var(--text3);font-size:11px">· Código 1656 · Vinc 499</small>',d2)+
-      descBlock('Descrição 3 — DDF050 GILRAT (0,1%) <small style="color:var(--text3);font-size:11px">· Código 1646 · Vinc 499</small>',d3)+
-      descBlock('Descrição 4 — DDF050 SENAR (0,2%) <small style="color:var(--text3);font-size:11px">· Código 1213 · Vinc 499</small>',d4);
-    rodape=`<div style="margin-top:10px;padding:8px 12px;background:var(--bg4);border-radius:6px;font-size:12px;font-weight:600;color:var(--text3)">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ-DOCs</div>`;
+      descBlockPnae('Descrição 1 — SIAFI',d1)+
+      descBlockPnae('Descrição 2 — Contrib. Previdenciária (1,2%) · Código 1656 · Vinc 499',d2)+
+      descBlockPnae('Descrição 3 — DDF050 GILRAT (0,1%) · Código 1646 · Vinc 499',d3)+
+      descBlockPnae('Descrição 4 — DDF050 SENAR (0,2%) · Código 1213 · Vinc 499',d4);
+    // BLOCO 4 item 5: rodapé com botão de copiar
+    rodape=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding:8px 12px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:6px"><span style="font-size:12px;font-weight:600;color:var(--gold)">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</span><button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS').then(()=>toast('Copiado!','success'))">📋 Copiar</button></div>`;
 
   } else if(l.grupo==='energia'){
     const empCosip=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenhoCosip);
@@ -7068,44 +7090,96 @@ function abrirDetalheLiquidacao(id){
     const totalRet=l.totalRetencoes||0;
     const vlrFatura=l.valorBruto||0;
     const nContrato=ct?ct.nContrato||'':'';
+    // BLOCO 3 item 7: campo Contrato da energia (do fornecedor)
+    const energiaContrato=forn?forn.contrato||'':'';
 
-    // Seção 1 — Empenhos (Erro 011)
-    sec1=secCard('Seção 1 — Empenhos Vinculados',
-      infoRow('Empenho — Energia Elétrica',l.nEmpenho||'—')+
-      infoRow('Empenho — COSIP',l.nEmpenhoCosip||'—')
-    );
+    function secColorCard(titulo,cor,hexFill,conteudo){
+      return `<div style="background:linear-gradient(135deg,${hexFill}18,${hexFill}06);border:2px solid ${hexFill}55;border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:800;color:${cor};letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid ${hexFill}40">${titulo}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${conteudo}</div>
+      </div>`;
+    }
+    function secColorRow(label,valor,cor){
+      return `<div style="background:${cor||'rgba(255,255,255,.04)'};border-radius:6px;padding:8px 10px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px">${label}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace;word-break:break-word">${valor}</div>
+      </div>`;
+    }
+    function secColorFull(label,valor,cor){
+      return `<div style="background:${cor||'rgba(255,255,255,.04)'};border-radius:6px;padding:8px 10px;grid-column:1/-1">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px">${label}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace;word-break:break-word">${valor}</div>
+      </div>`;
+    }
 
-    // Seção 2 — Valores (Erro 012)
-    sec2=secCard('Seção 2 — Valores',
-      sec2Row('Valor Fatura',fmtBR(vlrFatura))+
-      sec2Row('Total de Retenções',fmtBR(totalRet),'var(--red)')+
-      sec2Row('Valor Líquido',fmtBR(l.valorLiquido),'var(--green)')+
-      sec2Row('BC-6190',fmtBR(bc6190))+
-      sec2Row('Retenção 6190',fmtBR(r6190),'var(--red)')+
-      sec2Row('BC-6147',fmtBR(bc6147))+
-      sec2Row('Retenção 6147',fmtBR(r6147),'var(--red)')+
-      sec2Row('Processo SUAP',l.suap||'—')
-    );
+    // Seção 1 — Empenhos
+    sec1=`<div style="background:linear-gradient(135deg,rgba(68,138,255,.15),rgba(68,138,255,.04));border:2px solid #448aff55;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:800;color:var(--blue);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #448aff40">⚡ SEÇÃO 1 — EMPENHOS VINCULADOS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${secColorRow('Empenho — Energia Elétrica',l.nEmpenho||'—','rgba(68,138,255,.1)')}
+        ${secColorRow('Empenho — COSIP',l.nEmpenhoCosip||'—','rgba(68,138,255,.1)')}
+      </div>
+    </div>`;
 
-    // Seção 3 — Informações Contábeis (Erro 012)
-    sec3=secCard('Seção 3 — Informações Contábeis',
-      `<div style="padding:4px 0">
-        ${infoRow('Situação','DSP001')}
-        ${infoRow('CVPD','3.3.2.3.1.02.00')}
-        ${infoRow('A PAGAR','2.1.3.1.1.04.00')}
-        ${infoRow('Situação','DSP003')}
-        ${infoRow('ILUM PUB','3.7.2.3.1.01.00')}
-        ${infoRow('A PAGAR (COSIP)','2.1.3.1.1.04.00')}
-        ${infoRow('NATUREZA REND (6190)','17099')}
-        ${infoRow('NATUREZA REND (6147)','17002')}
-        ${infoRow('FAVORECIDO','00000000000191')}
-        ${infoRow('CNPJ CAMPUS','10.806.496/0013-82')}
-        ${infoRow('Conta de Contrato','8.1.2.3.1.02.01')}
-      </div>`
-    );
+    // Seção 2 — Valores
+    sec2=`<div style="background:linear-gradient(135deg,rgba(0,230,118,.15),rgba(0,230,118,.04));border:2px solid #00e67655;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:800;color:var(--green);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #00e67640">💰 SEÇÃO 2 — VALORES</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${secColorRow('Valor Fatura',fmtBR(vlrFatura),'rgba(0,230,118,.1)')}
+        ${secColorRow('Total de Retenções',fmtBR(totalRet),'rgba(255,68,68,.1)')}
+        ${secColorRow('Valor Líquido',fmtBR(l.valorLiquido),'rgba(0,230,118,.15)')}
+        ${secColorRow('Processo SUAP',l.suap||'—','rgba(0,230,118,.06)')}
+      </div>
+    </div>`;
 
-    // Descrições (Erro 013)
-    const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA FATURA DE ENERGIA ELÉTRICA E DA COSIP INCIDENTE SOBRE O MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, DO IFPI-CAMPUS SÃO JOÃO/PI - REFERENTE À FATURA Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR}`;
+    // Seção 3 — DDF055 DARF 6190
+    sec3=`<div style="background:linear-gradient(135deg,rgba(255,171,64,.15),rgba(255,171,64,.04));border:2px solid #ffab4055;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:800;color:var(--amber);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #ffab4040">🔶 SEÇÃO 3 — SITUAÇÃO DDF055 - DARF 6190</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${secColorRow('UG Pagadora','158146','rgba(255,171,64,.1)')}
+        ${secColorRow('BC-6190',fmtBR(bc6190),'rgba(255,171,64,.1)')}
+        ${secColorRow('Retenção 6190',fmtBR(r6190),'rgba(255,68,68,.1)')}
+        ${secColorRow('Natureza Rend (6190)','17099','rgba(255,171,64,.08)')}
+        ${secColorRow('Recolhedor (CNPJ)',l.cnpj||'—','rgba(255,171,64,.08)')}
+      </div>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(170,102,255,.15),rgba(170,102,255,.04));border:2px solid #aa66ff55;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:800;color:var(--purple);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #aa66ff40">🟣 SEÇÃO 4 — SITUAÇÃO DDF055 - DARF 6147</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${secColorRow('UG Pagadora','158146','rgba(170,102,255,.1)')}
+        ${secColorRow('BC-6147',fmtBR(bc6147),'rgba(170,102,255,.1)')}
+        ${secColorRow('Retenção 6147',fmtBR(r6147),'rgba(255,68,68,.1)')}
+        ${secColorRow('Natureza Rend (6147)','17002','rgba(170,102,255,.08)')}
+        ${secColorRow('Recolhedor (CNPJ)',l.cnpj||'—','rgba(170,102,255,.08)')}
+      </div>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(0,207,255,.15),rgba(0,207,255,.04));border:2px solid #00cfff55;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:800;color:var(--cyan);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #00cfff40">🔵 SEÇÃO 5 — SITUAÇÃO DSP001</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${secColorRow('Valor','Fatura - R$ 30,00','rgba(0,207,255,.1)')}
+        ${secColorRow('CVPD','3.3.2.3.1.02.00','rgba(0,207,255,.08)')}
+        ${secColorRow('A Pagar','2.1.3.1.1.04.00','rgba(0,207,255,.08)')}
+      </div>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(255,68,68,.15),rgba(255,68,68,.04));border:2px solid #ff444455;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:800;color:var(--red);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #ff444440">🔴 SEÇÃO 6 — SITUAÇÃO DSP003</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${secColorRow('Valor','R$ 30,00 (fixo)','rgba(255,68,68,.1)')}
+        ${secColorRow('ILUM PUB','3.7.2.3.1.01.00','rgba(255,68,68,.08)')}
+        ${secColorRow('A Pagar (COSIP)','2.1.3.1.1.04.00','rgba(255,68,68,.08)')}
+      </div>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(0,229,204,.15),rgba(0,229,204,.04));border:2px solid #00e5cc55;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:800;color:var(--teal);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #00e5cc40">🟢 SEÇÃO 7 — INFORMAÇÕES CONTÁBEIS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${secColorRow('FAVORECIDO','00000000000191','rgba(0,229,204,.1)')}
+        ${secColorRow('CNPJ CAMPUS','10806496001382','rgba(0,229,204,.08)')}
+        ${secColorRow('Conta de Contrato','8.1.2.3.1.02.01','rgba(0,229,204,.08)')}
+      </div>
+    </div>`;
+
+    // Descrições (Erro 013) — BLOCO 3 item 7: campo Contrato após CONFORME CONTRATO
+    const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA FATURA DE ENERGIA ELÉTRICA E DA COSIP INCIDENTE SOBRE O MÊS DE ${l.mesRef}, CONFORME CONTRATO ${energiaContrato||nContrato}, DO IFPI-CAMPUS SÃO JOÃO/PI - REFERENTE À FATURA Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR}`;
     const d2=`RETENÇÃO DE TRIB FED CONF IN 1234/2012 SOBRE PAGTO DE ENERGIA ELÉTRICA E DA COSIP INCID SOBRE O MÊS DE ${l.mesRef}, DO IFPI-CAMPUS SÃO JOÃO/PI - REF À FATURA ${l.nf} - EMIT EM ${dataEmissaoBR}`;
     descricoes=descBlock('Descrição 1 — SIAFI',d1)+descBlock('Descrição 2 — Retenção Trib. Fed.',d2);
     rodape=`<div style="margin-top:10px;padding:8px 12px;background:var(--bg4);border-radius:6px;font-size:12px;font-weight:600;color:var(--text3)">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS DA FATURA COM OS RESPECTIVOS PRÉ DOCS</div>`;
@@ -7171,6 +7245,16 @@ function abrirDetalheLiquidacao(id){
 
   } else if(l.grupo==='pnae'){
     // handled above
+  } else if(l.grupo==='diarias'){
+    // BLOCO 5: Seção Taxas e descrição dinâmica
+    sec2=secCard('Seção — Taxas',
+      sec2Row('Situação','DSP 005')+
+      sec2Row('VPD com Encargos Tributários com União, Estados ou Municípios','3.7.1.2.1.01.00','var(--amber)')+
+      sec2Row('Obrigações Fiscais a Curto Prazo a Pagar','2.1.4.1.1.14.01','var(--blue)')
+    );
+    // Descrição dinâmica BLOCO 5 item 2
+    const dDiarias=`LIQUIDAÇÃO PARA PAGAMENTO ${l.introducao||''} NO IFPI - CAMPUS SÃO JOÃO DO PIAUÍ NO ${l.mesRef||''} - CONFORME ${l.oficio||''} - PROCESSO SUAP ${l.suap||''}`;
+    descricoes=descBlock('Descrição — SIAFI',dDiarias);
   } else if(l.grupo==='ae'){
     const acao=state.acoes.find(a=>a.id===l.acaoId);
     const d1=`LIQUIDAÇÃO PARA PAGAMENTO DE ${l.introducao} - REF AO MÊS DE ${l.mesRef} - CONF. EDITAL Nº ${l.edital} - PARA ALUNOS REGULARMENTE MATRICULADOS NO IFPI - CAMPUS SÃO JOÃO/PI DE ACORDO COM O OFÍCIO Nº ${l.oficio} - PROC SUAP ${l.suap}`;
