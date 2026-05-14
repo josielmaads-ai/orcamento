@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -1860,9 +1861,16 @@ function importarJSON(evt){
         liquidacoes: state.liquidacoes.length,
         contratosPnae: state.contratosPnae.length
       };
-      auditLog('IMPORT','SISTEMA','JSON','Dados importados de arquivo JSON',{file:file.name,...resumo});
+      // Validação de integridade referencial pós-restauração
+      const empsIds=new Set((state.empenhosCad||[]).map(e=>e.id));
+      const liqsOrfas=(state.liquidacoes||[]).filter(l=>l.referenciaId&&!empsIds.has(l.referenciaId)).length;
+      if(liqsOrfas>0)console.warn(`[SUCO] Integridade: ${liqsOrfas} liquidação(ões) com referenciaId sem empenho cadastrado correspondente.`);
+      const contratosIds=new Set((state.contratos||[]).map(c=>c.id));
+      const empsOrfos=(state.empenhosCad||[]).filter(e=>e.contratoId&&!contratosIds.has(e.contratoId)).length;
+      if(empsOrfos>0)console.warn(`[SUCO] Integridade: ${empsOrfos} empenho(s) cadastrado(s) com contratoId sem contrato correspondente.`);
+      auditLog('IMPORT','SISTEMA','JSON','Dados importados de arquivo JSON',{file:file.name,...resumo,integridade:{liqsOrfas,empsOrfos}});
       salvar();showPage('dashboard');
-      toast('✓ Backup restaurado! ('+Object.entries(resumo).map(([k,v])=>k+': '+v).join(' · ')+')','success');
+      toast('✓ Backup restaurado! ('+Object.entries(resumo).map(([k,v])=>k+': '+v).join(' · ')+(liqsOrfas||empsOrfos?` ⚠ verifique console`:'')+')');
     }catch(err){toast('Erro ao importar: arquivo inválido ou corrompido','error');}
   };
   reader.readAsText(file);
@@ -1875,15 +1883,59 @@ function exportarHistoricoCSV(){
   toast('CSV do histórico exportado!','success');
 }
 function confirmarLimpar(){
-  openModal(
-    '⚠ Limpar todos os dados monetários',
-    'Esta ação removerá todos os lançamentos financeiros. A estrutura do sistema (categorias, parâmetros) será mantida. Esta operação NÃO pode ser desfeita. Certifique-se de ter feito um backup JSON antes de continuar.',
-    ()=>{
-      auditLog('DELETE','SISTEMA','RESET','Reset de dados financeiros executado — operação administrativa',{totalLancamentos:state.lancamentos.length});
-      state.lancamentos=[];
-      salvar();showPage('dashboard');toast('Dados financeiros removidos. Estrutura preservada.','warn');
-    }
-  );
+  const modalId='modal-reset-saldos';
+  if(document.getElementById(modalId))document.getElementById(modalId).remove();
+  const div=document.createElement('div');
+  div.id=modalId;
+  div.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);backdrop-filter:blur(6px)';
+  div.innerHTML=`
+  <div style="background:var(--bg3);border:1px solid var(--red-border);border-radius:16px;padding:28px;max-width:520px;width:95%;box-shadow:0 24px 80px rgba(0,0,0,.9)">
+    <div style="font-size:16px;font-weight:800;color:var(--red);margin-bottom:6px;display:flex;align-items:center;gap:10px">⚠ Reset de Saldos Operacionais</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.7">
+      Zera <strong style="color:var(--text)">apenas os lançamentos financeiros</strong> dos módulos selecionados.<br>
+      <span style="color:var(--green)">✓ Preservados:</span> empenhos cadastrados, contratos, contratos PNAE, fornecedores, históricos e relacionamentos.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="rst-credito" style="width:16px;height:16px;accent-color:var(--red)"> Registrar Crédito <span style="font-size:11px;color:var(--text3);margin-left:auto">Entradas e saídas de crédito</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="rst-empenho" style="width:16px;height:16px;accent-color:var(--red)"> Empenho <span style="font-size:11px;color:var(--text3);margin-left:auto">Lançamentos tipo Empenho/Anulação</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="rst-liquidacao" style="width:16px;height:16px;accent-color:var(--red)"> Liquidação <span style="font-size:11px;color:var(--text3);margin-left:auto">Liquidações e pagamentos</span>
+      </label>
+    </div>
+    <div style="background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red2);margin-bottom:18px">
+      ⚠ Esta operação <strong>NÃO pode ser desfeita</strong>. Faça um Backup JSON antes de continuar.
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="document.getElementById('${modalId}').remove()" style="padding:9px 20px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;color:var(--text3);font-size:13px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif">Cancelar</button>
+      <button onclick="executarResetSaldos('${modalId}')" style="padding:9px 20px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;color:var(--red);font-size:13px;font-weight:700;cursor:pointer;font-family:'IBM Plex Sans',sans-serif">⚠ Confirmar Reset</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+}
+
+function executarResetSaldos(modalId){
+  const resetCredito=document.getElementById('rst-credito')?.checked;
+  const resetEmpenho=document.getElementById('rst-empenho')?.checked;
+  const resetLiquidacao=document.getElementById('rst-liquidacao')?.checked;
+  if(!resetCredito&&!resetEmpenho&&!resetLiquidacao){toast('Selecione ao menos um módulo para resetar.','warn');return;}
+  const tiposCredito=['Entrada','Saída','Transferência','Anulação de Crédito'];
+  const tiposEmpenho=['Empenho','Anulação de Empenho'];
+  const tiposLiquidacao=['Liquidação','Pagamento','Anulação de Liquidação'];
+  const antes=state.lancamentos.length;
+  let tiposRemover=[];
+  if(resetCredito)tiposRemover=[...tiposRemover,...tiposCredito];
+  if(resetEmpenho)tiposRemover=[...tiposRemover,...tiposEmpenho];
+  if(resetLiquidacao)tiposRemover=[...tiposRemover,...tiposLiquidacao];
+  state.lancamentos=state.lancamentos.filter(l=>!tiposRemover.includes(l.tipo));
+  const removidos=antes-state.lancamentos.length;
+  auditLog('DELETE','SISTEMA','RESET_SALDOS',`Reset seletivo — módulos: ${[resetCredito?'Crédito':'',resetEmpenho?'Empenho':'',resetLiquidacao?'Liquidação':''].filter(Boolean).join(', ')} — ${removidos} lançamentos removidos`,{removidos,antes});
+  document.getElementById(modalId)?.remove();
+  salvar();showPage('dashboard');
+  toast(`Reset concluído — ${removidos} lançamento(s) removido(s). Cadastros preservados.`,'warn');
 }
 function imprimirRelatorio(){window.print();}
 
@@ -4510,15 +4562,29 @@ function renderContratoDetalhe(){
       <div class="kpi ${saldoNEmp<0?'accent-red':'accent-green'}"><div class="kpi-label">Saldo Não Empenhado</div><div class="kpi-value ${saldoNEmp<0?'text-red':'text-green'}" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(saldoNEmp)}</div></div>
       <div class="kpi accent-purple"><div class="kpi-label">Prev. Mensal Total</div><div class="kpi-value" style="color:var(--purple);font-size:clamp(13px,1.8vw,22px)">${fmtBR(totPrevMensal)}</div></div>
     </div>
-    <div class="card">
-      <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Detalhe por Contrato — Competência · Previsto · Empenho Inicial · Reforços <span style="font-size:9px;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:4px;padding:1px 6px;margin-left:6px">EXE only</span></div>
-      <div class="scroll-h"><table style="min-width:700px">
-        <thead><tr>
-          <th>Mês / Competência</th><th class="r">Previsto</th>
-          <th class="r">Emp. Inicial</th><th class="r">Reforços</th>
-          <th class="r">Total Empenhado</th><th class="r">Liquidado/Pago</th>
-          <th class="r">Saldo Emp.</th><th>Empenhos Vinculados</th>
-        </tr></thead>
+    <div class="card" style="padding:0;overflow:hidden;border:1px solid var(--border2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:linear-gradient(135deg,rgba(245,200,66,.10),rgba(245,200,66,.03));border-bottom:1px solid var(--gold-border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px rgba(245,200,66,.5)"></div>
+          <span style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.04em;text-transform:uppercase">Detalhe por Contrato — Competência</span>
+          <span style="font-size:10px;color:var(--text3)">Previsto · Empenho Inicial · Reforços · Liquidado</span>
+        </div>
+        <span style="font-size:9px;font-weight:700;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:20px;padding:2px 10px;letter-spacing:.06em">EXE ONLY</span>
+      </div>
+      <div class="scroll-h">
+      <table style="min-width:760px;border-collapse:separate;border-spacing:0">
+        <thead>
+          <tr style="background:rgba(245,200,66,.06)">
+            <th style="padding:10px 14px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--gold-border);white-space:nowrap;text-align:left">Mês / Competência</th>
+            <th style="padding:10px 14px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--gold-border);text-align:right">Previsto</th>
+            <th style="padding:10px 14px;font-size:10px;font-weight:700;color:var(--blue2);letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--gold-border);text-align:right">Emp. Inicial</th>
+            <th style="padding:10px 14px;font-size:10px;font-weight:700;color:var(--green);letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--gold-border);text-align:right">Reforços</th>
+            <th style="padding:10px 14px;font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--gold-border);text-align:right;background:rgba(68,138,255,.06)">Total Empenhado</th>
+            <th style="padding:10px 14px;font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--gold-border);text-align:right">Liquidado/Pago</th>
+            <th style="padding:10px 14px;font-size:10px;font-weight:700;color:var(--gold);letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--gold-border);text-align:right">Saldo Emp.</th>
+            <th style="padding:10px 14px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;border-bottom:1px solid var(--gold-border);text-align:left">Empenhos Vinculados</th>
+          </tr>
+        </thead>
         <tbody>
           ${pm.map((v,i)=>{
             const anoAtual=new Date().getFullYear();
@@ -4532,28 +4598,36 @@ function renderContratoDetalhe(){
             const saldoM=empM-liqM;
             const nEmpsMes=[...new Set(empsDoMes.map(l=>l.referencia||l.numeroEmpenho||'').filter(Boolean))].join(', ')||'—';
             const temDados=v>0||empM>0||liqM>0;
-            return`<tr style="${!temDados?'opacity:.35':''}">
-              <td style="font-weight:600;color:var(--gold);white-space:nowrap;font-size:11px">${MESES_ABR[i]}/${anoAtual}</td>
-              <td class="r" style="font-size:11px;color:var(--text2)">${v>0?fmtBR(v):'—'}</td>
-              <td class="r text-blue" style="font-size:11px">${inicialM>0?fmtBR(inicialM):'—'}</td>
-              <td class="r text-green" style="font-size:11px">${reforcoM>0?fmtBR(reforcoM):'—'}</td>
-              <td class="r text-blue fw7" style="font-size:11px">${empM>0?fmtBR(empM):'—'}</td>
-              <td class="r" style="color:var(--amber);font-size:11px">${liqM>0?fmtBR(liqM):'—'}</td>
-              <td class="r ${saldoM<0?'text-red':'text-gold'}" style="font-size:11px">${empM>0?fmtBR(saldoM):'—'}</td>
-              <td style="font-size:10px;color:var(--text3);max-width:180px;overflow:hidden;text-overflow:ellipsis">${nEmpsMes}</td>
+            const zebraBase=i%2===0?'rgba(255,255,255,.012)':'transparent';
+            const rowBg=temDados?zebraBase:'transparent';
+            return`<tr style="background:${rowBg};opacity:${!temDados?.38:1};transition:background .12s" onmouseover="this.style.background='rgba(245,200,66,.05)'" onmouseout="this.style.background='${rowBg}'">
+              <td style="padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap">
+                <span style="display:inline-flex;align-items:center;gap:6px">
+                  <span style="width:6px;height:6px;border-radius:50%;background:${temDados?'var(--gold)':'var(--border3)'};flex-shrink:0;box-shadow:${temDados?'0 0 6px rgba(245,200,66,.4)':'none'}"></span>
+                  <span style="font-size:12px;font-weight:700;color:${temDados?'var(--gold)':'var(--text4)'};font-family:'IBM Plex Mono',monospace">${MESES_ABR[i]}/${anoAtual}</span>
+                </span>
+              </td>
+              <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-size:12px;font-family:'IBM Plex Mono',monospace;color:${v>0?'var(--text2)':'var(--text4)'}">${v>0?fmtBR(v):'—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-size:12px;font-family:'IBM Plex Mono',monospace;color:${inicialM>0?'var(--blue2)':'var(--text4)'}">${inicialM>0?fmtBR(inicialM):'—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-size:12px;font-family:'IBM Plex Mono',monospace;color:${reforcoM>0?'var(--green)':'var(--text4)'}">${reforcoM>0?fmtBR(reforcoM):'—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-size:12px;font-family:'IBM Plex Mono',monospace;font-weight:700;color:${empM>0?'var(--blue)':'var(--text4)'};background:${empM>0?'rgba(68,138,255,.06)':'transparent'}">${empM>0?fmtBR(empM):'—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-size:12px;font-family:'IBM Plex Mono',monospace;color:${liqM>0?'var(--amber)':'var(--text4)'}">${liqM>0?fmtBR(liqM):'—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-size:12px;font-family:'IBM Plex Mono',monospace;font-weight:${empM>0?700:400};color:${empM>0?(saldoM<0?'var(--red)':'var(--gold)'):'var(--text4)'}">${empM>0?fmtBR(saldoM):'—'}</td>
+              <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'IBM Plex Mono',monospace" title="${nEmpsMes}">${nEmpsMes}</td>
             </tr>`;
           }).join('')}
-          <tr style="font-weight:700;background:var(--bg4);border-top:2px solid var(--gold-border)">
-            <td style="color:var(--gold)">TOTAL</td>
-            <td class="r text-gold" style="font-size:11px">${fmtBR(totPrevMensal)}</td>
-            <td class="r text-blue" style="font-size:11px" colspan="2"></td>
-            <td class="r text-blue" style="font-size:11px">${fmtBR(emp)}</td>
-            <td class="r" style="color:var(--amber);font-size:11px">${fmtBR(liqPag)}</td>
-            <td class="r ${saldoNEmp<0?'text-red':'text-gold'}" style="font-size:11px">${fmtBR(saldoNEmp)}</td>
+          <tr style="background:linear-gradient(135deg,rgba(245,200,66,.10),rgba(245,200,66,.04));border-top:2px solid var(--gold-border)">
+            <td style="padding:12px 14px;font-size:12px;font-weight:800;color:var(--gold);letter-spacing:.08em;text-transform:uppercase;font-family:'IBM Plex Mono',monospace">▸ TOTAL</td>
+            <td style="padding:12px 14px;text-align:right;font-size:12px;font-weight:700;color:var(--gold);font-family:'IBM Plex Mono',monospace">${fmtBR(totPrevMensal)}</td>
+            <td style="padding:12px 14px;text-align:right" colspan="2"></td>
+            <td style="padding:12px 14px;text-align:right;font-size:12px;font-weight:800;color:var(--blue);font-family:'IBM Plex Mono',monospace;background:rgba(68,138,255,.08)">${fmtBR(emp)}</td>
+            <td style="padding:12px 14px;text-align:right;font-size:12px;font-weight:700;color:var(--amber);font-family:'IBM Plex Mono',monospace">${fmtBR(liqPag)}</td>
+            <td style="padding:12px 14px;text-align:right;font-size:12px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:${saldoNEmp<0?'var(--red)':'var(--gold)'}">${fmtBR(saldoNEmp)}</td>
             <td></td>
           </tr>
         </tbody>
-      </table></div>
+      </table>
+      </div>
     </div>`;
 }
 
@@ -5507,7 +5581,7 @@ function cempMontarVinculo(cat){
       </div>
       <div id="cemp-pnae-forn-info" style="margin:6px 0"></div>
       <div class="field" style="max-width:420px"><label>Contrato PNAE</label><select id="cemp-pnae-contrato"><option value="">Nenhum</option></select></div>
-      <div class="field" style="max-width:280px;margin-top:8px"><label>Empenho <span style="color:var(--text3);font-size:11px">(exibido na Descrição 1 — SIAFI)</span></label><input type="text" id="cemp-pnae-empenho" placeholder="Nº do empenho PNAE (opcional)"></div>
+      <div class="field" style="max-width:280px;margin-top:8px"><label>Nº CONTRATO PNAE <span style="color:var(--text3);font-size:11px">(exibido na Descrição 1 — SIAFI)</span></label><input type="text" id="cemp-pnae-empenho" placeholder="Nº do contrato PNAE (opcional)"></div>
     </div>`;
     return;
   }
@@ -5553,10 +5627,26 @@ function cempPnaeBuscarForn(){
   if(infoEl)infoEl.innerHTML=forn
     ?`<div class="info-box success" style="margin:4px 0;padding:6px 10px"><span class="info-icon">✓</span><div><strong>${forn.nome}</strong> · ${tipo}: ${forn.documento}</div></div>`:'';
   const ctSel=document.getElementById('cemp-pnae-contrato');
+  const empenhoEl=document.getElementById('cemp-pnae-empenho');
   if(ctSel&&forn){
     const cts=state.contratosPnae.filter(c=>c.status!=='Excluído'&&c.documento.replace(/\D/g,'')===forn.documento.replace(/\D/g,''));
     ctSel.innerHTML='<option value="">Nenhum</option>'+cts.map(c=>`<option value="${c.id}">${c.nContrato} — ${c.objeto||c.nomeFornecedor}</option>`).join('');
+    // Preenchimento automático: seleciona o primeiro contrato vinculado e preenche o campo Nº CONTRATO PNAE
+    if(cts.length===1){
+      ctSel.value=cts[0].id;
+      if(empenhoEl&&!empenhoEl.value)empenhoEl.value=cts[0].nContrato||'';
+    } else if(cts.length>1 && ctSel.value){
+      // Já tem seleção, mantém
+    }
+  } else if(ctSel){
+    ctSel.innerHTML='<option value="">Nenhum</option>';
   }
+  // Atualiza campo Nº CONTRATO PNAE ao trocar select
+  if(ctSel)ctSel.onchange=function(){
+    const c=state.contratosPnae.find(x=>x.id===this.value);
+    if(c&&empenhoEl&&!empenhoEl.dataset.manuallyEdited)empenhoEl.value=c.nContrato||'';
+  };
+  if(empenhoEl)empenhoEl.oninput=function(){this.dataset.manuallyEdited='1';};
 }
 
 function cempValidarAno(){
@@ -6926,21 +7016,21 @@ function abrirDetalheLiquidacao(id){
 
   // ── Seção 2 helper ──
   function sec2Row(label,valor,cor){
-    return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--text3);font-size:12px">${label}</span>
-      <strong style="font-size:12px;color:${cor||'var(--text)'}">${valor}</strong>
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:1px solid rgba(255,171,64,.12)">
+      <span style="color:var(--text3);font-size:13px">${label}</span>
+      <strong style="font-size:14px;color:${cor||'var(--text)'};font-family:'IBM Plex Mono',monospace">${valor}</strong>
     </div>`;
   }
   function secCard(titulo,conteudo){
-    return `<div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:14px;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--amber);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">${titulo}</div>
+    return `<div style="background:linear-gradient(135deg,rgba(255,171,64,.10),rgba(255,171,64,.03));border:2px solid rgba(255,171,64,.3);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:800;color:var(--amber);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(255,171,64,.25)">🔶 ${titulo}</div>
       ${conteudo}
     </div>`;
   }
   function infoRow(label,valor){
-    return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--text3);font-size:11.5px">${label}</span>
-      <span style="color:var(--text2);font-size:11.5px;font-family:'IBM Plex Mono',monospace">${valor||'—'}</span>
+    return `<div style="background:rgba(255,255,255,.04);border-radius:6px;padding:8px 10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">${label}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace">${valor||'—'}</div>
     </div>`;
   }
 
@@ -7037,7 +7127,12 @@ function abrirDetalheLiquidacao(id){
     rodape=`<div style="margin-top:14px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px;font-size:13px;font-weight:700;color:var(--gold);text-align:center;letter-spacing:.04em;margin-bottom:8px">INCLUSÃO DE PRÉ DOC COM OS RESPECTIVOS DADOS BANCÁRIOS</div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px"><span style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</span><button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS').then(()=>toast('Copiado!','success'))">📋 Copiar</button></div>`;
 
   } else if(l.grupo==='pnae'){
-    const pnaeCt=(state.contratosPnae||[]).find(c=>c.id===emp?.pnaeContratoId);
+    // Busca contrato PNAE: 1) pelo pnaeContratoId do empenho, 2) pelo CPF/CNPJ da liquidação
+    let pnaeCt=(state.contratosPnae||[]).find(c=>c.id===emp?.pnaeContratoId);
+    if(!pnaeCt&&l.cnpj){
+      const _docLiq=l.cnpj.replace(/\D/g,'');
+      pnaeCt=(state.contratosPnae||[]).find(c=>c.status!=='Excluído'&&c.documento&&c.documento.replace(/\D/g,'')===_docLiq)||null;
+    }
     const nCtPnae=pnaeCt?pnaeCt.nContrato:'—';
     const prev=l.prevContrib||0;
     const gilrat=l.gilrat||0;
@@ -7173,7 +7268,7 @@ function abrirDetalheLiquidacao(id){
     <div style="background:linear-gradient(135deg,rgba(0,207,255,.15),rgba(0,207,255,.04));border:2px solid #00cfff55;border-radius:12px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:800;color:var(--cyan);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #00cfff40">🔵 SEÇÃO 5 — SITUAÇÃO DSP001</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        ${secColorRow('Valor','Fatura - R$ 30,00','rgba(0,207,255,.1)')}
+        ${secColorRow('Valor',fmtBR(Math.max(0,vlrFatura-30)),'rgba(0,207,255,.1)')}
         ${secColorRow('CVPD','3.3.2.3.1.02.00','rgba(0,207,255,.08)')}
         ${secColorRow('A Pagar','2.1.3.1.1.04.00','rgba(0,207,255,.08)')}
       </div>
@@ -7199,7 +7294,17 @@ function abrirDetalheLiquidacao(id){
     const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA FATURA DE ENERGIA ELÉTRICA E DA COSIP INCIDENTE SOBRE O MÊS DE ${l.mesRef}, CONFORME CONTRATO ${energiaContrato||nContrato}, DO IFPI-CAMPUS SÃO JOÃO/PI - REFERENTE À FATURA Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR}`;
     const d2=`RETENÇÃO DE TRIB FED CONF IN 1234/2012 SOBRE PAGTO DE ENERGIA ELÉTRICA E DA COSIP INCID SOBRE O MÊS DE ${l.mesRef}, DO IFPI-CAMPUS SÃO JOÃO/PI - REF À FATURA ${l.nf} - EMIT EM ${dataEmissaoBR}`;
     descricoes=descBlock('Descrição 1 — SIAFI',d1)+descBlock('Descrição 2 — Retenção Trib. Fed.',d2);
-    rodape=`<div style="margin-top:10px;padding:8px 12px;background:var(--bg4);border-radius:6px;font-size:12px;font-weight:600;color:var(--text3)">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS DA FATURA COM OS RESPECTIVOS PRÉ DOCS</div>`;
+    rodape=`
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DADOS BANCÁRIOS COM O RESPECTIVO PRÉ-DOC</span>
+        <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DADOS BANCÁRIOS COM O RESPECTIVO PRÉ-DOC').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ-DOCs</span>
+        <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ-DOCs').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+      </div>
+    </div>`;
 
   } else if(l.grupo==='agua'){
     const ctAgua=forn?forn.contratoAguaEsgoto||'—':'—';
@@ -7223,7 +7328,17 @@ function abrirDetalheLiquidacao(id){
     const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA FATURA DE SERV DE TRATAMENTO DE ÁGUA E ESGOTO SOBRE O MÊS DE ${l.mesRef}, CONFORME CONTRATO ${ctAgua}, DO IFPI-CAMPUS SÃO JOÃO/PI - REFERENTE À FATURA Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR}`;
     const d2=`RETENÇÃO DE TRIB FED CONF IN 1234/2012 SOBRE PAGTO DE FATURA SERV DE TRAT DE ÁGUA E ESGOTO INCID SOBRE O MÊS DE ${l.mesRef}, DO IFPI-CAMPUS SÃO JOÃO/PI - REF À FATURA ${l.nf} - EMIT EM ${dataEmissaoBR}`;
     descricoes=descBlock('Descrição 1 — SIAFI',d1)+descBlock('Descrição 2 — Retenção Trib. Fed.',d2);
-    rodape=`<div style="margin-top:10px;padding:8px 12px;background:var(--bg4);border-radius:6px;font-size:12px;font-weight:600;color:var(--text3)">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS DA FATURA COM OS RESPECTIVOS PRÉ-DOCs</div>`;
+    rodape=`
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DADOS BANCÁRIOS COM O RESPECTIVO PRÉ-DOC</span>
+        <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DADOS BANCÁRIOS COM O RESPECTIVO PRÉ-DOC').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ-DOCs</span>
+        <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ-DOCs').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+      </div>
+    </div>`;
 
   } else if(l.grupo==='mat'){
     const isSimples=forn&&forn.simplesNacional==='Sim';
@@ -7257,8 +7372,17 @@ function abrirDetalheLiquidacao(id){
     const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs.slice(0,200)}, CONFORME PREGÃO ELETR ${l.pregao||'—'}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     const d2=isSimples?null:`RETENÇÃO DE TRIBUTOS FED CONF IN 1234/2012 SOBRE PAGTO DA NF Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REF À ${descObs}, CONF PREGÃO ${l.pregao||'—'}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     descricoes=descBlock('Descrição 1 — SIAFI',d1)+(d2?descBlock('Descrição 2 — DDF055 Retenção Tributos Federais',d2):'');
-    rodape=`<div style="margin-top:10px;padding:8px 12px;background:var(--bg4);border-radius:6px;font-size:12px;font-weight:600;color:var(--text3)">INCLUSÃO DE DADOS BANCÁRIOS COM O RESPECTIVO PRÉ-DOC</div>
-      <div style="margin-top:6px;padding:8px 12px;background:var(--bg4);border-radius:6px;font-size:12px;font-weight:600;color:var(--text3)">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ-DOCs</div>`;
+    rodape=`
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DADOS BANCÁRIOS COM O RESPECTIVO PRÉ-DOC</span>
+        <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DADOS BANCÁRIOS COM O RESPECTIVO PRÉ-DOC').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ-DOCs</span>
+        <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ-DOCs').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+      </div>
+    </div>`;
 
   } else if(l.grupo==='pnae'){
     // handled above
