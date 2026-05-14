@@ -454,6 +454,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <!-- FIM DRIVE -->
     <button class="btn-top" onclick="exportarJSON()">↓ Backup JSON</button>
     <button class="btn-top" onclick="exportarCSV()">↓ CSV</button>
+    <button class="btn-top" id="btn-pdf-export" onclick="exportarRelatorioPDF()" style="color:var(--gold);border-color:var(--gold-border);background:var(--gold-bg);font-weight:600">⬇ Relatório PDF</button>
     <button class="btn-top" onclick="imprimirRelatorio()">⎙ Imprimir</button>
     <button class="btn-top" onclick="document.getElementById('import-file').click()">↑ Importar</button>
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importarJSON(event)">
@@ -1888,23 +1889,46 @@ function confirmarLimpar(){
   div.id=modalId;
   div.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.85);backdrop-filter:blur(6px)';
   div.innerHTML=`
-  <div style="background:var(--bg3);border:1px solid var(--red-border);border-radius:16px;padding:28px;max-width:520px;width:95%;box-shadow:0 24px 80px rgba(0,0,0,.9)">
+  <div style="background:var(--bg3);border:1px solid var(--red-border);border-radius:16px;padding:28px;max-width:560px;width:95%;box-shadow:0 24px 80px rgba(0,0,0,.9)">
     <div style="font-size:16px;font-weight:800;color:var(--red);margin-bottom:6px;display:flex;align-items:center;gap:10px">⚠ Reset de Saldos Operacionais</div>
     <div style="font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.7">
-      Zera <strong style="color:var(--text)">apenas os lançamentos financeiros</strong> dos módulos selecionados.<br>
-      <span style="color:var(--green)">✓ Preservados:</span> empenhos cadastrados, contratos, contratos PNAE, fornecedores, históricos e relacionamentos.
+      Zera os lançamentos financeiros e/ou saldos dos módulos selecionados.<br>
+      <span style="color:var(--green)">✓ Preservados sempre:</span> cadastros de empenho, contratos, contratos PNAE, fornecedores e relacionamentos.
     </div>
+
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px">Lançamentos financeiros</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="rst-credito" style="width:16px;height:16px;accent-color:var(--red)">
+        Registrar Crédito
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">Remove todas as entradas de crédito registradas</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="rst-empenho" style="width:16px;height:16px;accent-color:var(--red)">
+        Lançamentos de Empenho
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">Remove lançamentos tipo Empenho/Anulação</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="rst-liquidacao" style="width:16px;height:16px;accent-color:var(--red)">
+        Lançamentos de Liquidação
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">Remove lançamentos tipo Liquidação/Pagamento</span>
+      </label>
+    </div>
+
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px">Módulos especializados</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
-      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
-        <input type="checkbox" id="rst-credito" style="width:16px;height:16px;accent-color:var(--red)"> Registrar Crédito <span style="font-size:11px;color:var(--text3);margin-left:auto">Entradas e saídas de crédito</span>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--amber-border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="rst-saldo-empenho" style="width:16px;height:16px;accent-color:var(--amber)">
+        <span>Saldos de Empenho <span style="font-size:10px;color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:4px;padding:1px 6px;margin-left:4px">valorInicial → 0</span></span>
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">Zera o valor inicial de todos os empenhos cadastrados</span>
       </label>
-      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
-        <input type="checkbox" id="rst-empenho" style="width:16px;height:16px;accent-color:var(--red)"> Empenho <span style="font-size:11px;color:var(--text3);margin-left:auto">Lançamentos tipo Empenho/Anulação</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
-        <input type="checkbox" id="rst-liquidacao" style="width:16px;height:16px;accent-color:var(--red)"> Liquidação <span style="font-size:11px;color:var(--text3);margin-left:auto">Liquidações e pagamentos</span>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg4);border:1px solid var(--amber-border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="rst-liquidacoes-mod" style="width:16px;height:16px;accent-color:var(--amber)">
+        <span>Liquidações do Módulo <span style="font-size:10px;color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:4px;padding:1px 6px;margin-left:4px">state.liquidacoes → []</span></span>
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">Apaga todas as liquidações registradas no módulo especializado</span>
       </label>
     </div>
+
     <div style="background:var(--red-bg);border:1px solid var(--red-border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red2);margin-bottom:18px">
       ⚠ Esta operação <strong>NÃO pode ser desfeita</strong>. Faça um Backup JSON antes de continuar.
     </div>
@@ -1917,24 +1941,66 @@ function confirmarLimpar(){
 }
 
 function executarResetSaldos(modalId){
-  const resetCredito=document.getElementById('rst-credito')?.checked;
-  const resetEmpenho=document.getElementById('rst-empenho')?.checked;
-  const resetLiquidacao=document.getElementById('rst-liquidacao')?.checked;
-  if(!resetCredito&&!resetEmpenho&&!resetLiquidacao){toast('Selecione ao menos um módulo para resetar.','warn');return;}
-  const tiposCredito=['Entrada','Saída','Transferência','Anulação de Crédito'];
-  const tiposEmpenho=['Empenho','Anulação de Empenho'];
+  const resetCredito        = document.getElementById('rst-credito')?.checked;
+  const resetEmpenho        = document.getElementById('rst-empenho')?.checked;
+  const resetLiquidacao     = document.getElementById('rst-liquidacao')?.checked;
+  const resetSaldoEmpenho   = document.getElementById('rst-saldo-empenho')?.checked;
+  const resetLiquidacoesMod = document.getElementById('rst-liquidacoes-mod')?.checked;
+
+  if(!resetCredito&&!resetEmpenho&&!resetLiquidacao&&!resetSaldoEmpenho&&!resetLiquidacoesMod){
+    toast('Selecione ao menos um módulo para resetar.','warn');return;
+  }
+
+  const log=[];
+
+  // ── 1. Lançamentos financeiros ─────────────────────────────
+  const tiposCredito   =['Entrada','Saída','Transferência','Anulação de Crédito'];
+  const tiposEmpenho   =['Empenho','Anulação de Empenho'];
   const tiposLiquidacao=['Liquidação','Pagamento','Anulação de Liquidação'];
   const antes=state.lancamentos.length;
   let tiposRemover=[];
-  if(resetCredito)tiposRemover=[...tiposRemover,...tiposCredito];
-  if(resetEmpenho)tiposRemover=[...tiposRemover,...tiposEmpenho];
+  if(resetCredito)   tiposRemover=[...tiposRemover,...tiposCredito];
+  if(resetEmpenho)   tiposRemover=[...tiposRemover,...tiposEmpenho];
   if(resetLiquidacao)tiposRemover=[...tiposRemover,...tiposLiquidacao];
-  state.lancamentos=state.lancamentos.filter(l=>!tiposRemover.includes(l.tipo));
-  const removidos=antes-state.lancamentos.length;
-  auditLog('DELETE','SISTEMA','RESET_SALDOS',`Reset seletivo — módulos: ${[resetCredito?'Crédito':'',resetEmpenho?'Empenho':'',resetLiquidacao?'Liquidação':''].filter(Boolean).join(', ')} — ${removidos} lançamentos removidos`,{removidos,antes});
+  if(tiposRemover.length>0){
+    state.lancamentos=state.lancamentos.filter(l=>!tiposRemover.includes(l.tipo));
+    const removidos=antes-state.lancamentos.length;
+    log.push(`${removidos} lançamento(s) removido(s)`);
+  }
+
+  // ── 2. Saldos de empenho (valorInicial → 0) ───────────────
+  if(resetSaldoEmpenho&&Array.isArray(state.empenhosCad)){
+    const qtd=state.empenhosCad.length;
+    state.empenhosCad=state.empenhosCad.map(e=>({...e,valorInicial:0}));
+    // Também zera os lançamentos INICIAL/REFORÇO associados aos empenhos
+    state.lancamentos=state.lancamentos.filter(l=>l.subtipo!=='INICIAL'&&l.subtipo!=='REFORÇO');
+    log.push(`Saldo inicial zerado em ${qtd} empenho(s)`);
+  }
+
+  // ── 3. Liquidações do módulo especializado ─────────────────
+  if(resetLiquidacoesMod&&Array.isArray(state.liquidacoes)){
+    const qtdLiq=state.liquidacoes.length;
+    state.liquidacoes=[];
+    log.push(`${qtdLiq} liquidação(ões) do módulo especializado removida(s)`);
+  }
+
+  const modulosLabel=[
+    resetCredito?'Crédito':'',
+    resetEmpenho?'Lançamentos Empenho':'',
+    resetLiquidacao?'Lançamentos Liquidação':'',
+    resetSaldoEmpenho?'Saldos de Empenho':'',
+    resetLiquidacoesMod?'Liquidações (módulo)':''
+  ].filter(Boolean).join(', ');
+
+  auditLog('DELETE','SISTEMA','RESET_SALDOS',
+    `Reset seletivo — módulos: ${modulosLabel} — ${log.join(' | ')}`,
+    {log,antes});
+
   document.getElementById(modalId)?.remove();
-  salvar();showPage('dashboard');
-  toast(`Reset concluído — ${removidos} lançamento(s) removido(s). Cadastros preservados.`,'warn');
+  salvar();
+  renderSidebarSaldo();
+  showPage('dashboard');
+  toast(`Reset concluído — ${log.join(' · ')}. Cadastros preservados.`,'warn');
 }
 function imprimirRelatorio(){window.print();}
 
@@ -9149,5 +9215,694 @@ document.getElementById('modal-edit-empenho').addEventListener('click',function(
     </label>
   </div>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MÓDULO: EXPORTAÇÃO PDF EXECUTIVO — SUCO v1.0
+     Dependência: jsPDF (carregado via CDN ao acionar)
+     Autor: SUCO · IFPI Campus São João do Piauí
+════════════════════════════════════════════════════════════ -->
+<style>
+#modal-pdf{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:700;opacity:0;pointer-events:none;transition:opacity .25s}
+#modal-pdf.show{opacity:1;pointer-events:all}
+#modal-pdf-inner{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;padding:30px 32px;max-width:520px;width:92%;box-shadow:0 16px 60px rgba(0,0,0,.6)}
+.pdf-modal-title{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;color:var(--gold);margin-bottom:4px;display:flex;align-items:center;gap:10px}
+.pdf-modal-sub{font-size:12px;color:var(--text3);margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.pdf-opt-group{margin-bottom:16px}
+.pdf-opt-label{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+.pdf-opts{display:flex;flex-wrap:wrap;gap:8px}
+.pdf-opt{display:flex;align-items:center;gap:6px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px;color:var(--text2);transition:all .12s;user-select:none}
+.pdf-opt input{accent-color:var(--gold);width:13px;height:13px}
+.pdf-opt:has(input:checked){border-color:var(--gold-border);background:var(--gold-bg);color:var(--gold)}
+.pdf-footer{display:flex;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}
+.btn-pdf-gerar{flex:1;padding:11px;border-radius:10px;background:var(--gold-bg);border:1px solid var(--gold-border);color:var(--gold);font-weight:700;font-size:13px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-pdf-gerar:hover{background:rgba(245,200,66,.2)}
+.btn-pdf-gerar:disabled{opacity:.5;cursor:not-allowed}
+.btn-pdf-cancel{padding:11px 18px;border-radius:10px;background:transparent;border:1px solid var(--border2);color:var(--text3);font-size:13px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;transition:all .12s}
+.btn-pdf-cancel:hover{border-color:var(--border3);color:var(--text2)}
+#pdf-progress{display:none;margin-top:14px;background:var(--bg4);border-radius:8px;overflow:hidden;height:4px}
+#pdf-progress-bar{height:100%;background:var(--gold);border-radius:8px;width:0%;transition:width .3s}
+#pdf-status{font-size:11px;color:var(--text3);margin-top:6px;text-align:center;min-height:16px}
+</style>
+
+<!-- Modal de configuração do PDF -->
+<div id="modal-pdf">
+  <div id="modal-pdf-inner">
+    <div class="pdf-modal-title">⬇ Exportar Relatório Executivo</div>
+    <div class="pdf-modal-sub">IFPI Campus São João do Piauí · Coordenação de Orçamento, Contabilidade e Finanças</div>
+
+    <div class="pdf-opt-group">
+      <div class="pdf-opt-label">Seções a incluir</div>
+      <div class="pdf-opts">
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-kpis" checked> Indicadores (KPIs)</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-fluxo" checked> Fluxo de Execução</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-cats" checked> Execução por Categoria</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-fontes" checked> Saldo por Fonte / PTRES</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-empenhos"> Empenhos Cadastrados</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-recentes"> Últimos Lançamentos</label>
+      </div>
+    </div>
+
+    <div class="pdf-opt-group">
+      <div class="pdf-opt-label">Referência</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field">
+          <label>Competência / Período</label>
+          <input type="text" id="pdf-periodo" placeholder="Ex: Janeiro–Maio 2025" style="font-size:13px">
+        </div>
+        <div class="field">
+          <label>Elaborado por</label>
+          <input type="text" id="pdf-autor" value="José Marcondes Ribeiro Coelho" style="font-size:13px">
+        </div>
+      </div>
+    </div>
+
+    <div id="pdf-progress"><div id="pdf-progress-bar"></div></div>
+    <div id="pdf-status"></div>
+
+    <div class="pdf-footer">
+      <button class="btn-pdf-cancel" onclick="fecharModalPDF()">Cancelar</button>
+      <button class="btn-pdf-gerar" id="btn-pdf-gerar" onclick="gerarPDF()">⬇ Gerar PDF</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Abre / fecha modal PDF ──────────────────────────────────────────────────
+function exportarRelatorioPDF(){
+  // Preenche período automaticamente com o ano atual
+  const el = document.getElementById('pdf-periodo');
+  if(!el.value){
+    el.value = 'Exercício ' + new Date().getFullYear();
+  }
+  document.getElementById('modal-pdf').classList.add('show');
+}
+function fecharModalPDF(){
+  document.getElementById('modal-pdf').classList.remove('show');
+  setPdfStatus('');
+  setPdfProgress(0);
+  document.getElementById('btn-pdf-gerar').disabled = false;
+  document.getElementById('pdf-progress').style.display = 'none';
+}
+document.getElementById('modal-pdf').addEventListener('click', function(e){
+  if(e.target === this) fecharModalPDF();
+});
+
+function setPdfProgress(pct, msg){
+  const bar = document.getElementById('pdf-progress-bar');
+  const prog = document.getElementById('pdf-progress');
+  prog.style.display = 'block';
+  bar.style.width = pct + '%';
+  if(msg) setPdfStatus(msg);
+}
+function setPdfStatus(msg){
+  document.getElementById('pdf-status').textContent = msg;
+}
+
+// ── Carrega jsPDF via CDN (lazy load) ──────────────────────────────────────
+function carregarJsPDF(){
+  return new Promise((resolve, reject) => {
+    if(window.jspdf && window.jspdf.jsPDF){ resolve(window.jspdf.jsPDF); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = () => {
+      if(window.jspdf && window.jspdf.jsPDF) resolve(window.jspdf.jsPDF);
+      else reject(new Error('jsPDF não carregou'));
+    };
+    s.onerror = () => reject(new Error('Falha ao carregar jsPDF (verifique conexão)'));
+    document.head.appendChild(s);
+  });
+}
+
+// ── Helpers de formatação (inline — sem depender de fmtBR externo se não estiver pronto) ─
+function pdfFmt(v){
+  const n = Number(v)||0;
+  return 'R$ ' + Math.abs(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function pdfPct(v, total){
+  if(!total) return '0%';
+  return Math.min(100, Math.round(v/total*100)) + '%';
+}
+function pdfDataHoje(){
+  return new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+}
+
+// ── Coleta todos os dados para o relatório ──────────────────────────────────
+function coletarDadosRelatorio(){
+  // KPIs principais
+  const totCred  = totalCreditosOriginais();
+  const totEmp   = totalEmpenhosEXE();
+  const totAnul  = sum(state.lancamentos.filter(l=>{
+    if(l.status!=='Ativo'||l.tipo!=='Anulação') return false;
+    if(l.tipoRecurso) return l.tipoRecurso==='EXE';
+    const emp = (state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId||e.id===l.referenciaId||e.numero===l.referencia);
+    return !emp || (emp.tipoEmp||'EXE')==='EXE';
+  }));
+  const totLiq   = totalLiquidacoesEXE();
+  const totPag   = totalPagamentosEXE();
+  const totRap   = totalEmpenhosRAP();
+  const saldoD   = totCred - totEmp + totAnul;
+  const empLiq   = totEmp - totAnul;
+  const txExec   = totCred > 0 ? Math.min(100, Math.round(empLiq/totCred*100)) : 0;
+
+  // Execução por categoria
+  const catRows = DEFAULT_CATS.map(c => {
+    const cred = totalCreditosOriginais(c);
+    const emp  = totalEmpenhosEXE(c);
+    const liq  = totalLiquidacoesEXE(c);
+    const pag  = totalPagamentosEXE(c);
+    const sal  = saldoCat(c);
+    const pct  = cred > 0 ? Math.min(100, Math.round(emp/cred*100)) : 0;
+    if(!cred && !emp) return null;
+    return { cat: c, cred, emp, liq, pag, sal, pct };
+  }).filter(Boolean);
+
+  // Saldo por fonte
+  const fonteRows = state.fontes.map(f => {
+    const e    = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.fonte===f));
+    const emp  = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.fonte===f&&(l.tipoRecurso||'EXE')==='EXE'));
+    const anul = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Anulação'&&l.fonte===f));
+    if(!e && !emp) return null;
+    return { fonte: f, cred: e, emp: emp-anul, sal: e-(emp-anul) };
+  }).filter(Boolean);
+
+  // Saldo por PTRES
+  const ptresRows = state.ptres.map(p => {
+    const e    = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.ptres===p));
+    const emp  = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.ptres===p&&(l.tipoRecurso||'EXE')==='EXE'));
+    const anul = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Anulação'&&l.ptres===p));
+    if(!e && !emp) return null;
+    return { ptres: p, cred: e, emp: emp-anul, sal: e-(emp-anul) };
+  }).filter(Boolean);
+
+  // Empenhos cadastrados (top 30)
+  const empenhos = (state.empenhosCad||[])
+    .filter(e => e.status !== 'Excluído')
+    .slice(0, 30);
+
+  // Últimos 15 lançamentos ativos
+  const recentes = state.lancamentos
+    .filter(l => l.status === 'Ativo')
+    .sort((a,b) => (b.data||'').localeCompare(a.data||''))
+    .slice(0, 15);
+
+  return { totCred, totEmp, totAnul, totLiq, totPag, totRap, saldoD, empLiq, txExec, catRows, fonteRows, ptresRows, empenhos, recentes };
+}
+
+// ── Função principal de geração do PDF ────────────────────────────────────
+async function gerarPDF(){
+  const btnGerar = document.getElementById('btn-pdf-gerar');
+  btnGerar.disabled = true;
+
+  try {
+    setPdfProgress(5, 'Carregando biblioteca PDF...');
+    const jsPDF = await carregarJsPDF();
+
+    setPdfProgress(15, 'Coletando dados do sistema...');
+    const d = coletarDadosRelatorio();
+
+    const periodo = document.getElementById('pdf-periodo').value || 'Exercício ' + new Date().getFullYear();
+    const autor   = document.getElementById('pdf-autor').value   || 'COCF — IFPI Campus SJP';
+    const incKPIs     = document.getElementById('pdf-inc-kpis').checked;
+    const incFluxo    = document.getElementById('pdf-inc-fluxo').checked;
+    const incCats     = document.getElementById('pdf-inc-cats').checked;
+    const incFontes   = document.getElementById('pdf-inc-fontes').checked;
+    const incEmpenhos = document.getElementById('pdf-inc-empenhos').checked;
+    const incRecentes = document.getElementById('pdf-inc-recentes').checked;
+
+    setPdfProgress(25, 'Montando documento...');
+
+    // ── Configuração do documento ─────────────────────────────────────────
+    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+    const PW = 210, PH = 297;
+    const ML = 14, MR = 14, MT = 14;
+    const CW = PW - ML - MR; // 182mm de largura útil
+    let y = MT;
+    let paginaAtual = 1;
+
+    // Paleta de cores institucional
+    const C = {
+      darkBg:    [10, 10, 15],
+      gold:      [245, 200, 66],
+      goldDark:  [184, 140, 20],
+      green:     [0, 166, 81],
+      blue:      [68, 138, 255],
+      amber:     [255, 171, 64],
+      red:       [255, 68, 68],
+      purple:    [170, 102, 255],
+      white:     [255, 255, 255],
+      lightGray: [240, 240, 245],
+      midGray:   [180, 180, 195],
+      darkGray:  [80, 80, 100],
+      rowAlt:    [245, 245, 250],
+      rowHead:   [30, 30, 40],
+    };
+
+    // ── Helpers de desenho ──────────────────────────────────────────────
+    function novaPageSeNecessario(alturaNeeded){
+      if(y + alturaNeeded > PH - 20){
+        doc.addPage();
+        paginaAtual++;
+        desenharRodape();
+        y = 24;
+        return true;
+      }
+      return false;
+    }
+
+    function desenharRodape(){
+      const ry = PH - 10;
+      doc.setFillColor(...C.darkBg);
+      doc.rect(0, PH-14, PW, 14, 'F');
+      doc.setFontSize(7);
+      doc.setTextColor(...C.midGray);
+      doc.setFont('helvetica','normal');
+      doc.text(`SUCO v1.0 · IFPI Campus São João do Piauí · COCF · ${autor}`, ML, ry);
+      doc.text(`Emitido em ${pdfDataHoje()} · Página ${paginaAtual}`, PW - MR, ry, {align:'right'});
+      // Linha dourada no rodapé
+      doc.setDrawColor(...C.goldDark);
+      doc.setLineWidth(0.3);
+      doc.line(ML, PH-14, PW-MR, PH-14);
+    }
+
+    function secaoTitulo(titulo, cor){
+      novaPageSeNecessario(14);
+      const cc = cor || C.blue;
+      doc.setFillColor(...cc);
+      doc.rect(ML, y, 3, 8, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...cc);
+      doc.text(titulo.toUpperCase(), ML+6, y+5.5);
+      // Linha separadora
+      doc.setDrawColor(...cc);
+      doc.setLineWidth(0.2);
+      doc.line(ML+6, y+8, PW-MR, y+8);
+      y += 13;
+    }
+
+    function kpiBox(x, bW, label, valor, corValor, badge){
+      const bH = 20;
+      doc.setFillColor(...C.lightGray);
+      doc.roundedRect(x, y, bW-2, bH, 2, 2, 'F');
+      doc.setDrawColor(...C.midGray);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(x, y, bW-2, bH, 2, 2, 'S');
+      // Label
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica','normal');
+      doc.setTextColor(...C.darkGray);
+      doc.text(label, x+3, y+5);
+      // Valor
+      doc.setFontSize(10);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...(corValor || C.darkBg));
+      doc.text(valor, x+3, y+13);
+      // Badge opcional
+      if(badge){
+        doc.setFontSize(5.5);
+        doc.setFont('helvetica','bold');
+        doc.setTextColor(...C.darkGray);
+        doc.text(badge, x+bW-5, y+5, {align:'right'});
+      }
+    }
+
+    function barraProgresso(x, bY, largura, pct, cor){
+      const barH = 2.5;
+      // Fundo
+      doc.setFillColor(220, 220, 228);
+      doc.roundedRect(x, bY, largura, barH, 1, 1, 'F');
+      // Preenchimento
+      if(pct > 0){
+        doc.setFillColor(...(cor || C.green));
+        doc.roundedRect(x, bY, Math.max(2, largura * Math.min(pct,100) / 100), barH, 1, 1, 'F');
+      }
+    }
+
+    function tabelaHeader(cols, larguras, xStart){
+      doc.setFillColor(...C.rowHead);
+      doc.rect(xStart, y, CW, 6, 'F');
+      let cx = xStart + 2;
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...C.midGray);
+      cols.forEach((col, i) => {
+        const align = larguras[i] < 0 ? 'right' : 'left';
+        const lw = Math.abs(larguras[i]);
+        if(align === 'right') doc.text(col, cx + lw - 2, y+4.2, {align:'right'});
+        else doc.text(col, cx, y+4.2);
+        cx += lw;
+      });
+      y += 6;
+    }
+
+    function tabelaLinha(vals, larguras, xStart, isAlt, coresVals){
+      novaPageSeNecessario(6);
+      if(isAlt){
+        doc.setFillColor(...C.rowAlt);
+        doc.rect(xStart, y, CW, 5.5, 'F');
+      }
+      let cx = xStart + 2;
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica','normal');
+      vals.forEach((val, i) => {
+        const align = larguras[i] < 0 ? 'right' : 'left';
+        const lw = Math.abs(larguras[i]);
+        const cor = coresVals && coresVals[i] ? coresVals[i] : C.darkBg;
+        doc.setTextColor(...cor);
+        if(align === 'right') doc.text(String(val||'—'), cx + lw - 2, y+3.8, {align:'right'});
+        else doc.text(String(val||'—'), cx, y+3.8);
+        cx += lw;
+      });
+      y += 5.5;
+    }
+
+    function linhaTabela(){
+      doc.setDrawColor(220, 220, 228);
+      doc.setLineWidth(0.1);
+      doc.line(ML, y, PW-MR, y);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PÁGINA 1 — CAPA EXECUTIVA
+    // ══════════════════════════════════════════════════════════════════════
+    setPdfProgress(35, 'Desenhando capa...');
+
+    // Faixa preta superior (cabeçalho)
+    doc.setFillColor(...C.darkBg);
+    doc.rect(0, 0, PW, 52, 'F');
+
+    // Linha dourada decorativa
+    doc.setFillColor(...C.gold);
+    doc.rect(0, 52, PW, 1.2, 'F');
+
+    // Brasão / símbolo SUCO (forma geométrica)
+    doc.setFillColor(...C.gold);
+    doc.circle(ML + 9, 26, 9, 'F');
+    doc.setFillColor(...C.darkBg);
+    doc.circle(ML + 9, 26, 6.5, 'F');
+    // Gráfico estilizado dentro do círculo
+    doc.setFillColor(...C.gold);
+    doc.rect(ML+4, 28, 2.5, 4, 'F');
+    doc.rect(ML+7.5, 25, 2.5, 7, 'F');
+    doc.rect(ML+11, 22, 2.5, 10, 'F');
+
+    // Título
+    doc.setTextColor(...C.gold);
+    doc.setFontSize(18);
+    doc.setFont('helvetica','bold');
+    doc.text('SUCO v1.0', ML+22, 21);
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica','normal');
+    doc.setTextColor(...C.midGray);
+    doc.text('Sistema Unificado de Controle Orçamentário', ML+22, 28);
+
+    doc.setFontSize(8);
+    doc.setTextColor(150, 155, 180);
+    doc.text('IFPI · Campus São João do Piauí', ML+22, 35);
+    doc.text('Coordenação de Orçamento, Contabilidade e Finanças — COCF', ML+22, 41);
+
+    // Badge "RELATÓRIO EXECUTIVO"
+    doc.setFillColor(...C.goldDark);
+    doc.roundedRect(PW-MR-52, 16, 52, 8, 2, 2, 'F');
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica','bold');
+    doc.setTextColor(...C.darkBg);
+    doc.text('RELATÓRIO EXECUTIVO', PW-MR-26, 21.2, {align:'center'});
+
+    y = 62;
+
+    // Período e metadados
+    doc.setFontSize(13);
+    doc.setFont('helvetica','bold');
+    doc.setTextColor(...C.darkBg);
+    doc.text(periodo, ML, y);
+    y += 7;
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica','normal');
+    doc.setTextColor(...C.darkGray);
+    doc.text(`Elaborado por: ${autor}`, ML, y);
+    doc.text(`Data de emissão: ${pdfDataHoje()}`, PW-MR, y, {align:'right'});
+    y += 4;
+    doc.setDrawColor(...C.midGray);
+    doc.setLineWidth(0.2);
+    doc.line(ML, y, PW-MR, y);
+    y += 8;
+
+    // ── Indicadores resumidos na capa ────────────────────────────────────
+    if(incKPIs){
+      const colW = CW / 3;
+      // Linha 1
+      kpiBox(ML,              colW, 'Total de Créditos (EXE)', pdfFmt(d.totCred),  C.green,    'ENTRADAS');
+      kpiBox(ML + colW,       colW, 'Saldo Disponível',        pdfFmt(d.saldoD),   d.saldoD < 0 ? C.red : C.goldDark, d.saldoD < 0 ? '⚠ NEGATIVO' : 'OK');
+      kpiBox(ML + colW*2,     colW, 'Empenhado Líquido (EXE)', pdfFmt(d.empLiq),   C.blue,     'EXE');
+      y += 23;
+      // Linha 2
+      kpiBox(ML,              colW, 'Total Liquidado (EXE)',   pdfFmt(d.totLiq),   C.amber,    pdfPct(d.totLiq, d.empLiq)+' emp.');
+      kpiBox(ML + colW,       colW, 'Total Pago (EXE)',        pdfFmt(d.totPag),   C.green,    pdfPct(d.totPag, d.totLiq)+' liq.');
+      kpiBox(ML + colW*2,     colW, 'Taxa de Execução',        d.txExec + '%',     d.txExec >= 80 ? C.green : d.txExec >= 50 ? C.amber : C.red, d.txExec >= 80 ? 'BOA EXECUÇÃO' : d.txExec >= 50 ? 'REGULAR' : '⚠ BAIXA');
+      y += 23;
+
+      // Barra de progresso de execução
+      doc.setFontSize(7);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...C.darkGray);
+      doc.text('Execução orçamentária geral:', ML, y);
+      doc.text(d.txExec + '%', PW-MR, y, {align:'right'});
+      y += 3;
+      barraProgresso(ML, y, CW, d.txExec, d.txExec >= 80 ? C.green : d.txExec >= 50 ? C.amber : C.red);
+      y += 7;
+
+      if(d.totRap > 0){
+        doc.setFillColor(170, 102, 255, 0.1);
+        doc.setFillColor(240, 235, 255);
+        doc.roundedRect(ML, y, CW, 7, 1.5, 1.5, 'F');
+        doc.setFontSize(7);
+        doc.setFont('helvetica','bold');
+        doc.setTextColor(...C.purple);
+        doc.text('RAP — Restos a Pagar (segregado):', ML+3, y+4.5);
+        doc.setFont('helvetica','normal');
+        doc.text(pdfFmt(d.totRap) + ' · Não incluso nos indicadores acima', ML+72, y+4.5);
+        y += 11;
+      }
+    }
+
+    // ── Fluxo de execução (diagrama simplificado) ─────────────────────────
+    if(incFluxo){
+      novaPageSeNecessario(30);
+      y += 4;
+      secaoTitulo('Fluxo de Execução Orçamentária', C.blue);
+
+      const fW = (CW - 16) / 3;
+      const fH = 22;
+      const fases = [
+        { label:'EMPENHADO', sub:'EXE + RAP', val:pdfFmt(totalEmpenhos()), pct:pdfPct(totalEmpenhos(), d.totCred)+' do crédito', cor:C.blue },
+        { label:'LIQUIDADO',  sub:'EXE + RAP', val:pdfFmt(d.totLiq),         pct:pdfPct(d.totLiq, totalEmpenhos())+' do emp.',    cor:C.amber },
+        { label:'PAGO',       sub:'EXE + RAP', val:pdfFmt(d.totPag),         pct:pdfPct(d.totPag, d.totLiq)+' do liq.',          cor:C.green },
+      ];
+      fases.forEach((f, i) => {
+        const fx = ML + i*(fW+8);
+        // Box
+        doc.setFillColor(...f.cor.map(c => Math.round(c * 0.12 + 240)));
+        doc.roundedRect(fx, y, fW, fH, 2, 2, 'F');
+        doc.setDrawColor(...f.cor);
+        doc.setLineWidth(0.5);
+        doc.roundedRect(fx, y, fW, fH, 2, 2, 'S');
+        // Label
+        doc.setFontSize(6.5);
+        doc.setFont('helvetica','bold');
+        doc.setTextColor(...f.cor);
+        doc.text(f.label, fx + fW/2, y+5, {align:'center'});
+        doc.setFontSize(5.5);
+        doc.setFont('helvetica','normal');
+        doc.setTextColor(...C.darkGray);
+        doc.text(f.sub, fx + fW/2, y+8.5, {align:'center'});
+        // Valor
+        doc.setFontSize(9);
+        doc.setFont('helvetica','bold');
+        doc.setTextColor(...f.cor);
+        doc.text(f.val, fx + fW/2, y+15, {align:'center'});
+        // Percentual
+        doc.setFontSize(6);
+        doc.setFont('helvetica','normal');
+        doc.setTextColor(...C.darkGray);
+        doc.text(f.pct, fx + fW/2, y+20, {align:'center'});
+        // Seta
+        if(i < 2){
+          const ax = fx + fW + 4;
+          doc.setDrawColor(...C.midGray);
+          doc.setLineWidth(0.4);
+          doc.line(ax-2, y+fH/2, ax+2, y+fH/2);
+          // ponta da seta
+          doc.line(ax, y+fH/2-1.5, ax+2, y+fH/2);
+          doc.line(ax, y+fH/2+1.5, ax+2, y+fH/2);
+        }
+      });
+      y += fH + 8;
+    }
+
+    // ── Página 2 (se necessário): Execução por categoria ─────────────────
+    if(incCats && d.catRows.length > 0){
+      setPdfProgress(55, 'Tabela de categorias...');
+      novaPageSeNecessario(20);
+      secaoTitulo('Execução por Categoria (EXE)', C.green);
+
+      const cols  = ['Categoria', 'Crédito', 'Empenhado', 'Liquidado', 'Saldo', '% Exec.', 'Status'];
+      const largs = [52, -26, -26, -26, -26, -14, -12];
+      tabelaHeader(cols, largs, ML);
+
+      d.catRows.forEach((r, i) => {
+        novaPageSeNecessario(12);
+        const corSaldo = r.sal < 0 ? C.red : r.sal < r.cred*0.1 ? C.amber : C.green;
+        const corPct   = r.pct >= 80 ? C.green : r.pct >= 50 ? C.amber : C.red;
+        const status   = r.pct >= 80 ? 'OK' : r.pct >= 50 ? 'Regular' : 'Baixo';
+        tabelaLinha(
+          [r.cat, pdfFmt(r.cred), pdfFmt(r.emp), pdfFmt(r.liq), pdfFmt(r.sal), r.pct+'%', status],
+          largs, ML, i%2===1,
+          [C.darkBg, C.green, C.blue, C.amber, corSaldo, corPct, corPct]
+        );
+        // Mini barra de progresso por categoria
+        barraProgresso(ML+2, y-1.5, 30, r.pct, corPct);
+        y += 1.5;
+      });
+
+      // Total
+      const totCat = d.catRows.reduce((s,r)=>({
+        cred: s.cred+r.cred, emp: s.emp+r.emp, liq: s.liq+r.liq, sal: s.sal+r.sal
+      }), {cred:0, emp:0, liq:0, sal:0});
+      doc.setFillColor(...C.rowHead);
+      doc.rect(ML, y, CW, 6, 'F');
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...C.gold);
+      let cx2 = ML+2;
+      ['TOTAL', pdfFmt(totCat.cred), pdfFmt(totCat.emp), pdfFmt(totCat.liq), pdfFmt(totCat.sal), d.txExec+'%', ''].forEach((v,i)=>{
+        const lw = Math.abs(largs[i]);
+        if(largs[i] < 0) doc.text(v, cx2+lw-2, y+4.2, {align:'right'});
+        else doc.text(v, cx2, y+4.2);
+        cx2 += lw;
+      });
+      y += 10;
+    }
+
+    // ── Saldo por Fonte e PTRES ─────────────────────────────────────────
+    if(incFontes){
+      setPdfProgress(68, 'Tabela de fontes e PTRES...');
+      if(d.fonteRows.length > 0){
+        novaPageSeNecessario(24);
+        secaoTitulo('Saldo por Fonte de Recurso', C.amber);
+        const cols2  = ['Fonte de Recurso', 'Crédito (Entrada)', 'Empenhado Líq.', 'Saldo Disponível'];
+        const largs2 = [60, -40, -40, -42];
+        tabelaHeader(cols2, largs2, ML);
+        d.fonteRows.forEach((r,i) => {
+          tabelaLinha(
+            [r.fonte||'—', pdfFmt(r.cred), pdfFmt(r.emp), pdfFmt(r.sal)],
+            largs2, ML, i%2===1,
+            [C.darkBg, C.green, C.blue, r.sal < 0 ? C.red : C.goldDark]
+          );
+        });
+        y += 6;
+      }
+
+      if(d.ptresRows.length > 0){
+        novaPageSeNecessario(24);
+        secaoTitulo('Saldo por PTRES', C.amber);
+        const cols3  = ['PTRES', 'Crédito (Entrada)', 'Empenhado Líq.', 'Saldo Disponível'];
+        const largs3 = [60, -40, -40, -42];
+        tabelaHeader(cols3, largs3, ML);
+        d.ptresRows.forEach((r,i) => {
+          tabelaLinha(
+            [r.ptres||'—', pdfFmt(r.cred), pdfFmt(r.emp), pdfFmt(r.sal)],
+            largs3, ML, i%2===1,
+            [C.darkBg, C.green, C.blue, r.sal < 0 ? C.red : C.goldDark]
+          );
+        });
+        y += 6;
+      }
+    }
+
+    // ── Empenhos Cadastrados ────────────────────────────────────────────
+    if(incEmpenhos && d.empenhos.length > 0){
+      setPdfProgress(78, 'Tabela de empenhos...');
+      novaPageSeNecessario(20);
+      secaoTitulo('Empenhos Cadastrados' + (d.empenhos.length >= 30 ? ' (primeiros 30)' : ''), C.purple);
+
+      const cols4  = ['Nº Empenho', 'Tipo', 'Categoria', 'Fornecedor', 'Fonte', 'Valor Inicial'];
+      const largs4 = [30, 12, 46, 46, 16, -32];
+      tabelaHeader(cols4, largs4, ML);
+
+      d.empenhos.forEach((e, i) => {
+        const corTipo = (e.tipoEmp||'EXE') === 'RAP' ? C.purple : C.blue;
+        const fornTrunc = (e.fornecedorNome||e.fornNome||'—').substring(0, 24);
+        const catTrunc  = (e.categoria||'—').substring(0, 20);
+        tabelaLinha(
+          [e.numero||'—', e.tipoEmp||'EXE', catTrunc, fornTrunc, e.fonte||'—', pdfFmt(e.valorInicial||0)],
+          largs4, ML, i%2===1,
+          [C.darkBg, corTipo, C.darkBg, C.darkGray, C.darkGray, C.blue]
+        );
+      });
+      y += 6;
+    }
+
+    // ── Últimos Lançamentos ─────────────────────────────────────────────
+    if(incRecentes && d.recentes.length > 0){
+      setPdfProgress(87, 'Tabela de lançamentos...');
+      novaPageSeNecessario(20);
+      secaoTitulo('Últimos Lançamentos', C.darkGray);
+
+      const cols5  = ['ID', 'Data', 'Tipo', 'Categoria', 'Descrição', 'Valor'];
+      const largs5 = [16, 18, 22, 36, 58, -32];
+      tabelaHeader(cols5, largs5, ML);
+
+      d.recentes.forEach((l, i) => {
+        const corTipo = l.tipo === 'Entrada' ? C.green : l.tipo === 'Empenho' ? C.blue : l.tipo === 'Liquidação' ? C.amber : l.tipo === 'Pagamento' ? C.green : l.tipo === 'Anulação' ? C.red : C.darkGray;
+        const desc = (l.descricao||'—').substring(0,30);
+        tabelaLinha(
+          [l.id||'—', fmtData(l.data), l.tipo||'—', (l.categoria||'—').substring(0,16), desc, pdfFmt(l.valor)],
+          largs5, ML, i%2===1,
+          [C.darkGray, C.darkBg, corTipo, C.darkBg, C.darkGray, C.darkBg]
+        );
+      });
+      y += 6;
+    }
+
+    // ── Rodapé em todas as páginas ──────────────────────────────────────
+    const totalPaginas = doc.internal.getNumberOfPages();
+    for(let pg = 1; pg <= totalPaginas; pg++){
+      doc.setPage(pg);
+      paginaAtual = pg;
+      // Corrigir referência de página no rodapé
+      const ryy = PH - 10;
+      doc.setFillColor(...C.darkBg);
+      doc.rect(0, PH-14, PW, 14, 'F');
+      doc.setFontSize(7);
+      doc.setTextColor(...C.midGray);
+      doc.setFont('helvetica','normal');
+      doc.text(`SUCO v1.0 · IFPI Campus São João do Piauí · COCF · ${autor}`, ML, ryy);
+      doc.text(`Emitido em ${pdfDataHoje()} · Página ${pg} de ${totalPaginas}`, PW-MR, ryy, {align:'right'});
+      doc.setDrawColor(...C.goldDark);
+      doc.setLineWidth(0.3);
+      doc.line(ML, PH-14, PW-MR, PH-14);
+    }
+
+    // ── Download ─────────────────────────────────────────────────────────
+    setPdfProgress(95, 'Salvando arquivo...');
+    const nomeArquivo = `SUCO_Relatorio_${periodo.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(nomeArquivo);
+
+    setPdfProgress(100, `✓ Relatório gerado com sucesso! (${doc.internal.getNumberOfPages()} página(s))`);
+    setTimeout(()=>{
+      fecharModalPDF();
+      toast('Relatório PDF exportado com sucesso!','success');
+    }, 1800);
+
+  } catch(err) {
+    console.error('Erro ao gerar PDF:', err);
+    setPdfStatus('Erro: ' + err.message);
+    document.getElementById('btn-pdf-gerar').disabled = false;
+  }
+}
+</script>
 </body>
 </html> 
