@@ -2015,10 +2015,13 @@ function auditLog(acao,entidade,id,descricao,snapshot){
 //  CÁLCULOS CENTRALIZADOS (OrcamentoService)
 // ═══════════════════════════════════════════════════════════
 function getLancsAtivos(tipo,cat,refId){
+  // Normaliza a categoria de busca para garantir correspondência independente de capitalização
+  const catNorm=cat?normalizarCategoria(cat):null;
   return state.lancamentos.filter(l=>{
     if(l.status!=='Ativo')return false;
     if(tipo&&l.tipo!==tipo)return false;
-    if(cat&&l.categoria!==cat)return false;
+    // Compara categorias normalizadas para evitar divergência entre Title Case e MAIÚSCULAS
+    if(catNorm&&normalizarCategoria(l.categoria||'')!==catNorm)return false;
     if(refId!==undefined&&l.referenciaId!==refId)return false;
     return true;
   });
@@ -2143,9 +2146,10 @@ function totalEmpenhos(cat,refId){
 // ── RAP-SEGREGATED: somente EXE (para dashboard do exercício corrente) ──
 // Considera lançamentos de tipo Empenho + fallback em empenhosCad sem lançamento INICIAL
 function totalEmpenhosEXE(cat){
+  const catN=cat?normalizarCategoria(cat):null;
   const fromLancs = sum(state.lancamentos.filter(l=>
     l.status==='Ativo' && l.tipo==='Empenho' &&
-    (cat ? l.categoria===cat : true) &&
+    (catN ? normalizarCategoria(l.categoria||'')===catN : true) &&
     (l.tipoRecurso||'EXE') === 'EXE'
   ));
   // Fallback: empenhos EXE cadastrados que por algum motivo não geraram lançamento INICIAL
@@ -2164,9 +2168,10 @@ function totalEmpenhosEXE(cat){
   return fromLancs + fromCad;
 }
 function totalEmpenhosRAP(cat){
+  const catN=cat?normalizarCategoria(cat):null;
   const fromLancs = sum(state.lancamentos.filter(l=>
     l.status==='Ativo' && l.tipo==='Empenho' &&
-    (cat ? l.categoria===cat : true) &&
+    (catN ? normalizarCategoria(l.categoria||'')===catN : true) &&
     l.tipoRecurso === 'RAP'
   ));
   // Fallback: empenhos RAP cadastrados sem lançamento INICIAL
@@ -2183,39 +2188,43 @@ function totalEmpenhosRAP(cat){
   return fromLancs + fromCad;
 }
 function totalLiquidacoes(cat,refId){
-  if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Liquidação'&&(cat?l.categoria===cat:true)&&l.referenciaId===refId));
+  if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Liquidação'&&(cat?normalizarCategoria(l.categoria||'')===normalizarCategoria(cat):true)&&l.referenciaId===refId));
   return sum(getLancsAtivos('Liquidação',cat||null));
 }
 // Liquidações vinculadas apenas a empenhos EXE
 function totalLiquidacoesEXE(cat){
+  const catN=cat?normalizarCategoria(cat):null;
   return sum(state.lancamentos.filter(l=>
     l.status==='Ativo' && (l.tipo==='Liquidação'||l.tipo==='Pagamento') &&
-    (cat ? l.categoria===cat : true) &&
+    (catN ? normalizarCategoria(l.categoria||'')===catN : true) &&
     (l.tipoRecurso||'EXE')==='EXE'
   ));
 }
 function totalLiquidacoesRAP(cat){
+  const catN=cat?normalizarCategoria(cat):null;
   return sum(state.lancamentos.filter(l=>
     l.status==='Ativo' && (l.tipo==='Liquidação'||l.tipo==='Pagamento') &&
-    (cat ? l.categoria===cat : true) &&
+    (catN ? normalizarCategoria(l.categoria||'')===catN : true) &&
     l.tipoRecurso==='RAP'
   ));
 }
 function totalPagamentos(cat,refId){
-  if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Pagamento'&&(cat?l.categoria===cat:true)&&l.referenciaId===refId));
+  if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Pagamento'&&(cat?normalizarCategoria(l.categoria||'')===normalizarCategoria(cat):true)&&l.referenciaId===refId));
   return sum(getLancsAtivos('Pagamento',cat||null));
 }
 function totalPagamentosEXE(cat){
+  const catN=cat?normalizarCategoria(cat):null;
   return sum(state.lancamentos.filter(l=>
     l.status==='Ativo' && l.tipo==='Pagamento' &&
-    (cat ? l.categoria===cat : true) &&
+    (catN ? normalizarCategoria(l.categoria||'')===catN : true) &&
     (l.tipoRecurso||'EXE')==='EXE'
   ));
 }
 function totalPagamentosRAP(cat){
+  const catN=cat?normalizarCategoria(cat):null;
   return sum(state.lancamentos.filter(l=>
     l.status==='Ativo' && l.tipo==='Pagamento' &&
-    (cat ? l.categoria===cat : true) &&
+    (catN ? normalizarCategoria(l.categoria||'')===catN : true) &&
     l.tipoRecurso==='RAP'
   ));
 }
@@ -2224,13 +2233,16 @@ function totalTransfSaidas(cat){return sum(getLancsAtivos('Transferência Saída
 // = Créditos (Entradas) + Transferências Recebidas + Anulações (devolvem saldo) - Empenhos EXE brutos - Transferências Enviadas
 // Anulação reduz o saldo comprometido por empenhos → devolvendo saldo disponível à categoria
 function saldoCat(cat){
-  const creditos=sum(getLancsAtivos('Entrada',cat));
-  const transfE=sum(getLancsAtivos('Transferência Entrada',cat));
+  // Normaliza a categoria para garantir que créditos e empenhos sejam encontrados
+  // independente da capitalização usada no registro (ex: 'Assistência Estudantil' vs 'ASSISTÊNCIA ESTUDANTIL')
+  const catN=normalizarCategoria(cat);
+  const creditos=sum(getLancsAtivos('Entrada',catN));
+  const transfE=sum(getLancsAtivos('Transferência Entrada',catN));
   // Empenhos EXE brutos (sem descontar anulações — anulações são tratadas separadamente)
-  const empenhos=totalEmpenhosEXE(cat);
+  const empenhos=totalEmpenhosEXE(catN);
   // Anulações devolvem saldo à categoria (reduzem o comprometido)
-  const anulacoes=sum(getLancsAtivos('Anulação',cat));
-  const transfS=sum(getLancsAtivos('Transferência Saída',cat));
+  const anulacoes=sum(getLancsAtivos('Anulação',catN));
+  const transfS=sum(getLancsAtivos('Transferência Saída',catN));
   return creditos+transfE+anulacoes-empenhos-transfS;
 }
 // Saldo efetivo considerando a regra COSIP → ENERGIA ELÉTRICA:
@@ -2239,7 +2251,9 @@ function saldoCat(cat){
 //   saldo(ENERGIA ELÉTRICA) − empenhos(COSIP) − empenhos(ENERGIA ELÉTRICA) + anulações(COSIP) + anulações(ENERGIA ELÉTRICA)
 // Assim o conjunto ENERGIA + COSIP compartilha o mesmo pool de crédito.
 function saldoCatEfetivo(cat){
-  if(cat!=='COSIP') return saldoCat(cat);
+  // Normaliza entrada para garantir que 'COSIP', 'Cosip' etc. sejam tratados igualmente
+  const catN=normalizarCategoria(cat);
+  if(catN!=='COSIP') return saldoCat(catN);
   // Para COSIP: crédito da Energia menos todos os empenhos de Energia e COSIP combinados
   const creditosEnergia=sum(getLancsAtivos('Entrada','ENERGIA ELÉTRICA'));
   const transfEEnergia=sum(getLancsAtivos('Transferência Entrada','ENERGIA ELÉTRICA'));
