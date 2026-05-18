@@ -2143,29 +2143,61 @@ function totalEmpenhos(cat,refId){
   if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&(cat?l.categoria===cat:true)&&l.referenciaId===refId));
   return sum(getLancsAtivos('Empenho',cat||null));
 }
+function empenhoCadAtivo(e){
+  return e&&e.status!=='Excluído'&&e.status!=='ExcluÃ­do';
+}
+function findEmpenhoCadByLanc(l){
+  return (state.empenhosCad||[]).find(e=>
+    empenhoCadAtivo(e)&&(
+      e.id===l.empenhoCadId||
+      e.id===l.referenciaId||
+      e.numero===l.referencia||
+      e.numero===l.numeroEmpenho
+    )
+  );
+}
+function isLancEmpenhoModuloEXE(l){
+  if(!l||l.status!=='Ativo'||l.tipo!=='Empenho')return false;
+  const empCad=findEmpenhoCadByLanc(l);
+  const tipo=empCad?(empCad.tipoEmp||'EXE'):(l.tipoRecurso||'EXE');
+  if(tipo!=='EXE')return false;
+  const reg=l.tipoRegistro||'';
+  // Dashboard: empenhado = somente valores do módulo Empenho (inicial + reforço).
+  return reg==='INICIAL'||reg==='REFORCO'||reg==='REFORÇO'||(!reg&&!!empCad);
+}
+function matchEmpenhoFiltro(l,filtros){
+  const f=filtros||{};
+  if(f.categoria&&normalizarCategoria(l.categoria||'')!==normalizarCategoria(f.categoria))return false;
+  if(f.fonte!==undefined&&l.fonte!==f.fonte)return false;
+  if(f.ptres!==undefined&&l.ptres!==f.ptres)return false;
+  if(f.competencia!==undefined&&l.competencia!==f.competencia)return false;
+  return true;
+}
+function totalEmpenhosModuloEXE(filtros){
+  const f=filtros||{};
+  const fromLancs=sum(state.lancamentos.filter(l=>isLancEmpenhoModuloEXE(l)&&matchEmpenhoFiltro(l,f)));
+  const fromCad=(state.empenhosCad||[]).filter(e=>{
+    if(!empenhoCadAtivo(e))return false;
+    if((e.tipoEmp||'EXE')!=='EXE')return false;
+    if(f.categoria&&normalizarCategoria(e.categoria||'')!==normalizarCategoria(f.categoria))return false;
+    if(f.fonte!==undefined&&e.fonte!==f.fonte)return false;
+    if(f.ptres!==undefined&&e.ptres!==f.ptres)return false;
+    if(f.competencia!==undefined&&e.competencia!==f.competencia)return false;
+    const temInicial=state.lancamentos.some(l=>
+      l.status==='Ativo'&&l.tipo==='Empenho'&&
+      (l.tipoRegistro==='INICIAL'||!l.tipoRegistro)&&
+      (l.empenhoCadId===e.id||l.referencia===e.numero||l.numeroEmpenho===e.numero)
+    );
+    return !temInicial&&(e.valorInicial||0)>0;
+  }).reduce((s,e)=>s+(e.valorInicial||0),0);
+  return fromLancs+fromCad;
+}
 // ── RAP-SEGREGATED: somente EXE (para dashboard do exercício corrente) ──
 // Considera lançamentos de tipo Empenho + fallback em empenhosCad sem lançamento INICIAL
-function totalEmpenhosEXE(cat){
-  const catN=cat?normalizarCategoria(cat):null;
-  const fromLancs = sum(state.lancamentos.filter(l=>
-    l.status==='Ativo' && l.tipo==='Empenho' &&
-    (catN ? normalizarCategoria(l.categoria||'')===catN : true) &&
-    (l.tipoRecurso||'EXE') === 'EXE'
-  ));
-  // Fallback: empenhos EXE cadastrados que por algum motivo não geraram lançamento INICIAL
-  // (evita que saldo apareça incorreto após importação de backup antigo)
-  const fromCad = (state.empenhosCad||[]).filter(e=>{
-    if(e.status==='Excluído') return false;
-    if((e.tipoEmp||'EXE')!=='EXE') return false;
-    if(cat && normalizarCategoria(e.categoria||'')!==normalizarCategoria(cat)) return false;
-    // Só conta se NÃO há lançamento INICIAL correspondente (evita dupla contagem)
-    const temInicial = state.lancamentos.some(l=>
-      l.status==='Ativo' && l.tipo==='Empenho' &&
-      (l.empenhoCadId===e.id || l.referencia===e.numero)
-    );
-    return !temInicial && (e.valorInicial||0) > 0;
-  }).reduce((s,e)=>s+(e.valorInicial||0), 0);
-  return fromLancs + fromCad;
+function totalEmpenhosEXE(cat,filtros){
+  const f=filtros||{};
+  if(cat)f.categoria=cat;
+  return totalEmpenhosModuloEXE(f);
 }
 function totalEmpenhosRAP(cat){
   const catN=cat?normalizarCategoria(cat):null;
@@ -2238,12 +2270,10 @@ function saldoCat(cat){
   const catN=normalizarCategoria(cat);
   const creditos=sum(getLancsAtivos('Entrada',catN));
   const transfE=sum(getLancsAtivos('Transferência Entrada',catN));
-  // Empenhos EXE brutos (sem descontar anulações — anulações são tratadas separadamente)
+  // Empenhado do Dashboard = inicial + reforços do módulo Empenho, somente EXE.
   const empenhos=totalEmpenhosEXE(catN);
-  // Anulações devolvem saldo à categoria (reduzem o comprometido)
-  const anulacoes=sum(getLancsAtivos('Anulação',catN));
   const transfS=sum(getLancsAtivos('Transferência Saída',catN));
-  return creditos+transfE+anulacoes-empenhos-transfS;
+  return creditos+transfE-empenhos-transfS;
 }
 // Saldo efetivo considerando a regra COSIP → ENERGIA ELÉTRICA:
 // Empenhos e reforços na categoria COSIP consomem o saldo da ENERGIA ELÉTRICA.
@@ -2260,9 +2290,7 @@ function saldoCatEfetivo(cat){
   const transfSEnergia=sum(getLancsAtivos('Transferência Saída','ENERGIA ELÉTRICA'));
   const empEnergia=totalEmpenhosEXE('ENERGIA ELÉTRICA');
   const empCosip=totalEmpenhosEXE('COSIP');
-  const anulEnergia=sum(getLancsAtivos('Anulação','ENERGIA ELÉTRICA'));
-  const anulCosip=sum(getLancsAtivos('Anulação','COSIP'));
-  return creditosEnergia+transfEEnergia+anulEnergia+anulCosip-empEnergia-empCosip-transfSEnergia;
+  return creditosEnergia+transfEEnergia-empEnergia-empCosip-transfSEnergia;
 }
 
 // Saldo empenhado disponível para liquidação
@@ -2418,9 +2446,7 @@ function renderSidebar(){
   const colors={ok:'var(--green)',warn:'var(--amber)',danger:'var(--red)'};
   el.innerHTML=cats.slice(0,7).map(c=>{
     const te=totalEntradas(c);
-    const empBruto=totalEmpenhosEXE(c);
-    const anulCat=sum(getLancsAtivos('Anulação',c));
-    const emp=empBruto-anulCat; // líquido
+    const emp=totalEmpenhosEXE(c);
     const p=te>0?clamp(Math.round(emp/te*100),0,100):0;
     const st=statusCor(p);const s=saldoCat(c);
     return`<div class="sw-row"><div class="sw-cat" title="${c}">${catIcon(c)} ${c}</div><div class="sw-val" style="color:${colors[st]}">${fmtBR(s)}</div></div><div class="sw-bar"><div class="sw-bar-fill" style="width:${p}%;background:${colors[st]}"></div></div>`;
@@ -2433,7 +2459,7 @@ function renderSidebar(){
 function renderDashboard(){
   const totCred=totalCreditosOriginais();
   // ── SEGREGAÇÃO RAP/EXE: Dashboard reflete APENAS exercício corrente (EXE) ──
-  const totEmp=totalEmpenhosEXE();          // apenas EXE (empenhos brutos)
+  const totEmp=totalEmpenhosEXE();          // apenas EXE: inicial + reforços do módulo Empenho
   // Anulações EXE apenas — filtra pelo tipoRecurso do lançamento ou do empenho cadastrado
   const totAnul=sum(state.lancamentos.filter(l=>{
     if(l.status!=='Ativo'||l.tipo!=='Anulação') return false;
@@ -2445,10 +2471,8 @@ function renderDashboard(){
   }));
   const totLiq=totalLiquidacoesEXE();       // apenas EXE (módulo lancamentos)
   const totPag=totalPagamentosEXE();        // apenas EXE
-  // ★ SALDO DISPONÍVEL = TOTAL CRÉDITOS EXE − TOTAL EMPENHADO LÍQUIDO
-  // onde EMPENHADO LÍQUIDO = EMPENHO INICIAL + REFORÇOS − ANULAÇÕES
-  // equiv: SALDO = CRÉDITOS − EMPENHO_BRUTO + ANULAÇÕES
-  const saldoDisp=totCred-totEmp+totAnul;
+  // ★ SALDO DISPONÍVEL = TOTAL CRÉDITOS − EMPENHADO DO MÓDULO EMPENHO (INICIAL + REFORÇO), somente EXE
+  const saldoDisp=totCred-totEmp;
   // Totais RAP (para badge informativo no dashboard)
   const totEmpRapGlobal=totalEmpenhosRAP();
   const liqPagas=(state.liquidacoes||[]).filter(l=>{
@@ -2472,17 +2496,17 @@ function renderDashboard(){
     <div class="kpi ${saldoDisp<0?'accent-red':'accent-gold'}">
       <div class="kpi-label">Saldo Disponível Geral <span class="kpi-badge ${saldoDisp<0?'badge-danger':'badge-gold'}">${saldoDisp<0?'⚠ NEGATIVO':'OK'}</span></div>
       <div class="kpi-value ${saldoDisp<0?'text-red':'text-gold'}">${fmtBR(saldoDisp)}</div>
-      <div class="kpi-sub">Créditos EXE − Empenhado Líquido (Inicial+Reforços−Anulações) <span style="color:var(--blue);font-size:9px;margin-left:4px">EXE</span></div>
+      <div class="kpi-sub">Créditos EXE − Empenhado (Inicial+Reforços) <span style="color:var(--blue);font-size:9px;margin-left:4px">EXE</span></div>
     </div>
     <div class="kpi accent-blue">
-      <div class="kpi-label">Total Empenhado Líquido <span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);padding:3px 8px;border-radius:10px;font-size:10px;font-weight:800">EXE</span></div>
-      <div class="kpi-value text-blue">${fmtBR(totEmp-totAnul)}</div>
-      <div class="kpi-sub">Inicial + Reforços − Anulações · ${pctBar(totEmp-totAnul,totCred)}% do crédito${totAnul>0?` · <span style="color:var(--amber);font-size:9px">−${fmtBR(totAnul)} anulado</span>`:''}${totEmpRapGlobal>0?` · <span style="color:var(--purple);font-size:9px">+ ${fmtBR(totEmpRapGlobal)} RAP (segregado)</span>`:''}</div>
+      <div class="kpi-label">Total Empenhado <span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);padding:3px 8px;border-radius:10px;font-size:10px;font-weight:800">EXE</span></div>
+      <div class="kpi-value text-blue">${fmtBR(totEmp)}</div>
+      <div class="kpi-sub">Inicial + Reforços · ${pctBar(totEmp,totCred)}% do crédito${totEmpRapGlobal>0?` · <span style="color:var(--purple);font-size:9px">+ ${fmtBR(totEmpRapGlobal)} RAP (segregado)</span>`:''}</div>
     </div>
     <div class="kpi accent-amber">
       <div class="kpi-label">Total Liquidado <span class="kpi-badge badge-warn">EXE</span></div>
       <div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiq)}</div>
-      <div class="kpi-sub">${pctBar(totLiq,totEmp-totAnul)}% do empenhado liquidado</div>
+      <div class="kpi-sub">${pctBar(totLiq,totEmp)}% do empenhado liquidado</div>
     </div>
     <div class="kpi accent-green">
       <div class="kpi-label">Total Pago <span class="kpi-badge badge-ok">EXE</span></div>
@@ -2501,13 +2525,13 @@ function renderDashboard(){
     </div>
     <div class="kpi accent-teal" style="border-color:rgba(0,207,255,.4);background:rgba(0,207,255,.06)">
       <div class="kpi-label">Taxa de Execução Orçamentária <span class="kpi-badge" style="background:rgba(0,207,255,.15);color:var(--cyan)">EXEC % — EXE</span></div>
-      <div class="kpi-value" style="color:var(--cyan)">${totCred>0?clamp(Math.round((totEmp-totAnul)/totCred*100),0,100):0}%</div>
-      <div class="kpi-sub">(Empenhado Líquido ÷ Crédito) × 100 — ${totCred>0?clamp(Math.round((totEmp-totAnul)/totCred*100),0,100)<50?'⚠ Execução baixa':clamp(Math.round((totEmp-totAnul)/totCred*100),0,100)<80?'Execução regular':'✓ Boa execução':'Sem créditos'}</div>
+      <div class="kpi-value" style="color:var(--cyan)">${totCred>0?clamp(Math.round(totEmp/totCred*100),0,100):0}%</div>
+      <div class="kpi-sub">(Empenhado ÷ Crédito) × 100 — ${totCred>0?clamp(Math.round(totEmp/totCred*100),0,100)<50?'⚠ Execução baixa':clamp(Math.round(totEmp/totCred*100),0,100)<80?'Execução regular':'✓ Boa execução':'Sem créditos'}</div>
     </div>
-    <div class="kpi ${(totCred>0&&(totEmp-totAnul)/totCred>=0.9)?'accent-red':totCred>0&&(totEmp-totAnul)/totCred>=0.7?'accent-amber':'accent-green'}">
-      <div class="kpi-label">Índice de Comprometimento <span class="kpi-badge ${(totCred>0&&(totEmp-totAnul)/totCred>=0.9)?'badge-danger':totCred>0&&(totEmp-totAnul)/totCred>=0.7?'badge-warn':'badge-ok'}">${(totCred>0&&(totEmp-totAnul)/totCred>=0.9)?'⚠ ALTO':totCred>0&&(totEmp-totAnul)/totCred>=0.7?'MÉDIO':'OK'}</span></div>
-      <div class="kpi-value ${(totCred>0&&(totEmp-totAnul)/totCred>=0.9)?'text-red':totCred>0&&(totEmp-totAnul)/totCred>=0.7?'text-amber':'text-green'}">${totCred>0?clamp(Math.round((totEmp-totAnul)/totCred*100),0,999):0}%</div>
-      <div class="kpi-sub">(Empenhado Líquido EXE ÷ Crédito) × 100 — Saldo livre: ${fmtBR(saldoDisp)}</div>
+    <div class="kpi ${(totCred>0&&totEmp/totCred>=0.9)?'accent-red':totCred>0&&totEmp/totCred>=0.7?'accent-amber':'accent-green'}">
+      <div class="kpi-label">Índice de Comprometimento <span class="kpi-badge ${(totCred>0&&totEmp/totCred>=0.9)?'badge-danger':totCred>0&&totEmp/totCred>=0.7?'badge-warn':'badge-ok'}">${(totCred>0&&totEmp/totCred>=0.9)?'⚠ ALTO':totCred>0&&totEmp/totCred>=0.7?'MÉDIO':'OK'}</span></div>
+      <div class="kpi-value ${(totCred>0&&totEmp/totCred>=0.9)?'text-red':totCred>0&&totEmp/totCred>=0.7?'text-amber':'text-green'}">${totCred>0?clamp(Math.round(totEmp/totCred*100),0,999):0}%</div>
+      <div class="kpi-sub">(Empenhado EXE ÷ Crédito) × 100 — Saldo livre: ${fmtBR(saldoDisp)}</div>
     </div>
     ${totEmpRapGlobal>0?`<div style="grid-column:1/-1;background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:12px;padding:12px 18px;display:flex;align-items:center;gap:12px">
       <span style="font-size:22px">🗂️</span>
@@ -2538,22 +2562,18 @@ function renderDashboard(){
     <div class="fase-item pag"><div class="fase-val text-green">${fmtBR(totPagConsolid)}</div><div class="fase-lbl">Pago <span style="font-size:9px;color:var(--green);opacity:.9">EXE+RAP</span></div><div class="fase-pct text-green">${pLiqPag}% do liq.</div></div>
   `;
 
-  // Saldo por Fonte e PTRES — apenas empenhos EXE, descontando anulações
+  // Saldo por Fonte e PTRES — empenhado = inicial + reforços do módulo Empenho, somente EXE.
   const saldoFonteRows=state.fontes.map(f=>{
     const e=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.fonte===f));
-    const empBruto=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.fonte===f&&(l.tipoRecurso||'EXE')==='EXE'));
-    const anul=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Anulação'&&l.fonte===f));
-    const emp=empBruto-anul;
-    if(!e&&!empBruto)return '';
+    const emp=totalEmpenhosEXE(null,{fonte:f});
+    if(!e&&!emp)return '';
     const s=e-emp;
     return`<tr><td style="font-size:11px">${f||'—'}</td><td class="r text-green" style="font-size:11px">${fmtBR(e)}</td><td class="r text-blue" style="font-size:11px">${fmtBR(emp)}</td><td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px;font-weight:700">${fmtBR(s)}</td></tr>`;
   }).filter(Boolean);
   const saldoPtresRows=state.ptres.map(p=>{
     const e=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.ptres===p));
-    const empBruto=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.ptres===p&&(l.tipoRecurso||'EXE')==='EXE'));
-    const anul=sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Anulação'&&l.ptres===p));
-    const emp=empBruto-anul;
-    if(!e&&!empBruto)return '';
+    const emp=totalEmpenhosEXE(null,{ptres:p});
+    if(!e&&!emp)return '';
     const s=e-emp;
     return`<tr><td style="font-size:11px">${p||'—'}</td><td class="r text-green" style="font-size:11px">${fmtBR(e)}</td><td class="r text-blue" style="font-size:11px">${fmtBR(emp)}</td><td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px;font-weight:700">${fmtBR(s)}</td></tr>`;
   }).filter(Boolean);
@@ -2577,9 +2597,8 @@ function renderDashboard(){
     });
     return{
       e:sum(lancsDoMes.filter(l=>l.tipo==='Entrada')),
-      // Empenho mensal líquido: EXE bruto − anulações do mês
-      emp:sum(lancsDoMes.filter(l=>l.tipo==='Empenho'&&(l.tipoRecurso||'EXE')==='EXE'))
-         -sum(lancsDoMes.filter(l=>l.tipo==='Anulação')),
+      // Empenho mensal por competência: inicial + reforços do módulo Empenho, somente EXE.
+      emp:totalEmpenhosEXE(null,{competencia:prefixo}),
       // Liquidação/Pagamento mensal: somente EXE
       liq:sum(lancsDoMes.filter(l=>(l.tipo==='Liquidação'||l.tipo==='Pagamento')&&(l.tipoRecurso||'EXE')==='EXE')),
       pag:sum(lancsDoMes.filter(l=>l.tipo==='Pagamento'&&(l.tipoRecurso||'EXE')==='EXE'))
@@ -2608,12 +2627,10 @@ function renderDashboard(){
     <tr class="total-row"><td>Saldo (Emp.−Liq.) EXE</td>${dadosMensais.map(d=>{const s=d.emp-d.liq;return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:11px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${totM2Saldo<0?'text-red':'text-gold'} fw7" style="font-size:11px">${fmtBR(totM2Saldo)}</td></tr>
   `;
 
-  // Execução por categoria — apenas EXE, empenhado líquido (bruto − anulações)
+  // Execução por categoria — apenas EXE, empenhado = inicial + reforços do módulo Empenho.
   const catRows=DEFAULT_CATS.filter(c=>totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0).map(c=>{
     const te=totalCreditosOriginais(c);
-    const temBruto=totalEmpenhosEXE(c);
-    const temAnul=sum(getLancsAtivos('Anulação',c));
-    const tem=temBruto-temAnul; // empenhado líquido
+    const tem=totalEmpenhosEXE(c);
     const tl=totalLiquidacoesEXE(c);
     // "Pago" = pagamentos via state.lancamentos (módulo Saída) +
     //          liquidações do módulo especializado marcadas como pago='Sim' e de empenhos EXE
@@ -2623,7 +2640,7 @@ function renderDashboard(){
     return`<tr>
       <td>${catIcon(c)} <strong>${c}</strong></td>
       <td class="r text-green">${fmtBR(te)}</td>
-      <td class="r text-blue">${fmtBR(tem)}${temAnul>0?`<div style="font-size:9px;color:var(--amber)">−${fmtBR(temAnul)} anulado</div>`:''}</td>
+      <td class="r text-blue">${fmtBR(tem)}</td>
       <td class="r" style="color:var(--amber)">${fmtBR(tl)}</td>
       <td class="r text-green">${fmtBR(tp)}</td>
       <td class="r ${saldoEmp<0?'text-red':'text-gold'}">${fmtBR(saldoEmp)}</td>
