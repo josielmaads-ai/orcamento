@@ -2210,14 +2210,47 @@ function aeLiquidacoesRegistros(acaoId,comp){
   return principais.concat(fallback);
 }
 function aeTotaisAcao(acaoId,comp){
+  // ── Lançamentos vinculados (caminho principal) ──────────────────────────
   const emps=(state.lancamentos||[]).filter(l=>{
     if(!aeIsEmpenhoLanc(l))return false;
     if(aeAcaoIdFromLanc(l)!==acaoId)return false;
     if(comp&&aeCompFromLanc(l)!==comp)return false;
     return true;
   });
-  const inicial=sum(emps.filter(l=>l.tipoRegistro==='INICIAL'));
-  const reforcos=sum(emps.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO'||!l.tipoRegistro));
+  const inicialLancs=sum(emps.filter(l=>l.tipoRegistro==='INICIAL'));
+  const reforcosLancs=sum(emps.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO'||!l.tipoRegistro));
+
+  // ── Fallback: empenhosCad AE desta ação sem lançamento INICIAL ──────────
+  // Garante que empenhos cadastrados no módulo Empenho (valorInicial + reforços)
+  // que ainda não geraram lançamento INICIAL sejam contabilizados corretamente.
+  // Regra de Ouro: empenhado = Valor Inicial do Registro + Valor Reforçado (módulo Empenho)
+  let inicialCad=0, reforcosCad=0;
+  (state.empenhosCad||[]).forEach(e=>{
+    if(!empenhoCadAtivo(e)) return;
+    if((e.tipoEmp||'EXE')!=='EXE') return;                      // somente EXE
+    if(!aeIsCat(e.categoria||'')) return;                         // somente categoria AE
+    if(e.acaoId!==acaoId) return;                                  // somente desta ação
+    if(comp&&(e.competencia||'')!==comp) return;                   // respeita mês de competência
+    // Verifica se já existe lançamento INICIAL vinculado (para não duplicar)
+    const temLancInicial=emps.some(l=>
+      l.tipoRegistro==='INICIAL'&&
+      (l.empenhoCadId===e.id||l.referencia===e.numero||l.numeroEmpenho===e.numero)
+    );
+    if(temLancInicial) return; // já computado via lançamentos
+    // Soma valorInicial do cadastro como "inicial" (sem duplicar)
+    inicialCad+=(e.valorInicial||0);
+    // Soma reforços cadastrados via lançamentos REFORCO vinculados a este empenhosCad
+    // (lançamentos REFORCO não têm tipoRegistro=INICIAL, portanto não foram pegos acima)
+    const reforcosDesteEmp=sum((state.lancamentos||[]).filter(l=>
+      l.status==='Ativo'&&l.tipo==='Empenho'&&
+      (l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO')&&
+      (l.empenhoCadId===e.id||l.referencia===e.numero||l.numeroEmpenho===e.numero)
+    ));
+    reforcosCad+=reforcosDesteEmp;
+  });
+
+  const inicial=inicialLancs+inicialCad;
+  const reforcos=reforcosLancs+reforcosCad;
   const liqs=aeLiquidacoesRegistros(acaoId,comp);
   return {
     inicial,
