@@ -2128,6 +2128,125 @@ function sumLancsByAcaoComp(tipo, acaoId, comp){
     return empCad&&((empCad.competencia||'')===comp);
   });
 }
+function aeAtivo(x){return x&&!(String(x.status||'').toUpperCase().startsWith('EXCLU'));}
+function aeIsCat(cat){
+  const n=String(normalizarCategoria(cat||'')||'').toUpperCase();
+  return n.includes('ASSIST')&&n.includes('ESTUDANTIL');
+}
+function aeEmpCadByNumero(nEmp){
+  return (state.empenhosCad||[]).find(e=>aeAtivo(e)&&e.numero===nEmp);
+}
+function aeEmpCadFromLanc(l){
+  return (state.empenhosCad||[]).find(e=>
+    aeAtivo(e)&&(
+      e.id===l.empenhoCadId||
+      e.id===l.referenciaId||
+      e.numero===l.referencia||
+      e.numero===l.numeroEmpenho
+    )
+  );
+}
+function aeEmpCadFromLiq(lq){
+  return aeEmpCadByNumero(lq.nEmpenho)||aeEmpCadByNumero(lq.nEmpenhoCosip);
+}
+function aeAcaoIdFromLanc(l){
+  const emp=aeEmpCadFromLanc(l);
+  return l.acaoId||emp?.acaoId||((state.acoes||[]).some(a=>aeAtivo(a)&&a.id===l.referenciaId)?l.referenciaId:'');
+}
+function aeAcaoIdFromLiq(lq){
+  const emp=aeEmpCadFromLiq(lq);
+  return lq.acaoId||emp?.acaoId||'';
+}
+function aeCompFromLanc(l){
+  const emp=aeEmpCadFromLanc(l);
+  return l.competencia||emp?.competencia||'';
+}
+function aeCompFromLiq(lq){
+  const emp=aeEmpCadFromLiq(lq);
+  return emp?.competencia||lq.competencia||'';
+}
+function aeIsEmpenhoLanc(l){
+  if(!l||l.status!=='Ativo'||l.tipo!=='Empenho')return false;
+  const emp=aeEmpCadFromLanc(l);
+  if(!aeIsCat(l.categoria||emp?.categoria))return false;
+  const reg=l.tipoRegistro||'';
+  return reg==='INICIAL'||reg==='REFORCO'||reg==='REFORÇO'||(!reg&&!!emp);
+}
+function aeEntradas(comp){
+  return (state.lancamentos||[]).filter(l=>
+    l.status==='Ativo'&&l.tipo==='Entrada'&&aeIsCat(l.categoria)&&(!comp||(l.competencia||'')===comp)
+  );
+}
+function aeLiquidacoesRegistros(acaoId,comp){
+  const usados=new Set();
+  const principais=(state.liquidacoes||[]).filter(lq=>{
+    if(!aeAtivo(lq))return false;
+    const emp=aeEmpCadFromLiq(lq);
+    if(!aeIsCat(lq.categoria||emp?.categoria))return false;
+    const aid=aeAcaoIdFromLiq(lq);
+    if(acaoId&&aid!==acaoId)return false;
+    if(comp&&aeCompFromLiq(lq)!==comp)return false;
+    usados.add(lq.id);
+    return true;
+  }).map(lq=>({
+    id:lq.id,
+    liquidado:valorBrutoLiquidacao(lq),
+    pago:lq.pago==='Sim'?(lq.valorLiquido||lq.valorBruto||0):0
+  }));
+  const fallback=(state.lancamentos||[]).filter(l=>{
+    if(l.status!=='Ativo'||(l.tipo!=='Liquidação'&&l.tipo!=='Pagamento'))return false;
+    if(l.liquidacaoId&&usados.has(l.liquidacaoId))return false;
+    const emp=aeEmpCadFromLanc(l);
+    if(!aeIsCat(l.categoria||emp?.categoria))return false;
+    const aid=aeAcaoIdFromLanc(l);
+    if(acaoId&&aid!==acaoId)return false;
+    if(comp&&aeCompFromLanc(l)!==comp)return false;
+    return true;
+  }).map(l=>({
+    id:l.id,
+    liquidado:l.tipo==='Liquidação'?(l.valor||0):0,
+    pago:l.tipo==='Pagamento'?(l.valor||0):0
+  }));
+  return principais.concat(fallback);
+}
+function aeTotaisAcao(acaoId,comp){
+  const emps=(state.lancamentos||[]).filter(l=>{
+    if(!aeIsEmpenhoLanc(l))return false;
+    if(aeAcaoIdFromLanc(l)!==acaoId)return false;
+    if(comp&&aeCompFromLanc(l)!==comp)return false;
+    return true;
+  });
+  const inicial=sum(emps.filter(l=>l.tipoRegistro==='INICIAL'));
+  const reforcos=sum(emps.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO'||!l.tipoRegistro));
+  const liqs=aeLiquidacoesRegistros(acaoId,comp);
+  return {
+    inicial,
+    reforcos,
+    empenhado:inicial+reforcos,
+    liquidado:liqs.reduce((s,l)=>s+l.liquidado,0),
+    pago:liqs.reduce((s,l)=>s+l.pago,0)
+  };
+}
+function aePrevistoAcao(a,comp){
+  if(comp){
+    const p=comp.split('-');
+    if(p.length===2&&Array.isArray(a.previstoMensalArr))return a.previstoMensalArr[parseInt(p[1])-1]||0;
+  }
+  return a.previsto||0;
+}
+function aeTotaisGeral(comp){
+  const acoes=(state.acoes||[]).filter(a=>aeAtivo(a));
+  return acoes.reduce((acc,a)=>{
+    const t=aeTotaisAcao(a.id,comp);
+    acc.previsto+=aePrevistoAcao(a,comp);
+    acc.inicial+=t.inicial;
+    acc.reforcos+=t.reforcos;
+    acc.empenhado+=t.empenhado;
+    acc.liquidado+=t.liquidado;
+    acc.pago+=t.pago;
+    return acc;
+  },{previsto:0,inicial:0,reforcos:0,empenhado:0,liquidado:0,pago:0,recebido:sum(aeEntradas(comp))});
+}
 function sum(arr){return arr.reduce((s,l)=>s+(l.valor||0),0)}
 // Créditos originais (SOMENTE entradas — Anulação reduz empenho, não aumenta crédito)
 function totalCreditosOriginais(cat){
@@ -3591,13 +3710,16 @@ function aePopularFiltroComp(){
   if(!sel)return;
   const cur=sel.value;
   const comps=new Set();
-  // Coleta competências dos empenhos cadastrados de AE
+  // Coleta competências dos créditos, empenhos e liquidações AE.
   (state.empenhosCad||[]).forEach(e=>{
-    if(e.status!=='Excluído'&&e.categoria==='ASSISTÊNCIA ESTUDANTIL'&&e.competencia)comps.add(e.competencia);
+    if(aeAtivo(e)&&aeIsCat(e.categoria)&&e.competencia)comps.add(e.competencia);
   });
-  // Coleta competências dos lançamentos AE
-  state.lancamentos.forEach(l=>{
-    if(l.status==='Ativo'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'&&l.competencia)comps.add(l.competencia);
+  (state.lancamentos||[]).forEach(l=>{
+    if(l.status==='Ativo'&&aeIsCat(l.categoria)&&l.competencia)comps.add(l.competencia);
+  });
+  (state.liquidacoes||[]).forEach(l=>{
+    const c=aeCompFromLiq(l);
+    if(aeAtivo(l)&&c&&(aeIsCat(l.categoria)||aeIsCat(aeEmpCadFromLiq(l)?.categoria)))comps.add(c);
   });
   const compsSorted=[...comps].sort().reverse();
   sel.innerHTML='<option value="">— Todas as competências —</option>'+compsSorted.map(c=>{
@@ -3701,8 +3823,9 @@ function renderAeGerenciar(){
         </thead>
         <tbody>
           ${acoes.length?acoes.map(a=>{
-            const emp=sum(sumLancsByAcao('Empenho',a.id));
-            const pag=sum(sumLancsByAcao('Pagamento',a.id));
+            const t=aeTotaisAcao(a.id,'');
+            const emp=t.empenhado;
+            const pag=t.pago;
             const prev=a.previsto||0;
             const pct=prev>0?Math.round(emp/prev*100):0;
             const isEditing=_aeEditId===a.id;
@@ -3839,9 +3962,10 @@ function renderAeAcoes(){
   const headerFiltro=comp?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">📅</span><div>Mostrando dados da competência: <strong>${labelFiltro}</strong> · Apuração por <strong>mês de competência</strong> do empenho.</div></div>`:'';
   el.innerHTML=headerFiltro+(acoes.length?acoes.map(a=>{
     // ★ REGRA AE: usar competência (não data de cadastro/pagamento/liquidação)
-    const emp=sum(sumLancsByAcaoComp('Empenho',a.id,comp));
-    const liq=sum(sumLancsByAcaoComp('Liquidação',a.id,comp));
-    const pag=sum(sumLancsByAcaoComp('Pagamento',a.id,comp));
+    const t=aeTotaisAcao(a.id,comp);
+    const emp=t.empenhado;
+    const liq=t.liquidado;
+    const pag=t.pago;
     // Previsto: se filtro de competência, usa valor mensal específico; senão, anual
     let prev=a.previsto||0;
     if(comp){
@@ -3877,40 +4001,29 @@ function renderAeMensal(){
   const elMensal=document.getElementById('ae-mensal');
   if(!elMensal)return;
   const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  const comp=_aeFiltroComp;
   const anoAtual=new Date().getFullYear();
   // Resumo mensal consolidado (todas as ações)
   const dadosMensais=MESES.map((_,mi)=>{
     const mesIdx=mi+1;
     const prefixo=anoAtual+'-'+String(mesIdx).padStart(2,'0');
-    // ── REGRA GLOBAL DE ORIGEM: mês extraído EXCLUSIVAMENTE do campo competencia ──
-    // Fallback por data de emissão REMOVIDO conforme §2 Módulo Assistência Estudantil.
-    const filtMes=l=>{
-      if(l.status!=='Ativo')return false;
-      return (l.competencia||'')===prefixo;
-    };
+    if(comp&&prefixo!==comp)return{prev:0,rec:0,emp:0,liq:0,pag:0};
     const prev=acoes.reduce((s,a)=>{
       const arr=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
       return s+(arr[mi]||0);
     },0);
-    const emp=sum(state.lancamentos.filter(l=>filtMes(l)&&l.tipo==='Empenho'&&(state.acoes.some(a=>a.status!=='Excluído'&&(l.referenciaId===a.id||(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId)?.acaoId===a.id)))));
-    // Liquidações e Pagamentos: usa competência do empenho cadastrado vinculado (não data do lançamento)
-    const filtMesLiq=l=>{
-      if(l.status!=='Ativo')return false;
-      const empCadId=l.empenhoCadId||l.referenciaId;
-      const empCad=(state.empenhosCad||[]).find(e=>e.id===empCadId);
-      return empCad?((empCad.competencia||'')===prefixo):(l.competencia||'')===prefixo;
-    };
-    const liq=sum(state.lancamentos.filter(l=>filtMesLiq(l)&&l.tipo==='Liquidação'&&(state.acoes.some(a=>a.status!=='Excluído'&&(l.referenciaId===a.id||((state.empenhosCad||[]).find(e=>e.id===l.referenciaId)?.acaoId===a.id))))));
-    const pag=sum(state.lancamentos.filter(l=>filtMesLiq(l)&&l.tipo==='Pagamento'&&(state.acoes.some(a=>a.status!=='Excluído'&&l.referenciaId===a.id))));
-    return{prev,emp,liq,pag};
+    const t=aeTotaisGeral(prefixo);
+    return{prev,rec:t.recebido,emp:t.empenhado,liq:t.liquidado,pag:t.pago};
   });
   const totPrev=dadosMensais.reduce((s,d)=>s+d.prev,0);
+  const totRec=dadosMensais.reduce((s,d)=>s+d.rec,0);
   const totEmp=dadosMensais.reduce((s,d)=>s+d.emp,0);
   const totLiq=dadosMensais.reduce((s,d)=>s+d.liq,0);
   const totPag=dadosMensais.reduce((s,d)=>s+d.pag,0);
   const fmtC=(v)=>v>0?`<td class="r" style="font-size:10.5px">${fmtBR(v)}</td>`:`<td class="r" style="color:var(--text4);font-size:10.5px">—</td>`;
   const mensalHtml=`
     <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Previsto</td>${dadosMensais.map(d=>fmtC(d.prev)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPrev)}</td></tr>
+    <tr><td style="font-size:11px;font-weight:600;color:var(--teal)">Recebido</td>${dadosMensais.map(d=>fmtC(d.rec)).join('')}<td class="r fw7" style="font-size:10.5px;color:var(--teal)">${fmtBR(totRec)}</td></tr>
     <tr><td style="font-size:11px;font-weight:600;color:var(--blue)">Empenhado</td>${dadosMensais.map(d=>fmtC(d.emp)).join('')}<td class="r text-blue fw7" style="font-size:10.5px">${fmtBR(totEmp)}</td></tr>
     <tr><td style="font-size:11px;font-weight:600;color:var(--amber)">Liquidado</td>${dadosMensais.map(d=>fmtC(d.liq)).join('')}<td class="r text-amber fw7" style="font-size:10.5px">${fmtBR(totLiq)}</td></tr>
     <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Pago</td>${dadosMensais.map(d=>fmtC(d.pag)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPag)}</td></tr>
@@ -3918,22 +4031,24 @@ function renderAeMensal(){
   `;
   // Resumo por ação
   const porAcaoRows=acoes.map(a=>{
-    const emp2=sum(sumLancsByAcao('Empenho',a.id));
-    const liq2=sum(sumLancsByAcao('Liquidação',a.id));
-    const pag2=sum(sumLancsByAcao('Pagamento',a.id));
-    const prev2=a.previsto||0;
+    const t=aeTotaisAcao(a.id,comp);
+    const emp2=t.empenhado;
+    const liq2=t.liquidado;
+    const pag2=t.pago;
+    const prev2=aePrevistoAcao(a,comp);
     const pEmp=prev2>0?Math.round(emp2/prev2*100):0;
     const pPag=emp2>0?Math.round(pag2/emp2*100):0;
     return`<tr><td>${a.nome}</td><td class="r text-green">${fmtBR(prev2)}</td><td class="r text-blue">${fmtBR(emp2)}</td><td class="r" style="color:var(--amber)">${fmtBR(liq2)}</td><td class="r text-green">${fmtBR(pag2)}</td><td class="r">${prev2>0?semaforo(pEmp):'—'}</td><td class="r">${emp2>0?semaforo(pPag):'—'}</td></tr>`;
   });
   elMensal.innerHTML=`
-    <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>As linhas <strong>Empenhado</strong>, <strong>Liquidado</strong> e <strong>Pago</strong> exibem o valor no <strong>mês de competência do registro original</strong> — independente da data de alteração ou sincronização.</div></div>
+    <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>As linhas <strong>Recebido</strong>, <strong>Empenhado</strong>, <strong>Liquidado</strong> e <strong>Pago</strong> exibem o valor pelo <strong>mês de competência do registro original</strong>${comp?' · filtro aplicado: <strong>'+(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})()+'</strong>':''}.</div></div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo Mensal Consolidado — ${anoAtual}</div></div>
     <div class="scroll-h"><table class="month-table"><thead><tr><th>Fase</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead><tbody>${mensalHtml}</tbody></table></div></div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Valores Mensais Previstos vs Executados</div></div>
     <div class="scroll-h"><table class="month-table"><thead><tr><th>Indicador</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead>
     <tbody>
       <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Previsto</td>${dadosMensais.map(d=>fmtC(d.prev)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPrev)}</td></tr>
+      <tr><td style="font-size:11px;font-weight:600;color:var(--teal)">Recebido</td>${dadosMensais.map(d=>fmtC(d.rec)).join('')}<td class="r fw7" style="font-size:10.5px;color:var(--teal)">${fmtBR(totRec)}</td></tr>
       <tr><td style="font-size:11px;font-weight:600;color:var(--blue)">Empenhado <span style="font-size:9px;color:var(--text3)">(competência)</span></td>${dadosMensais.map(d=>fmtC(d.emp)).join('')}<td class="r text-blue fw7" style="font-size:10.5px">${fmtBR(totEmp)}</td></tr>
       <tr><td style="font-size:11px;font-weight:600;color:var(--amber)">Liquidado</td>${dadosMensais.map(d=>fmtC(d.liq)).join('')}<td class="r text-amber fw7" style="font-size:10.5px">${fmtBR(totLiq)}</td></tr>
       <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Pago</td>${dadosMensais.map(d=>fmtC(d.pag)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPag)}</td></tr>
@@ -3951,64 +4066,30 @@ function renderAeDash(){
   const comp=_aeFiltroComp; // '' = todas
   const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
 
-  // Total Previsto: anual ou do mês de competência selecionado
-  let totPrev=0;
-  if(comp){
-    const p=comp.split('-');
-    if(p.length===2){
-      const mIdx=parseInt(p[1])-1;
-      totPrev=acoes.reduce((s,a)=>{
-        const arr=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
-        return s+(arr[mIdx]||0);
-      },0);
-    }
-  } else {
-    totPrev=acoes.reduce((s,a)=>s+(a.previsto||0),0);
-  }
-
-  // Total Recebido = soma das entradas da categoria ASSISTÊNCIA ESTUDANTIL
-  // (filtra por competência se houver — entradas têm competência em c-comp)
-  const totRecebido=sum(getLancsAtivos('Entrada','ASSISTÊNCIA ESTUDANTIL').filter(l=>!comp||(l.competencia||'')===comp));
-
-  // ★ REGRA AE: Empenhado/Liquidado/Pago apurados por mês de competência (não por data)
-  const compFiltro=l=>{
-    if(!comp)return true;
-    if(l.tipo==='Empenho')return (l.competencia||'')===comp;
-    // Liquidação/Pagamento: herdam competência do empenho cadastrado vinculado
-    const empCadId=l.empenhoCadId||l.referenciaId;
-    const empCad=(state.empenhosCad||[]).find(e=>e.id===empCadId);
-    return empCad&&((empCad.competencia||'')===comp);
-  };
-  const totEmpenhado=sum(state.lancamentos.filter(l=>
-    l.status==='Ativo'&&l.tipo==='Empenho'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'&&compFiltro(l)
-  ));
-  const totLiquidado=sum(state.lancamentos.filter(l=>
-    l.status==='Ativo'&&l.tipo==='Liquidação'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'&&compFiltro(l)
-  ));
-  const totPago=sum(state.lancamentos.filter(l=>
-    l.status==='Ativo'&&l.tipo==='Pagamento'&&l.categoria==='ASSISTÊNCIA ESTUDANTIL'&&compFiltro(l)
-  ));
+  const totais=aeTotaisGeral(comp);
+  const totPrev=totais.previsto;
+  const totRecebido=totais.recebido;
+  const totEmpenhado=totais.empenhado;
+  const totLiquidado=totais.liquidado;
+  const totPago=totais.pago;
 
   // % Execução Geral = (Pago / Recebido) × 100
   const pExecGeral=totRecebido>0?Math.round(totPago/totRecebido*100):0;
 
   // Tabela Ações — Indicadores com totalização (filtrada por competência)
   const linhasAcoes=acoes.map(a=>{
-    const emp=sum(sumLancsByAcaoComp('Empenho',a.id,comp));
-    const pag=sum(sumLancsByAcaoComp('Pagamento',a.id,comp));
-    let prev=a.previsto||0;
-    if(comp){
-      const p=comp.split('-');
-      if(p.length===2&&Array.isArray(a.previstoMensalArr)){
-        prev=a.previstoMensalArr[parseInt(p[1])-1]||0;
-      }
-    }
+    const t=aeTotaisAcao(a.id,comp);
+    const emp=t.empenhado;
+    const liq=t.liquidado;
+    const pag=t.pago;
+    const prev=aePrevistoAcao(a,comp);
     const pct=prev>0?Math.round(emp/prev*100):0;
-    return{a,emp,pag,prev,pct};
+    return{a,emp,liq,pag,prev,pct};
   });
 
   const totTabelaPrev=linhasAcoes.reduce((s,r)=>s+r.prev,0);
   const totTabelaEmp=linhasAcoes.reduce((s,r)=>s+r.emp,0);
+  const totTabelaLiq=linhasAcoes.reduce((s,r)=>s+r.liq,0);
   const totTabelaPag=linhasAcoes.reduce((s,r)=>s+r.pag,0);
   const totTabelaSaldo=linhasAcoes.reduce((s,r)=>s+(r.prev-r.emp),0);
   const headerFiltro=comp?`<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📅</span><div>Apuração por <strong>mês de competência</strong> · Filtrando: <strong>${labelFiltro}</strong></div></div>`:'<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>Empenhado, Liquidado e Pago apurados pelo <strong>mês de competência</strong> do empenho — conforme regra do módulo Assistência Estudantil.</div></div>';
@@ -4028,13 +4109,14 @@ function renderAeDash(){
       </div>
     </div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Ações — Indicadores${comp?' · '+labelFiltro:''}</div></div>
-    <table><thead><tr><th>Ação</th><th>Tipo</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Pago</th><th class="r">Saldo Não Emp.</th><th class="r">% Emp.</th></tr></thead>
+    <table><thead><tr><th>Ação</th><th>Tipo</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Liquidado</th><th class="r">Pago</th><th class="r">Saldo Não Emp.</th><th class="r">% Emp.</th></tr></thead>
     <tbody>
-      ${linhasAcoes.map(({a,emp,pag,prev,pct})=>`<tr><td><strong>${a.nome}</strong></td><td><span class="kpi-badge badge-blue">${a.tipo}</span></td><td class="r text-green">${fmtBR(prev)}</td><td class="r text-blue">${fmtBR(emp)}</td><td class="r text-green">${fmtBR(pag)}</td><td class="r ${(prev-emp)<0?'text-red':'text-gold'}">${fmtBR(prev-emp)}</td><td class="r">${prev>0?semaforo(pct):'—'}</td></tr>`).join('')||'<tr class="empty-row"><td colspan="7">Nenhuma ação</td></tr>'}
+      ${linhasAcoes.map(({a,emp,liq,pag,prev,pct})=>`<tr><td><strong>${a.nome}</strong></td><td><span class="kpi-badge badge-blue">${a.tipo}</span></td><td class="r text-green">${fmtBR(prev)}</td><td class="r text-blue">${fmtBR(emp)}</td><td class="r" style="color:var(--amber)">${fmtBR(liq)}</td><td class="r text-green">${fmtBR(pag)}</td><td class="r ${(prev-emp)<0?'text-red':'text-gold'}">${fmtBR(prev-emp)}</td><td class="r">${prev>0?semaforo(pct):'—'}</td></tr>`).join('')||'<tr class="empty-row"><td colspan="8">Nenhuma ação</td></tr>'}
       ${linhasAcoes.length?`<tr style="font-weight:700;background:var(--bg4);border-top:2px solid var(--gold-border)">
         <td colspan="2" style="color:var(--gold)">TOTAIS</td>
         <td class="r text-green fw7">${fmtBR(totTabelaPrev)}</td>
         <td class="r text-blue fw7">${fmtBR(totTabelaEmp)}</td>
+        <td class="r fw7" style="color:var(--amber)">${fmtBR(totTabelaLiq)}</td>
         <td class="r text-green fw7">${fmtBR(totTabelaPag)}</td>
         <td class="r ${totTabelaSaldo<0?'text-red':'text-gold'} fw7">${fmtBR(totTabelaSaldo)}</td>
         <td class="r">${totTabelaPrev>0?semaforo(Math.round(totTabelaEmp/totTabelaPrev*100)):'—'}</td>
@@ -4476,9 +4558,17 @@ function init(){
     }
   });
   (state.liquidacoes||[]).forEach(l=>{
-    if(!l.tipoRecurso){
-      const empCad=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
-      l.tipoRecurso=empCad?.tipoEmp||'EXE';
+    const empCad=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho||e.numero===l.nEmpenhoCosip);
+    if(!l.tipoRecurso)l.tipoRecurso=empCad?.tipoEmp||'EXE';
+    if(empCad){
+      if(!l.competencia)l.competencia=empCad.competencia||'';
+      if(!l.acaoId)l.acaoId=empCad.acaoId||'';
+      const lanc=state.lancamentos.find(x=>x.liquidacaoId===l.id);
+      if(lanc){
+        if(!lanc.competencia)lanc.competencia=empCad.competencia||'';
+        if(!lanc.empenhoCadId)lanc.empenhoCadId=empCad.id;
+        if(!lanc.acaoId)lanc.acaoId=empCad.acaoId||'';
+      }
     }
   });
   renderDashboard();
@@ -4515,23 +4605,29 @@ function renderAeDetalhe(){
     </div>`;
   const a=acoes.find(x=>x.id===curSel)||acoes[0];
   if(!a)return;
+  const comp=_aeFiltroComp;
+  const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
   const pm=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
-  const totPrev=pm.reduce((s,v)=>s+v,0)||a.previsto||0;
-  const emp=sum(sumLancsByAcao('Empenho',a.id));
-  const liq=sum(sumLancsByAcao('Liquidação',a.id));
-  const pag=sum(sumLancsByAcao('Pagamento',a.id));
+  const totPrev=comp?aePrevistoAcao(a,comp):(pm.reduce((s,v)=>s+v,0)||a.previsto||0);
+  const tAcao=aeTotaisAcao(a.id,comp);
+  const emp=tAcao.empenhado;
+  const liq=tAcao.liquidado;
+  const pag=tAcao.pago;
+  const totRecebido=sum(aeEntradas(comp));
   const liqPag=liq+pag;
   const saldoNEmp=totPrev-emp;
   const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   el.innerHTML+=`
-    <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
+    <div class="kpi-grid" style="grid-template-columns:repeat(6,1fr);margin-bottom:14px">
       <div class="kpi accent-gold"><div class="kpi-label">Previsto Total</div><div class="kpi-value text-gold" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(totPrev)}</div></div>
+      <div class="kpi accent-green"><div class="kpi-label">Crédito Recebido AE</div><div class="kpi-value text-green" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(totRecebido)}</div><div class="kpi-sub">categoria AE</div></div>
       <div class="kpi accent-blue"><div class="kpi-label">Empenhado</div><div class="kpi-value text-blue" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(emp)}</div></div>
       <div class="kpi accent-amber"><div class="kpi-label">Liquidado / Pago</div><div class="kpi-value" style="color:var(--amber);font-size:clamp(13px,1.8vw,22px)">${fmtBR(liqPag)}</div><div class="kpi-sub">liq: ${fmtBR(liq)} · pag: ${fmtBR(pag)}</div></div>
       <div class="kpi ${saldoNEmp<0?'accent-red':'accent-green'}"><div class="kpi-label">Saldo Não Empenhado</div><div class="kpi-value ${saldoNEmp<0?'text-red':'text-green'}" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(saldoNEmp)}</div></div>
       <div class="kpi accent-purple"><div class="kpi-label">Tipo</div><div class="kpi-value" style="color:var(--purple);font-size:14px;padding-top:4px">${a.tipo||'Benefício'}</div></div>
     </div>
     <div style="margin-top:0">
+      ${comp?`<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📅</span><div>Detalhe filtrado pela competência: <strong>${labelFiltro}</strong>.</div></div>`:''}
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:10px 16px;background:rgba(0,166,81,.06);border:1px solid rgba(0,166,81,.2);border-radius:10px">
         <span style="font-size:18px">📅</span>
         <div style="font-size:12px;color:var(--text2);line-height:1.5">
@@ -4540,9 +4636,10 @@ function renderAeDetalhe(){
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px">
-        <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:6px 14px;background:var(--bg4);border-radius:8px;border:1px solid var(--border2)">
+        <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:6px 14px;background:var(--bg4);border-radius:8px;border:1px solid var(--border2)">
           <div style="font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase">MÊS</div>
           <div style="font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;text-align:right">PREVISTO</div>
+          <div style="font-size:9.5px;font-weight:700;color:var(--teal);letter-spacing:.1em;text-transform:uppercase;text-align:right">CRÉDITO AE</div>
           <div style="font-size:9.5px;font-weight:700;color:var(--exe);letter-spacing:.1em;text-transform:uppercase;text-align:right">EMP.INICIAL</div>
           <div style="font-size:9.5px;font-weight:700;color:var(--green2);letter-spacing:.1em;text-transform:uppercase;text-align:right">REFORÇOS</div>
           <div style="font-size:9.5px;font-weight:700;color:var(--blue2);letter-spacing:.1em;text-transform:uppercase;text-align:right">TOTAL EMP.</div>
@@ -4555,26 +4652,24 @@ function renderAeDetalhe(){
           const anoAtual=new Date().getFullYear();
           return pm.map((v,i)=>{
             const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
-            const empsDoMes=sumLancsByAcao('Empenho',a.id).filter(l=>l.competencia===prefix);
-            const inicialM=sum(empsDoMes.filter(l=>l.tipoRegistro==='INICIAL'));
-            const reforcoM=sum(empsDoMes.filter(l=>l.tipoRegistro==='REFORCO'||(!l.tipoRegistro&&l.tipo==='Empenho')));
-            const empM=inicialM+reforcoM;
-            const filtLiqPag=l=>{
-              const empCadId=l.empenhoCadId||l.referenciaId;
-              const empCad=(state.empenhosCad||[]).find(e=>e.id===empCadId);
-              return empCad?((empCad.competencia||'')===prefix):((l.competencia||'')===prefix);
-            };
-            const liqM=sum(sumLancsByAcao('Liquidação',a.id).filter(filtLiqPag));
-            const pagM=sum(sumLancsByAcao('Pagamento',a.id).filter(filtLiqPag));
-            const saldoM=v-empM;
-            const temDados=v>0||empM>0||liqM>0||pagM>0;
-            const pct=v>0?Math.min(100,Math.round(empM/v*100)):0;
+            const mesForaDoFiltro=comp&&prefix!==comp;
+            const previstoM=mesForaDoFiltro?0:v;
+            const recM=mesForaDoFiltro?0:sum(aeEntradas(prefix));
+            const tMes=mesForaDoFiltro?{inicial:0,reforcos:0,empenhado:0,liquidado:0,pago:0}:aeTotaisAcao(a.id,prefix);
+            const inicialM=tMes.inicial;
+            const reforcoM=tMes.reforcos;
+            const empM=tMes.empenhado;
+            const liqM=tMes.liquidado;
+            const pagM=tMes.pago;
+            const saldoM=previstoM-empM;
+            const temDados=previstoM>0||recM>0||empM>0||liqM>0||pagM>0;
+            const pct=previstoM>0?Math.min(100,Math.round(empM/previstoM*100)):0;
             const pctColor=pct>=80?'var(--green)':pct>=40?'var(--amber)':'var(--red)';
             const mesAbr=MESES_ABR2[i];
             if(!temDados){
-              return '<div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:8px 14px;border-radius:8px;opacity:.3">'
+              return '<div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:8px 14px;border-radius:8px;opacity:.3">'
                 +'<div style="font-size:11px;font-weight:600;color:var(--text4)">'+mesAbr+'/'+anoAtual+'</div>'
-                +'<div style="text-align:right;font-size:11px;color:var(--text4)">—</div>'.repeat(7)
+                +'<div style="text-align:right;font-size:11px;color:var(--text4)">—</div>'.repeat(8)
                 +'</div>';
             }
             const fmtV=val=>val>0?fmtBR(val):'—';
@@ -4582,14 +4677,15 @@ function renderAeDetalhe(){
               ?'<span style="font-size:12px;font-weight:700;color:'+clr+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(val)+'</span>'
               :'<span style="color:var(--text4);font-size:11px">—</span>';
             const saldoColor=saldoM<0?'var(--red)':'var(--gold)';
-            const saldoVal=(v>0||empM>0)?'<span style="font-size:12px;font-weight:800;color:'+saldoColor+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(saldoM)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>';
-            const barHtml=(v>0||empM>0)
+            const saldoVal=(previstoM>0||empM>0)?'<span style="font-size:12px;font-weight:800;color:'+saldoColor+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(saldoM)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>';
+            const barHtml=(previstoM>0||empM>0)
               ?'<div style="padding:0 14px 8px;display:flex;align-items:center;gap:8px"><div style="flex:1;height:3px;background:var(--bg5);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px;transition:width .4s"></div></div><span style="font-size:9px;color:'+pctColor+';font-weight:700;white-space:nowrap">'+pct+'% emp.</span></div>'
               :'';
             return '<div style="border-radius:10px;border:1px solid var(--border2);background:var(--bg3);overflow:hidden;transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--exe-border)\'" onmouseout="this.style.borderColor=\'var(--border2)\'">'
-              +'<div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:10px 14px;align-items:center">'
+              +'<div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:10px 14px;align-items:center">'
               +'<div><div style="font-size:12px;font-weight:700;color:var(--gold)">'+mesAbr+'</div><div style="font-size:9px;color:var(--text4)">'+anoAtual+'</div></div>'
-              +'<div style="text-align:right">'+(v>0?'<span style="font-size:12px;font-weight:600;color:var(--text2);font-family:\'IBM Plex Mono\',monospace">'+fmtBR(v)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>')+'</div>'
+              +'<div style="text-align:right">'+(previstoM>0?'<span style="font-size:12px;font-weight:600;color:var(--text2);font-family:\'IBM Plex Mono\',monospace">'+fmtBR(previstoM)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>')+'</div>'
+              +'<div style="text-align:right">'+colV(recM,'var(--teal)')+'</div>'
               +'<div style="text-align:right">'+colV(inicialM,'var(--exe)')+'</div>'
               +'<div style="text-align:right">'+colV(reforcoM,'var(--green2)')+'</div>'
               +'<div style="text-align:right">'+colV(empM,'var(--blue2)')+'</div>'
@@ -4599,9 +4695,10 @@ function renderAeDetalhe(){
               +'</div>'+barHtml+'</div>';
           }).join('');
         })()}
-        <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:12px 14px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border:2px solid var(--gold-border);border-radius:10px;margin-top:4px">
+        <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:12px 14px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border:2px solid var(--gold-border);border-radius:10px;margin-top:4px">
           <div style="font-size:11px;font-weight:800;color:var(--gold);letter-spacing:.06em">TOTAL</div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--gold);font-family:'IBM Plex Mono',monospace">${fmtBR(totPrev)}</span></div>
+          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--teal);font-family:'IBM Plex Mono',monospace">${fmtBR(totRecebido)}</span></div>
           <div style="text-align:right;grid-column:span 2"></div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--blue2);font-family:'IBM Plex Mono',monospace">${fmtBR(emp)}</span></div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--amber);font-family:'IBM Plex Mono',monospace">${fmtBR(liq)}</span></div>
@@ -6747,6 +6844,7 @@ function registrarLiquidacao(grupo){
     id:shortId('LQ'),grupo,nEmpenho:emp.numero,nEmpenhoCosip:grupo==='energia'?((state.empenhosCad||[]).find(x=>x.id===_liqEmpCosipId)?.numero||''):'',
     categoria:emp.categoria,cnpj:emp.cnpj||'',fornNome:emp.fornNome||forn?.nome||'',
     data,valorBruto:vlr,totalRetencoes:totalRet,valorLiquido:liquido,
+    competencia:emp.competencia||'',
     tipoRecurso:emp.tipoEmp||'EXE',
     nf:get('liq-nf'),dataEmissao:get('liq-data-emissao'),mesRef:get('liq-mes-ref'),
     npDh:get('liq-np'),mesPag:get('liq-mes-pag'),suap:get('liq-suap'),
@@ -6775,6 +6873,7 @@ function registrarLiquidacao(grupo){
     id:shortId('LIQ'),tipo:'Liquidação',categoria:emp.categoria,
     descricao:'Liquidação '+emp.numero+(obj.nf?' NF '+obj.nf:''),
     valor:vlr,data,fonte:emp.fonte||'',ptres:emp.ptres||'',nd:emp.nd||'',
+    competencia:emp.competencia||'',empenhoCadId:emp.id,acaoId:emp.acaoId||obj.acaoId||'',
     // tipoRecurso herdado do empenho cadastrado para correta segregação EXE/RAP na tabela
     tipoRecurso:emp.tipoEmp||'EXE',
     referencia:emp.numero,referenciaId:emp.id,status:'Ativo',ts:new Date().toISOString(),
@@ -6967,6 +7066,11 @@ function editarLiquidacao(id){
     }
     
     l.tsModif=new Date().toISOString();
+    const empLiq=aeEmpCadFromLiq(l);
+    if(empLiq){
+      l.competencia=empLiq.competencia||l.competencia||'';
+      l.acaoId=l.acaoId||empLiq.acaoId||'';
+    }
     
     // Atualizar lançamento correspondente
     const lanc=state.lancamentos.find(x=>x.liquidacaoId===id);
@@ -6974,6 +7078,12 @@ function editarLiquidacao(id){
       lanc.data=l.data;
       lanc.valor=l.valorBruto;
       lanc.descricao='Liquidação '+l.nEmpenho+(l.nf?' NF '+l.nf:'');
+      if(empLiq){
+        lanc.competencia=empLiq.competencia||lanc.competencia||'';
+        lanc.empenhoCadId=empLiq.id;
+        lanc.acaoId=empLiq.acaoId||l.acaoId||'';
+        lanc.referenciaId=empLiq.id;
+      }
       lanc.tsModif=new Date().toISOString();
     }
     
