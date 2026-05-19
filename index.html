@@ -6126,6 +6126,9 @@ function renderCadastroEmpenhos(){
       </span>`:''}
       ${t.anulacoes>0?`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:6px;padding:3px 8px;font-size:11px;white-space:nowrap" title="Anulações">
         <span style="color:var(--amber)">➖</span><span style="color:var(--amber);font-weight:700">${fmtBR(t.anulacoes)}</span>
+      </span>`:''}
+      ${t.liqFeitas>0?`<span style="display:inline-flex;align-items:center;gap:4px;background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:6px;padding:3px 8px;font-size:11px;white-space:nowrap" title="Liquidado (saldo consumido)">
+        <span style="color:var(--blue)">💧</span><span style="color:var(--blue);font-weight:700">${fmtBR(t.liqFeitas)}</span>
       </span>`:''}`;
     const btnReforco=!isRAP?`<button class="btn btn-xs" style="background:var(--green-bg);border:1px solid var(--green-border);color:var(--green)" onclick="abrirModalReforco('${e.id}')" title="Reforço">➕</button>`:'';
     const btnAnular=!isRAP?`<button class="btn btn-xs" style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)" onclick="abrirModalAnular('${e.id}')" title="Anular">➖</button>`:'';
@@ -6423,9 +6426,9 @@ function calcSaldoEmpenho(nEmp){
     (l.referencia===nEmp||(empCadId&&l.empenhoCadId===empCadId))
   );
   let totalEmp=sum(lancsEmp);
-  // Priorizar valorInicial do cadastro para EXE: garante que o Valor Inicial
+  // Priorizar valorInicial do cadastro para EXE/RAP: garante que o Valor Inicial
   // informado no formulário principal seja sempre considerado no saldo.
-  // Regra: Saldo = Valor Inicial + Reforço - Anulação
+  // Regra: Saldo = Valor Inicial + Reforço - Anulação - Liquidação
   if(empCad?.valorInicial>0){
     // Se há lançamento INICIAL, use o maior entre os dois (prefer cadastro)
     const inicialLanc=sum(lancsEmp.filter(l=>l.tipoRegistro==='INICIAL'));
@@ -6482,8 +6485,9 @@ function calcEmpenhoTotais(empCadId, nEmp){
   const inicial=valorIniCad!=null?valorIniCad:inicialLanc;
 
   const totalEmp=inicial+reforcos+legacy;
-  // SALDO CORRETO: Valor Inicial + Reforço - Anulação (sem descontar liquidação do saldo do empenho)
-  const saldo=Math.max(0, inicial+reforcos+legacy-anulacoes);
+  // SALDO CORRETO: Valor Inicial + Reforço - Anulação - Liquidado
+  // A liquidação CONSOME o saldo do empenho (EXE e RAP)
+  const saldo=Math.max(0, inicial+reforcos+legacy-anulacoes-liqFeitas);
   return{inicial,reforcos:reforcos+legacy,anulacoes,liqFeitas,totalEmp,saldo};
 }
 
