@@ -2702,12 +2702,20 @@ function renderDashboard(){
   `;
 
   // ── FLUXO DE EXECUÇÃO: EXE + RAP (visão consolidada) ──
-  const totEmpConsolid = totalEmpenhos();         // EXE + RAP
-  const totLiqConsolid = totalLiquidacoesEXE()+totalLiquidacoesRAP();      // EXE + RAP (lançamentos)
-  const totPagConsolid = totalPagamentos();       // EXE + RAP
-  const totLiqModConsolid = (state.liquidacoes||[])
+  // [CORRIGIDO] Empenhado: usa EXE+RAP com fallback empenhosCad (mesma base dos KPIs)
+  const totEmpConsolid = totalEmpenhosEXE() + totalEmpenhosRAP();
+  // [CORRIGIDO] Liquidado: soma lançamentos tipo 'Liquidação' (EXE+RAP) + módulo state.liquidacoes
+  const totLiqLancs = totalLiquidacoesEXE() + totalLiquidacoesRAP();
+  const totLiqMod   = (state.liquidacoes||[])
     .filter(l=>l.status!=='Excluído')
-    .reduce((s,l)=>s+(l.valorLiquido||l.valorBruto||0),0); // módulo liquidações
+    .reduce((s,l)=>s+(l.valorBruto||0), 0);
+  const totLiqConsolid = totLiqLancs + totLiqMod;
+  // [CORRIGIDO] Pago: soma lançamentos tipo 'Pagamento' (EXE+RAP) + módulo state.liquidacoes onde pago='Sim'
+  const totPagLancs = totalPagamentosEXE() + totalPagamentosRAP();
+  const totPagMod   = (state.liquidacoes||[])
+    .filter(l=>l.status!=='Excluído' && l.pago==='Sim')
+    .reduce((s,l)=>s+(l.valorLiquido||l.valorBruto||0), 0);
+  const totPagConsolid = totPagLancs + totPagMod;
 
   const pEmpLiq=totEmpConsolid>0?clamp(Math.round(totLiqConsolid/totEmpConsolid*100),0,100):0;
   const pLiqPag=totLiqConsolid>0?clamp(Math.round(totPagConsolid/totLiqConsolid*100),0,100):0;
