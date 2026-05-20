@@ -2844,18 +2844,38 @@ function renderDashboard(){
   `;
 
   // Execução por categoria — apenas EXE, empenhado = inicial + reforços do módulo Empenho.
-  const catRows=DEFAULT_CATS.filter(c=>totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0).map(c=>{
-    const te=totalCreditosOriginais(c);
+  // ★ REGRA COSIP: a categoria COSIP não registra crédito próprio — usa o pool de ENERGIA ELÉTRICA.
+  //   Para exibição no dashboard, usamos creditoEfetivo(c) que retorna o crédito do pool para COSIP.
+  //   O saldo a empenhar de COSIP é calculado como saldoCatEfetivo() (pool compartilhado).
+  function creditoEfetivoParaDash(c){
+    const catN=normalizarCategoria(c);
+    if(catN==='COSIP'){
+      // COSIP mostra o crédito da ENERGIA ELÉTRICA (pool compartilhado)
+      return totalCreditosOriginais('ENERGIA ELÉTRICA');
+    }
+    return totalCreditosOriginais(catN);
+  }
+  // Filtro: exibe categorias que têm crédito próprio OU empenhos (inclusive COSIP via pool)
+  const catRows=DEFAULT_CATS.filter(c=>{
+    if(normalizarCategoria(c)==='COSIP') return totalEmpenhosEXE(c)>0; // COSIP só aparece se tiver empenhos
+    return totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0;
+  }).map(c=>{
+    const te=creditoEfetivoParaDash(c);
     const tem=totalEmpenhosEXE(c);
     const tl=totalLiquidacoesEXE(c);
     // "Pago" = pagamentos via state.lancamentos (módulo Saída) +
     //          liquidações do módulo especializado marcadas como pago='Sim' e de empenhos EXE
     const tp=totalPagamentosEXE(c);
-    const saldoEmp=te-tem;
+    // Saldo a empenhar: para COSIP usa pool efetivo; para demais usa saldoCat normal
+    const saldoEmp=normalizarCategoria(c)==='COSIP'?saldoCatEfetivo(c):te-tem;
     const pe=te>0?Math.round(tem/te*100):0;
+    const isCosip=normalizarCategoria(c)==='COSIP';
+    const credCell=isCosip
+      ?`<td class="r text-green" title="COSIP usa o pool de crédito da ENERGIA ELÉTRICA">${fmtBR(te)} <span style="font-size:9px;color:var(--amber)">⚡pool</span></td>`
+      :`<td class="r text-green">${fmtBR(te)}</td>`;
     return`<tr>
       <td>${catIcon(c)} <strong>${c}</strong></td>
-      <td class="r text-green">${fmtBR(te)}</td>
+      ${credCell}
       <td class="r text-blue">${fmtBR(tem)}</td>
       <td class="r" style="color:var(--amber)">${fmtBR(tl)}</td>
       <td class="r text-green">${fmtBR(tp)}</td>
