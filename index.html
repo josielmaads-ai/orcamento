@@ -2484,21 +2484,27 @@ function saldoCat(cat){
   return creditos+transfE-empenhos-transfS;
 }
 // Saldo efetivo considerando a regra COSIP → ENERGIA ELÉTRICA:
-// Empenhos e reforços na categoria COSIP consomem o saldo da ENERGIA ELÉTRICA.
-// O saldo disponível para COSIP é calculado como:
-//   saldo(ENERGIA ELÉTRICA) − empenhos(COSIP) − empenhos(ENERGIA ELÉTRICA) + anulações(COSIP) + anulações(ENERGIA ELÉTRICA)
-// Assim o conjunto ENERGIA + COSIP compartilha o mesmo pool de crédito.
+// ★ REGRA DE NEGÓCIO: O crédito registrado em ENERGIA ELÉTRICA é o pool único para
+//   empenhos de ENERGIA ELÉTRICA e de COSIP. O saldo disponível para ambas as categorias
+//   é calculado como:
+//   crédito(ENERGIA ELÉTRICA) + transf.entrada(ENERGIA) − transf.saída(ENERGIA)
+//   − empenhos(ENERGIA ELÉTRICA) − empenhos(COSIP)
+// O crédito NUNCA deve ser registrado diretamente em COSIP no módulo Registrar Crédito.
 function saldoCatEfetivo(cat){
-  // Normaliza entrada para garantir que 'COSIP', 'Cosip' etc. sejam tratados igualmente
+  // Normaliza entrada para garantir que 'COSIP', 'Cosip', 'ENERGIA ELÉTRICA' etc. sejam tratados igualmente
   const catN=normalizarCategoria(cat);
-  if(catN!=='COSIP') return saldoCat(catN);
-  // Para COSIP: crédito da Energia menos todos os empenhos de Energia e COSIP combinados
-  const creditosEnergia=sum(getLancsAtivos('Entrada','ENERGIA ELÉTRICA'));
-  const transfEEnergia=sum(getLancsAtivos('Transferência Entrada','ENERGIA ELÉTRICA'));
-  const transfSEnergia=sum(getLancsAtivos('Transferência Saída','ENERGIA ELÉTRICA'));
-  const empEnergia=totalEmpenhosEXE('ENERGIA ELÉTRICA');
-  const empCosip=totalEmpenhosEXE('COSIP');
-  return creditosEnergia+transfEEnergia-empEnergia-empCosip-transfSEnergia;
+  // Tanto ENERGIA ELÉTRICA quanto COSIP usam o mesmo pool de crédito (ENERGIA ELÉTRICA)
+  if(catN==='ENERGIA ELÉTRICA'||catN==='COSIP'){
+    const creditosEnergia=sum(getLancsAtivos('Entrada','ENERGIA ELÉTRICA'));
+    const transfEEnergia=sum(getLancsAtivos('Transferência Entrada','ENERGIA ELÉTRICA'));
+    const transfSEnergia=sum(getLancsAtivos('Transferência Saída','ENERGIA ELÉTRICA'));
+    const empEnergia=totalEmpenhosEXE('ENERGIA ELÉTRICA');
+    const empCosip=totalEmpenhosEXE('COSIP');
+    // Saldo do pool: crédito menos TODOS os empenhos (Energia + COSIP)
+    return creditosEnergia+transfEEnergia-empEnergia-empCosip-transfSEnergia;
+  }
+  // Para todas as demais categorias: saldo normal
+  return saldoCat(catN);
 }
 
 // Saldo empenhado disponível para liquidação
@@ -2884,11 +2890,18 @@ function renderDashboard(){
 // ═══════════════════════════════════════════════════════════
 function renderCatGrid(){
   const sel=state.catSelecionadaE;
-  // COSIP excluída do módulo Registrar Crédito — usa saldo da ENERGIA ELÉTRICA
+  // COSIP excluída do módulo Registrar Crédito — crédito entra somente via ENERGIA ELÉTRICA
+  // O saldo de ENERGIA ELÉTRICA já contempla o consumo de empenhos COSIP (pool compartilhado)
   const CATS_CREDITO=DEFAULT_CATS.filter(c=>c!=='COSIP');
   document.getElementById('cat-grid-e').innerHTML=CATS_CREDITO.map(c=>{
-    const s=saldoCat(c);
-    return`<div class="cat-card ${c===sel?'sel':''}" onclick="selCat('${c}')"><span class="cat-icon">${catIcon(c)}</span><div class="cat-name">${c}</div><div class="cat-saldo">${fmtBR(s)}</div></div>`;
+    // Para ENERGIA ELÉTRICA: usa saldoCatEfetivo que desconta empenhos COSIP + ENERGIA do pool
+    // Para demais categorias: usa saldoCat normal
+    const s = c==='ENERGIA ELÉTRICA' ? saldoCatEfetivo(c) : saldoCat(c);
+    // Indicador visual extra para ENERGIA: mostrar que COSIP consome este saldo
+    const extraLabel = c==='ENERGIA ELÉTRICA'
+      ? `<div class="cat-saldo" style="color:var(--amber);font-size:9px">⚡+COSIP pool</div>`
+      : '';
+    return`<div class="cat-card ${c===sel?'sel':''}" onclick="selCat('${c}')"><span class="cat-icon">${catIcon(c)}</span><div class="cat-name">${c}</div><div class="cat-saldo">${fmtBR(s)}</div>${extraLabel}</div>`;
   }).join('');
   populateSelect('c-fonte',state.fontes);
   populateSelect('c-ptres',state.ptres);
@@ -2900,11 +2913,24 @@ function renderCatGrid(){
 function selCat(c){state.catSelecionadaE=c;renderCatGrid();}
 function updateSaldoBar(){
   const c=state.catSelecionadaE;if(!c)return;
-  const te=totalCreditosOriginais(c),emp=totalEmpenhosEXE(c),s=saldoCat(c);
-  const p=te>0?clamp(Math.round(emp/te*100),0,100):0;
+  const te=totalCreditosOriginais(c);
+  // Para ENERGIA ELÉTRICA: o pool inclui empenhos de COSIP — usar saldo efetivo
+  const isEnergia=(c==='ENERGIA ELÉTRICA');
+  const empEnergia=totalEmpenhosEXE('ENERGIA ELÉTRICA');
+  const empCosip=isEnergia?totalEmpenhosEXE('COSIP'):0;
+  const empTotal=isEnergia?(empEnergia+empCosip):totalEmpenhosEXE(c);
+  const s=isEnergia?saldoCatEfetivo(c):saldoCat(c);
+  const p=te>0?clamp(Math.round(empTotal/te*100),0,100):0;
   const st=statusCor(p);
+  // Legenda diferenciada para ENERGIA ELÉTRICA (pool compartilhado com COSIP)
+  const caption=isEnergia
+    ? `Crédito: ${fmtBR(te)} · Emp. Energia: ${fmtBR(empEnergia)} · Emp. COSIP: ${fmtBR(empCosip)} · ${p}% comprometido`
+    : `Crédito: ${fmtBR(te)} · Empenhado: ${fmtBR(empTotal)} · ${p}% comprometido`;
+  const poolAviso=isEnergia
+    ? `<div style="font-size:10px;color:var(--amber);margin-top:4px;padding-top:4px;border-top:1px solid var(--border)">⚡ COSIP consome este mesmo pool de crédito — saldo disponível já descontado</div>`
+    : '';
   document.getElementById('credito-saldo-bar').innerHTML=`
-    <div class="saldo-bar-card"><div class="sb-top"><span class="sb-nome">${catIcon(c)} ${c}</span><span class="sb-val ${st}">${fmtBR(s)}</span></div><div class="sb-bar"><div class="sb-fill ${st}" style="width:${p}%"></div></div><div class="sb-caption">Crédito: ${fmtBR(te)} · Empenhado: ${fmtBR(emp)} · ${p}% comprometido</div></div>`;
+    <div class="saldo-bar-card"><div class="sb-top"><span class="sb-nome">${catIcon(c)} ${c}</span><span class="sb-val ${st}">${fmtBR(s)}</span></div><div class="sb-bar"><div class="sb-fill ${st}" style="width:${p}%"></div></div><div class="sb-caption">${caption}</div>${poolAviso}</div>`;
 }
 function registrarCredito(){
   const cat=state.catSelecionadaE;if(!cat){toast('Selecione uma categoria','warn');return;}
@@ -5851,11 +5877,23 @@ function initCadastroEmpenho(){
   }
   const grid=document.getElementById('cemp-cat-grid');
   if(!grid)return;
-  grid.innerHTML=DEFAULT_CATS.map(c=>`
-    <div class="cat-btn" id="cemp-cat-${c.replace(/\s/g,'_')}" onclick="cempSelecionarCat('${c}')">
+  grid.innerHTML=DEFAULT_CATS.map(c=>{
+    // Mostrar saldo disponível em cada categoria para guiar o usuário
+    const saldo=saldoCatEfetivo(c);
+    const saldoColor=saldo>0?'var(--green)':'var(--red)';
+    // COSIP e ENERGIA compartilham pool — indicar visualmente
+    const poolTag=(c==='COSIP')
+      ?`<span style="font-size:9px;color:var(--amber);line-height:1.2">usa pool ⚡</span>`
+      :(c==='ENERGIA ELÉTRICA')
+        ?`<span style="font-size:9px;color:var(--amber);line-height:1.2">pool c/ 💡COSIP</span>`
+        :'';
+    return`<div class="cat-btn" id="cemp-cat-${c.replace(/\s/g,'_')}" onclick="cempSelecionarCat('${c}')">
       <span class="cat-btn-icon">${catIcon(c)}</span>
       <span class="cat-btn-nome">${c}</span>
-    </div>`).join('');
+      ${poolTag}
+      <span style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:${saldoColor};margin-top:2px">${fmtBR(saldo)}</span>
+    </div>`;
+  }).join('');
   if(!document.getElementById('cemp-data').value)
     document.getElementById('cemp-data').value=new Date().toISOString().slice(0,10);
   renderCadastroEmpenhos();
