@@ -1708,30 +1708,27 @@ function carregar(){
       if(_syncVI>0)
         console.info('Migração: valorInicial sincronizado para '+_syncVI+' empenho(s) cadastrados.');
 
-      // ── Migração AE: propagar acaoId de empenhosCad para lançamentos vinculados
-      // Após ajustes, lançamentos de AE podem ter perdido o vínculo referenciaId → acaoId.
-      // Percorre empenhosCad que têm acaoId e propaga para todos os lançamentos filhos.
+      // ── Migração AE: propagar acaoId e empenhoCadId de empenhosCad para lançamentos filhos
+      // ★ FIX AE: a versão anterior propagava apenas empenhoCadId mas não acaoId, deixando
+      //   aeAcaoIdFromLanc dependente de busca indireta que pode falhar em dados legados.
+      //   Agora propagamos ambos para garantir integridade do vínculo ação↔lançamento.
       let _aeVinc=0;
       (state.empenhosCad||[]).forEach(e=>{
         if(!e.acaoId||e.status==='Excluído') return;
         state.lancamentos.forEach(l=>{
           if(l.status!=='Ativo') return;
-          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.referenciaId===e.id);
-          if(isFilho&&l.tipo==='Empenho'&&l.referenciaId!==e.acaoId){
-            // Não sobrescreve referenciaId se já aponta para algum lançamento
-            if(!state.lancamentos.find(x=>x.id===l.referenciaId)){
-              // referenciaId provavelmente é o empenhoCadId ou nulo — seguro propagar acaoId via empenhoCadId
-            }
-            if(!l.empenhoCadId) l.empenhoCadId=e.id;
-            _aeVinc++;
-          }
-          if(isFilho&&(l.tipo==='Liquidação'||l.tipo==='Pagamento')){
-            if(!l.empenhoCadId) { l.empenhoCadId=e.id; _aeVinc++; }
-          }
+          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.numeroEmpenho===e.numero)||(l.referenciaId===e.id);
+          if(!isFilho) return;
+          let mudou=false;
+          // Garante empenhoCadId sempre presente para consultas via empenhosCad
+          if(!l.empenhoCadId){ l.empenhoCadId=e.id; mudou=true; }
+          // ★ Propaga acaoId diretamente — caminho mais robusto e sem ambiguidade
+          if(e.acaoId&&!l.acaoId){ l.acaoId=e.acaoId; mudou=true; }
+          if(mudou) _aeVinc++;
         });
       });
       if(_aeVinc>0)
-        console.info('Migração AE: '+_aeVinc+' lançamento(s) com empenhoCadId restaurado/atualizado.');
+        console.info('Migração AE: '+_aeVinc+' lançamento(s) com acaoId/empenhoCadId restaurado/atualizado.');
 
       // Log de migração automática
       console.log('✅ Categorias normalizadas automaticamente ao carregar');
@@ -1880,13 +1877,18 @@ function importarJSON(evt){
             :now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
         }
       });
-      // ── Migração AE: propagar empenhoCadId para lançamentos filhos ─────────
+      // ── Migração AE: propagar acaoId e empenhoCadId para lançamentos filhos ────
+      // ★ FIX AE: idêntico à migração em loadData — propaga acaoId para evitar
+      //   divergência em dados importados de versões anteriores que não gravavam acaoId.
       (state.empenhosCad||[]).forEach(e=>{
         if(!e.acaoId||e.status==='Excluído')return;
         state.lancamentos.forEach(l=>{
           if(l.status!=='Ativo')return;
-          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.referenciaId===e.id);
-          if(isFilho&&!l.empenhoCadId) l.empenhoCadId=e.id;
+          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.numeroEmpenho===e.numero)||(l.referenciaId===e.id);
+          if(!isFilho)return;
+          if(!l.empenhoCadId) l.empenhoCadId=e.id;
+          // ★ Propaga acaoId diretamente para garantir integridade após importação
+          if(e.acaoId&&!l.acaoId) l.acaoId=e.acaoId;
         });
       });
       const resumo = {
@@ -2126,24 +2128,31 @@ function sumLancsByContratoEXE(tipo, contratoId){
 }
 
 // ── Helper: soma lançamentos vinculados a uma AÇÃO de AE ──
+// ★ FIX AE: cadeia de resolução revisada e documentada para evitar matches incorretos.
+//   A resolução de acaoId usa aeAcaoIdFromLanc (que agora prioriza l.acaoId direto),
+//   tornando esta função mais simples e consistente com o resto do módulo.
 function sumLancsByAcao(tipo, acaoId){
   return state.lancamentos.filter(l=>{
     if(l.status!=='Ativo'||l.tipo!==tipo) return false;
-    // referenciaId aponta para acaoId
-    if(l.referenciaId===acaoId) return true;
-    // Para empenhos: empenhoCadId pode ter acaoId
+    // Caminho 1: acaoId gravado diretamente no lançamento (dados novos/migrados)
+    if(l.acaoId===acaoId) return true;
+    // Caminho 2: via empenho cadastrado vinculado (dados legados sem acaoId direto)
     if(tipo==='Empenho'){
+      // Não usar referenciaId===acaoId para empenhos: referenciaId pode ser o numero do empenho
       const empCad=(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId);
-      return empCad && empCad.acaoId===acaoId;
+      if(empCad&&empCad.acaoId===acaoId) return true;
+      // Fallback extra: referenciaId aponta direto para o id da ação (dados muito antigos)
+      if(l.referenciaId===acaoId&&(state.acoes||[]).some(a=>aeAtivo(a)&&a.id===acaoId)) return true;
+      return false;
     }
     // Para liquidações/pagamentos: via empenho cadastrado vinculado
     if(tipo==='Liquidação'||tipo==='Pagamento'){
-      // Primeiro: referenciaId pode ser o id do empenho cadastrado
+      // referenciaId pode ser o id do empenho cadastrado
       const empCadByRef=(state.empenhosCad||[]).find(e=>e.id===l.referenciaId);
-      if(empCadByRef && empCadByRef.acaoId===acaoId) return true;
-      // Segundo: empenhoCadId direto
+      if(empCadByRef&&empCadByRef.acaoId===acaoId) return true;
+      // empenhoCadId direto
       const empCadById=(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId);
-      if(empCadById && empCadById.acaoId===acaoId) return true;
+      if(empCadById&&empCadById.acaoId===acaoId) return true;
       return false;
     }
     return false;
@@ -2188,12 +2197,23 @@ function aeEmpCadFromLiq(lq){
   return aeEmpCadByNumero(lq.nEmpenho)||aeEmpCadByNumero(lq.nEmpenhoCosip);
 }
 function aeAcaoIdFromLanc(l){
+  // ★ FIX AE: cadeia de resolução clara e sem ambiguidade:
+  //   1. acaoId direto no lançamento (gravado desde a correção — caminho primário)
+  //   2. acaoId do empenho cadastrado vinculado (legado sem acaoId direto)
+  //   3. referenciaId aponta para uma ação conhecida (dados muito antigos)
+  if(l.acaoId) return l.acaoId;
   const emp=aeEmpCadFromLanc(l);
-  return l.acaoId||emp?.acaoId||((state.acoes||[]).some(a=>aeAtivo(a)&&a.id===l.referenciaId)?l.referenciaId:'');
+  if(emp?.acaoId) return emp.acaoId;
+  // Último recurso: referenciaId coincide com id de uma ação ativa
+  if(l.referenciaId&&(state.acoes||[]).some(a=>aeAtivo(a)&&a.id===l.referenciaId))
+    return l.referenciaId;
+  return '';
 }
 function aeAcaoIdFromLiq(lq){
+  // ★ FIX AE: mesma cadeia de resolução para liquidações
+  if(lq.acaoId) return lq.acaoId;
   const emp=aeEmpCadFromLiq(lq);
-  return lq.acaoId||emp?.acaoId||'';
+  return emp?.acaoId||'';
 }
 function aeCompFromLanc(l){
   const emp=aeEmpCadFromLanc(l);
@@ -2231,9 +2251,17 @@ function aeLiquidacoesRegistros(acaoId,comp){
     liquidado:valorBrutoLiquidacao(lq),
     pago:lq.pago==='Sim'?(lq.valorLiquido||lq.valorBruto||0):0
   }));
+  // ★ FIX AE: o fallback cobre lançamentos de liquidação sem registro espelho em
+  //   state.liquidacoes (ou cujo espelho foi excluído). Excluímos qualquer lançamento
+  //   cujo liquidacaoId referencia um registro EXISTENTE (ativo ou não) em liquidacoes,
+  //   pois o caminho principal já o contabiliza (se ativo) ou ele foi anulado (inativo).
+  const liquidacoesIds=new Set((state.liquidacoes||[]).map(lq=>lq.id));
   const fallback=(state.lancamentos||[]).filter(l=>{
     if(l.status!=='Ativo'||(l.tipo!=='Liquidação'&&l.tipo!=='Pagamento'))return false;
-    if(l.liquidacaoId&&usados.has(l.liquidacaoId))return false;
+    // Excluir se: (a) já processado no caminho principal, ou
+    //            (b) liquidacaoId existe em state.liquidacoes (mesmo que inativo/excluído)
+    //            → evita double-count e contagem de liquidações anuladas
+    if(l.liquidacaoId&&(usados.has(l.liquidacaoId)||liquidacoesIds.has(l.liquidacaoId)))return false;
     const emp=aeEmpCadFromLanc(l);
     if(!aeIsCat(l.categoria||emp?.categoria))return false;
     const aid=aeAcaoIdFromLanc(l);
@@ -2256,13 +2284,19 @@ function aeTotaisAcao(acaoId,comp){
     return true;
   });
   const inicialLancs=sum(emps.filter(l=>l.tipoRegistro==='INICIAL'));
-  const reforcosLancs=sum(emps.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO'||!l.tipoRegistro));
+  // ★ FIX AE: removido '||!l.tipoRegistro' — lançamentos sem tipoRegistro sem empenhoCadId
+  //   reconhecido são tratados pelo fallback (inicialCad). Incluí-los aqui causava
+  //   double-count quando o fallback também os somava via empenhosCad.
+  const reforcosLancs=sum(emps.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO'));
 
   // ── Fallback: empenhosCad AE desta ação sem lançamento INICIAL ──────────
   // Garante que empenhos cadastrados no módulo Empenho (valorInicial + reforços)
   // que ainda não geraram lançamento INICIAL sejam contabilizados corretamente.
   // Regra de Ouro: empenhado = Valor Inicial do Registro + Valor Reforçado (módulo Empenho)
   let inicialCad=0, reforcosCad=0;
+  // ★ FIX AE: conjunto de ids de lançamentos REFORCO já somados no caminho principal
+  //   para evitar double-count no fallback abaixo.
+  const reforcosJaSomados=new Set(emps.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO').map(l=>l.id));
   (state.empenhosCad||[]).forEach(e=>{
     if(!empenhoCadAtivo(e)) return;
     if((e.tipoEmp||'EXE')!=='EXE') return;                      // somente EXE
@@ -2277,12 +2311,15 @@ function aeTotaisAcao(acaoId,comp){
     if(temLancInicial) return; // já computado via lançamentos
     // Soma valorInicial do cadastro como "inicial" (sem duplicar)
     inicialCad+=(e.valorInicial||0);
-    // Soma reforços cadastrados via lançamentos REFORCO vinculados a este empenhosCad
-    // (lançamentos REFORCO não têm tipoRegistro=INICIAL, portanto não foram pegos acima)
+    // ★ FIX AE: soma apenas reforços que NÃO foram já somados no caminho principal
+    //   (antes a ausência de acaoId no lançamento REFORCO os excluía do caminho principal,
+    //   mas agora que acaoId é sempre gravado, eles são somados lá — sem deduplicação
+    //   aqui causaria double-count em dados novos).
     const reforcosDesteEmp=sum((state.lancamentos||[]).filter(l=>
       l.status==='Ativo'&&l.tipo==='Empenho'&&
       (l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO')&&
-      (l.empenhoCadId===e.id||l.referencia===e.numero||l.numeroEmpenho===e.numero)
+      (l.empenhoCadId===e.id||l.referencia===e.numero||l.numeroEmpenho===e.numero)&&
+      !reforcosJaSomados.has(l.id)   // ★ evita double-count
     ));
     reforcosCad+=reforcosDesteEmp;
   });
@@ -2976,15 +3013,21 @@ function _onModalConfirm(e){
 
 function renderSidebar(){
   const el=document.getElementById('sidebar-saldo');
-  const cats=DEFAULT_CATS.filter(c=>totalEntradas(c)>0||totalEmpenhosEXE(c)>0);
+  // COSIP é excluída da listagem individual — seu saldo faz parte do pool de ENERGIA ELÉTRICA
+  const cats=DEFAULT_CATS.filter(c=>c!=='COSIP'&&(totalEntradas(c)>0||totalEmpenhosEXE(c)>0));
   if(!cats.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">Sem dados</div>';return;}
   const colors={ok:'var(--green)',warn:'var(--amber)',danger:'var(--red)'};
   el.innerHTML=cats.slice(0,7).map(c=>{
+    const isEnergia=(c==='ENERGIA ELÉTRICA');
     const te=totalEntradas(c);
-    const emp=totalEmpenhosEXE(c);
+    // Para ENERGIA ELÉTRICA: empenhado = empenhos de ENERGIA + empenhos de COSIP (pool compartilhado)
+    const emp=isEnergia?(totalEmpenhosEXE('ENERGIA ELÉTRICA')+totalEmpenhosEXE('COSIP')):totalEmpenhosEXE(c);
     const p=te>0?clamp(Math.round(emp/te*100),0,100):0;
-    const st=statusCor(p);const s=saldoCat(c);
-    return`<div class="sw-row"><div class="sw-cat" title="${c}">${catIcon(c)} ${c}</div><div class="sw-val" style="color:${colors[st]}">${fmtBR(s)}</div></div><div class="sw-bar"><div class="sw-bar-fill" style="width:${p}%;background:${colors[st]}"></div></div>`;
+    const st=statusCor(p);
+    // Para ENERGIA ELÉTRICA: saldo efetivo já desconta empenhos de ambas as categorias
+    const s=isEnergia?saldoCatEfetivo(c):saldoCat(c);
+    const label=isEnergia?`${catIcon(c)} ENERGIA ELÉTRICA + COSIP`:(`${catIcon(c)} ${c}`);
+    return`<div class="sw-row"><div class="sw-cat" title="${isEnergia?'ENERGIA ELÉTRICA + COSIP (pool unificado)':c}">${label}</div><div class="sw-val" style="color:${colors[st]}">${fmtBR(s)}</div></div><div class="sw-bar"><div class="sw-bar-fill" style="width:${p}%;background:${colors[st]}"></div></div>`;
   }).join('');
 }
 
@@ -3165,16 +3208,79 @@ function renderDashboard(){
   `;
 
   // Execução por categoria — apenas EXE, empenhado = inicial + reforços do módulo Empenho.
-  const catRows=DEFAULT_CATS.filter(c=>totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0).map(c=>{
+  // REGRA POOL: ENERGIA ELÉTRICA e COSIP são exibidas como bloco unificado na tabela.
+  //   - Crédito: apenas de ENERGIA ELÉTRICA (COSIP não tem crédito próprio)
+  //   - Empenhado/Liquidado/Pago: soma individual exibida em sub-linhas
+  //   - Saldo a empenhar: saldoCatEfetivo (pool − ENERGIA − COSIP)
+  //   - % Exec. e Status: baseados no pool unificado
+
+  const catRows=[];
+  // Controla se o bloco de ENERGIA/COSIP já foi inserido
+  let energiaCosipInserido=false;
+
+  DEFAULT_CATS.filter(c=>totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0).forEach(c=>{
+    // --- Bloco unificado ENERGIA ELÉTRICA + COSIP ---
+    if(c==='ENERGIA ELÉTRICA'||c==='COSIP'){
+      if(energiaCosipInserido) return; // já inseriu o bloco
+      energiaCosipInserido=true;
+
+      const tePool=totalCreditosOriginais('ENERGIA ELÉTRICA'); // crédito vem só de ENERGIA
+      const temEE=totalEmpenhosEXE('ENERGIA ELÉTRICA');
+      const temCO=totalEmpenhosEXE('COSIP');
+      const temPool=temEE+temCO;
+      const tlEE=totalLiquidacoesEXE('ENERGIA ELÉTRICA');
+      const tlCO=totalLiquidacoesEXE('COSIP');
+      const tlPool=tlEE+tlCO;
+      const tpEE=totalPagamentosEXE('ENERGIA ELÉTRICA');
+      const tpCO=totalPagamentosEXE('COSIP');
+      const tpPool=tpEE+tpCO;
+      const saldoPool=saldoCatEfetivo('ENERGIA ELÉTRICA'); // pool − empEE − empCO
+      const pePool=tePool>0?Math.round(temPool/tePool*100):0;
+
+      // Linha-mãe: pool unificado
+      catRows.push(`<tr style="background:rgba(255,171,64,.04);border-left:3px solid var(--amber)">
+        <td>⚡💡 <strong>ENERGIA ELÉTRICA + COSIP</strong> <span style="font-size:9px;color:var(--amber);font-weight:600;margin-left:4px">pool unificado</span></td>
+        <td class="r text-green">${fmtBR(tePool)}</td>
+        <td class="r text-blue">${fmtBR(temPool)}</td>
+        <td class="r" style="color:var(--amber)">${fmtBR(tlPool)}</td>
+        <td class="r text-green">${fmtBR(tpPool)}</td>
+        <td class="r ${saldoPool<0?'text-red':'text-gold'}">${fmtBR(saldoPool)}</td>
+        <td class="r">${tePool>0?semaforo(pePool):'—'}</td>
+        <td class="r">${tePool>0?`<span class="semaforo ${pePool>=80?'sem-verde':pePool>=50?'sem-amarelo':'sem-vermelho'}" style="font-size:9px;padding:2px 8px">${pePool>=80?'🟢 Normal':pePool>=50?'🟡 Atenção':'🔴 Crítico'}</span>`:'—'}</td>
+      </tr>`);
+      // Sub-linha ENERGIA ELÉTRICA
+      catRows.push(`<tr style="opacity:.85">
+        <td style="padding-left:28px;font-size:11.5px;color:var(--text2)">⚡ ENERGIA ELÉTRICA <span style="font-size:9px;color:var(--text3)">(crédito do pool)</span></td>
+        <td class="r" style="font-size:11px;color:var(--text3)">—</td>
+        <td class="r text-blue" style="font-size:11px">${fmtBR(temEE)}</td>
+        <td class="r" style="color:var(--amber);font-size:11px">${fmtBR(tlEE)}</td>
+        <td class="r text-green" style="font-size:11px">${fmtBR(tpEE)}</td>
+        <td class="r" style="font-size:11px;color:var(--text3)">—</td>
+        <td class="r" style="font-size:11px;color:var(--text3)">—</td>
+        <td class="r" style="font-size:11px;color:var(--text3)">—</td>
+      </tr>`);
+      // Sub-linha COSIP
+      catRows.push(`<tr style="opacity:.85">
+        <td style="padding-left:28px;font-size:11.5px;color:var(--text2)">💡 COSIP <span style="font-size:9px;color:var(--text3)">(consome pool de ENERGIA ELÉTRICA)</span></td>
+        <td class="r" style="font-size:11px;color:var(--text3)">—</td>
+        <td class="r text-blue" style="font-size:11px">${fmtBR(temCO)}</td>
+        <td class="r" style="color:var(--amber);font-size:11px">${fmtBR(tlCO)}</td>
+        <td class="r text-green" style="font-size:11px">${fmtBR(tpCO)}</td>
+        <td class="r" style="font-size:11px;color:var(--text3)">—</td>
+        <td class="r" style="font-size:11px;color:var(--text3)">—</td>
+        <td class="r" style="font-size:11px;color:var(--text3)">—</td>
+      </tr>`);
+      return;
+    }
+
+    // --- Demais categorias: comportamento original ---
     const te=totalCreditosOriginais(c);
     const tem=totalEmpenhosEXE(c);
     const tl=totalLiquidacoesEXE(c);
-    // "Pago" = pagamentos via state.lancamentos (módulo Saída) +
-    //          liquidações do módulo especializado marcadas como pago='Sim' e de empenhos EXE
     const tp=totalPagamentosEXE(c);
     const saldoEmp=te-tem;
     const pe=te>0?Math.round(tem/te*100):0;
-    return`<tr>
+    catRows.push(`<tr>
       <td>${catIcon(c)} <strong>${c}</strong></td>
       <td class="r text-green">${fmtBR(te)}</td>
       <td class="r text-blue">${fmtBR(tem)}</td>
@@ -3183,7 +3289,7 @@ function renderDashboard(){
       <td class="r ${saldoEmp<0?'text-red':'text-gold'}">${fmtBR(saldoEmp)}</td>
       <td class="r">${te>0?semaforo(pe):'—'}</td>
       <td class="r">${te>0?`<span class="semaforo ${pe>=80?'sem-verde':pe>=50?'sem-amarelo':'sem-vermelho'}" style="font-size:9px;padding:2px 8px">${pe>=80?'🟢 Normal':pe>=50?'🟡 Atenção':'🔴 Crítico'}</span>`:'—'}</td>
-    </tr>`;
+    </tr>`);
   });
   document.getElementById('dash-cat-table').innerHTML=catRows.length?catRows.join(''):'<tr class="empty-row"><td colspan="8">Nenhum dado disponível</td></tr>';
 
@@ -5575,13 +5681,16 @@ async function driveCarregar(){
           :now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
       }
     });
-    // ── Migração AE: propagar acaoId de empenhosCad para lançamentos filhos ──
+    // ── Migração AE: propagar acaoId e empenhoCadId para lançamentos filhos ──
+    // ★ FIX AE: propaga acaoId diretamente para consistência com os outros pontos de carga.
     (state.empenhosCad||[]).forEach(e=>{
       if(!e.acaoId||e.status==='Excluído')return;
       state.lancamentos.forEach(l=>{
         if(l.status!=='Ativo')return;
-        const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.referenciaId===e.id);
-        if(isFilho&&!l.empenhoCadId) l.empenhoCadId=e.id;
+        const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.numeroEmpenho===e.numero)||(l.referenciaId===e.id);
+        if(!isFilho)return;
+        if(!l.empenhoCadId) l.empenhoCadId=e.id;
+        if(e.acaoId&&!l.acaoId) l.acaoId=e.acaoId;
       });
     });
     salvar();init();
@@ -5912,6 +6021,9 @@ function abrirModalReforco(empCadId){
       descricao: 'REFORÇO: '+desc,
       valor, data, competencia,
       empenhoCadId: e.id,
+      // ★ FIX AE: acaoId herdado do empenho cadastrado para manter vínculo com a ação
+      //   em reforços — sem isso o valor reforçado não aparecia no empenhado da ação.
+      acaoId: e.acaoId||'',
       numeroEmpenho: e.numero,
       fonte: e.fonte||'',
       ptres: e.ptres||'',
@@ -6481,6 +6593,10 @@ function registrarCadastroEmpenho(){
     data,
     competencia,
     empenhoCadId: obj.id,
+    // ★ FIX AE: acaoId propagado diretamente para que aeAcaoIdFromLanc resolva sem
+    //   depender exclusivamente da busca indireta via empenhosCad. Garante que o
+    //   empenhado seja associado à ação correta mesmo em carregamentos sem migração.
+    acaoId: acaoId||'',
     numeroEmpenho: numero,
     fonte: fonte||'',
     ptres: ptres||'',
