@@ -2376,24 +2376,40 @@ function totalEmpenhosRAP(cat){
   return fromLancs + fromCad;
 }
 function totalLiquidacoes(cat,refId){
-  if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Liquidação'&&(cat?normalizarCategoria(l.categoria||'')===normalizarCategoria(cat):true)&&l.referenciaId===refId));
-  return sum(getLancsAtivos('Liquidação',cat||null));
+  if(refId!==undefined)return sum(state.lancamentos.filter(l=>
+    l.status==='Ativo' &&
+    (l.tipo==='Liquidação' || (l.tipo==='Pagamento' && l.liquidacaoId)) &&
+    (cat?normalizarCategoria(l.categoria||'')===normalizarCategoria(cat):true) &&
+    l.referenciaId===refId
+  ));
+  return sum(state.lancamentos.filter(l=>
+    l.status==='Ativo' &&
+    (l.tipo==='Liquidação' || (l.tipo==='Pagamento' && l.liquidacaoId)) &&
+    (cat?normalizarCategoria(l.categoria||'')===normalizarCategoria(cat):true)
+  ));
 }
 // Liquidações vinculadas apenas a empenhos EXE
 function totalLiquidacoesEXE(cat){
-  // [CORRIGIDO] Filtra apenas tipo 'Liquidação' — Pagamentos são contados em totalPagamentosEXE()
+  // Conta lançamentos tipo 'Liquidação' E também os do módulo Liquidação que foram marcados
+  // como 'Pago' (cujo tipo muda para 'Pagamento' via togglePagoLiquidacao).
+  // Estes últimos são identificados pela presença de liquidacaoId — eles continuam sendo
+  // liquidações, apenas também foram pagos. Sem isso, Liquidado aparece R$ 0,00 quando
+  // todas as liquidações estão pagas.
   const catN=cat?normalizarCategoria(cat):null;
   return sum(state.lancamentos.filter(l=>
-    l.status==='Ativo' && l.tipo==='Liquidação' &&
+    l.status==='Ativo' &&
+    (l.tipo==='Liquidação' || (l.tipo==='Pagamento' && l.liquidacaoId)) &&
     (catN ? normalizarCategoria(l.categoria||'')===catN : true) &&
     (l.tipoRecurso||'EXE')==='EXE'
   ));
 }
 function totalLiquidacoesRAP(cat){
-  // [CORRIGIDO] Filtra apenas tipo 'Liquidação' — Pagamentos são contados em totalPagamentosRAP()
+  // Conta lançamentos tipo 'Liquidação' E também os do módulo Liquidação RAP que foram
+  // marcados como 'Pago' (tipo muda para 'Pagamento' com liquidacaoId presente).
   const catN=cat?normalizarCategoria(cat):null;
   return sum(state.lancamentos.filter(l=>
-    l.status==='Ativo' && l.tipo==='Liquidação' &&
+    l.status==='Ativo' &&
+    (l.tipo==='Liquidação' || (l.tipo==='Pagamento' && l.liquidacaoId)) &&
     (catN ? normalizarCategoria(l.categoria||'')===catN : true) &&
     l.tipoRecurso==='RAP'
   ));
@@ -2702,20 +2718,13 @@ function renderDashboard(){
   `;
 
   // ── FLUXO DE EXECUÇÃO: EXE + RAP (visão consolidada) ──
-  // [CORRIGIDO] Empenhado: usa EXE+RAP com fallback empenhosCad (mesma base dos KPIs)
+  // Empenhado: usa EXE+RAP com fallback empenhosCad (mesma base dos KPIs)
   const totEmpConsolid = totalEmpenhosEXE() + totalEmpenhosRAP();
-  // [CORRIGIDO] Liquidado: soma lançamentos tipo 'Liquidação' (EXE+RAP) + módulo state.liquidacoes
-  const totLiqLancs = totalLiquidacoesEXE() + totalLiquidacoesRAP();
-  const totLiqMod   = (state.liquidacoes||[])
-    .filter(l=>l.status!=='Excluído')
-    .reduce((s,l)=>s+(l.valorBruto||0), 0);
-  const totLiqConsolid = totLiqLancs + totLiqMod;
-  // [CORRIGIDO] Pago: soma lançamentos tipo 'Pagamento' (EXE+RAP) + módulo state.liquidacoes onde pago='Sim'
-  const totPagLancs = totalPagamentosEXE() + totalPagamentosRAP();
-  const totPagMod   = (state.liquidacoes||[])
-    .filter(l=>l.status!=='Excluído' && l.pago==='Sim')
-    .reduce((s,l)=>s+(l.valorLiquido||l.valorBruto||0), 0);
-  const totPagConsolid = totPagLancs + totPagMod;
+  // Liquidado: totalLiquidacoesEXE/RAP já incluem lancamentos do módulo Liquidação
+  // (tanto os ainda em tipo='Liquidação' como os marcados como pagos com tipo='Pagamento'+liquidacaoId)
+  const totLiqConsolid = totalLiquidacoesEXE() + totalLiquidacoesRAP();
+  // Pago: lançamentos tipo 'Pagamento' — inclui os do módulo Liquidação marcados como pagos
+  const totPagConsolid = totalPagamentosEXE() + totalPagamentosRAP();
 
   const pEmpLiq=totEmpConsolid>0?clamp(Math.round(totLiqConsolid/totEmpConsolid*100),0,100):0;
   const pLiqPag=totLiqConsolid>0?clamp(Math.round(totPagConsolid/totLiqConsolid*100),0,100):0;
@@ -2765,8 +2774,9 @@ function renderDashboard(){
       e:sum(lancsDoMes.filter(l=>l.tipo==='Entrada')),
       // Empenho mensal por competência: inicial + reforços do módulo Empenho, somente EXE.
       emp:totalEmpenhosEXE(null,{competencia:prefixo}),
-      // [CORRIGIDO] liq = somente Liquidação EXE; pag = somente Pagamento EXE (separados)
-      liq:sum(lancsDoMes.filter(l=>l.tipo==='Liquidação'&&(l.tipoRecurso||'EXE')==='EXE')),
+      // liq = Liquidação EXE + Pagamento EXE que vieram do módulo Liquidação (liquidacaoId presente)
+      // pag = somente Pagamento EXE (inclui os do módulo Liquidação marcados como pagos)
+      liq:sum(lancsDoMes.filter(l=>(l.tipo==='Liquidação'||(l.tipo==='Pagamento'&&l.liquidacaoId))&&(l.tipoRecurso||'EXE')==='EXE')),
       pag:sum(lancsDoMes.filter(l=>l.tipo==='Pagamento'&&(l.tipoRecurso||'EXE')==='EXE'))
     };
   });
