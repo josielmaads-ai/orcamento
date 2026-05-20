@@ -2448,6 +2448,339 @@ function totalLiquidacoesRAP(cat){
     l.tipoRecurso==='RAP'
   ));
 }
+// ═══════════════════════════════════════════════════════════
+//  GERENCIADOR DE POOL DE ENERGIA ELÉTRICA/COSIP
+// ═══════════════════════════════════════════════════════════
+class EnergyPoolManager {
+  constructor() {
+    this.cache = new Map();
+    this.lastUpdate = 0;
+    this.cacheTimeout = 5000; // 5 segundos de cache
+    this.lock = false;
+  }
+
+  // Obtém o saldo do pool de ENERGIA ELÉTRICA/COSIP
+  getPoolBalance() {
+    const now = Date.now();
+    
+    // Verifica se o cache é válido
+    if (this.cache.has('pool') && (now - this.lastUpdate) < this.cacheTimeout) {
+      return this.cache.get('pool');
+    }
+
+    // Calcula o saldo do pool
+    const creditosEnergia = sum(getLancsAtivos('Entrada', 'ENERGIA ELÉTRICA'));
+    const transfEEnergia = sum(getLancsAtivos('Transferência Entrada', 'ENERGIA ELÉTRICA'));
+    const transfSEnergia = sum(getLancsAtivos('Transferência Saída', 'ENERGIA ELÉTRICA'));
+    const empEnergia = totalEmpenhosEXE('ENERGIA ELÉTRICA');
+    const empCosip = totalEmpenhosEXE('COSIP');
+    
+    const poolBalance = creditosEnergia + transfEEnergia - empEnergia - empCosip - transfSEnergia;
+    
+    // Atualiza o cache
+    this.cache.set('pool', poolBalance);
+    this.lastUpdate = now;
+    
+    return poolBalance;
+  }
+
+  // Atualiza o pool de forma atômica
+  updatePool(transaction) {
+    if (this.lock) {
+      throw new Error('Pool operation in progress. Please try again.');
+    }
+
+    this.lock = true;
+    try {
+      // Processa a transação
+      if (transaction.tipo === 'crédito') {
+        if (transaction.categoria === 'ENERGIA ELÉTRICA') {
+          // Apenas créditos em ENERGIA ELÉTRICA afetam o pool
+          this.cache.clear(); // Limpa o cache
+          return true;
+        }
+      } else if (transaction.tipo === 'empenho') {
+        // Empenhos em ENERGIA ELÉTRICA ou COSIP afetam o pool
+        if (transaction.categoria === 'ENERGIA ELÉTRICA' || transaction.categoria === 'COSIP') {
+          this.cache.clear(); // Limpa o cache
+          return true;
+        }
+      }
+      return false;
+    } finally {
+      this.lock = false;
+    }
+  }
+
+  // Valida se uma operação é permitida
+  validateOperation(category, operation, value) {
+    const catN = normalizarCategoria(category);
+    
+    // Validação para COSIP
+    if (catN === 'COSIP' && operation === 'crédito') {
+      throw new Error('COSIP credits must go through ENERGIA ELÉTRICA pool');
+    }
+    
+    // Validação de saldo para empenhos
+    if (operation === 'empenho') {
+      const poolBalance = this.getPoolBalance();
+      if (value > poolBalance) {
+        throw new Error(`Insufficient balance in energy pool. Available: R$ ${poolBalance.toFixed(2)}, Required: R$ ${value.toFixed(2)}`);
+      }
+    }
+    
+    return true;
+  }
+
+  // Invalida o cache quando os dados mudam
+  invalidateCache() {
+    this.cache.clear();
+    this.lastUpdate = 0;
+  }
+
+  // Obtém o saldo efetivo para uma categoria
+  getEffectiveBalance(category) {
+    const catN = normalizarCategoria(category);
+    
+    if (catN === 'ENERGIA ELÉTRICA' || catN === 'COSIP') {
+      return this.getPoolBalance();
+    }
+    
+    // Para outras categorias, usa o cálculo normal
+    return saldoCat(catN);
+  }
+}
+
+// Instância global do gerenciador de pool
+const energyPoolManager = new EnergyPoolManager();
+
+// ═══════════════════════════════════════════════════════════
+//  SISTEMA DE VALIDAÇÃO DE OPERAÇÕES
+// ═══════════════════════════════════════════════════════════
+class CategoryValidator {
+  constructor() {
+    this.errors = [];
+    this.warnings = [];
+  }
+
+  // Valida uma operação de crédito
+  validateCredit(categoria, valor, descricao = '') {
+    this.errors = [];
+    this.warnings = [];
+    
+    try {
+      // Validação básica
+      if (!categoria || typeof categoria !== 'string') {
+        throw new Error('Categoria inválida para crédito');
+      }
+      
+      if (!valor || valor <= 0) {
+        throw new Error('Valor do crédito deve ser maior que zero');
+      }
+      
+      // Validação especial para COSIP
+      const catN = normalizarCategoria(categoria);
+      if (catN === 'COSIP') {
+        throw new Error('COSIP credits must go through ENERGIA ELÉTRICA pool');
+      }
+      
+      // Validação de saldo para categorias normais
+      if (catN !== 'ENERGIA ELÉTRICA' && catN !== 'COSIP') {
+        const saldoAtual = saldoCat(catN);
+        if (saldoAtual < 0) {
+          this.warnings.push(`Categoria ${categoria} tem saldo negativo: R$ ${saldoAtual.toFixed(2)}`);
+        }
+      }
+      
+      // Validação de energia elétrica
+      if (catN === 'ENERGIA ELÉTRICA') {
+        const poolBalance = energyPoolManager.getPoolBalance();
+        if (poolBalance < 0) {
+          this.warnings.push(`Pool de energia tem saldo negativo: R$ ${poolBalance.toFixed(2)}`);
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      this.errors.push(error.message);
+      return false;
+    }
+  }
+
+  // Valida uma operação de empenho
+  validateEmpenho(categoria, valor, referenciaId = '') {
+    this.errors = [];
+    this.warnings = [];
+    
+    try {
+      // Validação básica
+      if (!categoria || typeof categoria !== 'string') {
+        throw new Error('Categoria inválida para empenho');
+      }
+      
+      if (!valor || valor <= 0) {
+        throw new Error('Valor do empenho deve ser maior que zero');
+      }
+      
+      // Validação de saldo
+      const catN = normalizarCategoria(categoria);
+      let saldoDisponivel;
+      
+      if (catN === 'ENERGIA ELÉTRICA' || catN === 'COSIP') {
+        saldoDisponivel = energyPoolManager.getPoolBalance();
+      } else {
+        saldoDisponivel = saldoCat(catN);
+      }
+      
+      if (valor > saldoDisponivel) {
+        throw new Error(`Saldo insuficiente na categoria ${categoria}. Disponível: R$ ${saldoDisponivel.toFixed(2)}, Requerido: R$ ${valor.toFixed(2)}`);
+      }
+      
+      // Validação de referência única para empenhos
+      if (referenciaId) {
+        const empenhoExistente = state.empenhos.find(e => 
+          e.referenciaId === referenciaId && e.status === 'Ativo'
+        );
+        if (empenhoExistente) {
+          throw new Error(`Já existe um empenho ativo com referência ${referenciaId}`);
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      this.errors.push(error.message);
+      return false;
+    }
+  }
+
+  // Valida uma operação de liquidação
+  validateLiquidacao(empenhoId, valor) {
+    this.errors = [];
+    this.warnings = [];
+    
+    try {
+      if (!empenhoId) {
+        throw new Error('ID do empenho inválido para liquidação');
+      }
+      
+      if (!valor || valor <= 0) {
+        throw new Error('Valor da liquidação deve ser maior que zero');
+      }
+      
+      const empenho = state.empenhos.find(e => e.id === empenhoId && e.status === 'Ativo');
+      if (!empenho) {
+        throw new Error('Empenho não encontrado ou inativo');
+      }
+      
+      if (valor > empenho.valor) {
+        throw new Error(`Valor da liquidação excede o valor do empenho. Empenho: R$ ${empenho.valor.toFixed(2)}, Liquidação: R$ ${valor.toFixed(2)}`);
+      }
+      
+      // Verifica se já foi liquidado
+      const totalLiquidado = totalLiquidadoPorEmpenho(empenhoId);
+      if (totalLiquidado >= empenho.valor) {
+        throw new Error('Empenho já foi totalmente liquidado');
+      }
+      
+      return true;
+    } catch (error) {
+      this.errors.push(error.message);
+      return false;
+    }
+  }
+
+  // Valida integridade do sistema
+  validateSystemIntegrity() {
+    this.errors = [];
+    this.warnings = [];
+    
+    try {
+      // Valida consistência entre categorias
+      const categorias = DEFAULT_CATS;
+      for (const cat of categorias) {
+        const catN = normalizarCategoria(cat);
+        
+        // Verifica se há inconsistências no saldo
+        const saldoNormal = saldoCat(catN);
+        const saldoEfetivo = energyPoolManager.getEffectiveBalance(cat);
+        
+        if (catN === 'ENERGIA ELÉTRICA' || catN === 'COSIP') {
+          if (saldoNormal !== saldoEfetivo) {
+            this.warnings.push(`Inconsistência detectada em ${cat}: saldo normal R$ ${saldoNormal.toFixed(2)} vs saldo efetivo R$ ${saldoEfetivo.toFixed(2)}`);
+          }
+        } else {
+          if (saldoNormal !== saldoEfetivo) {
+            this.errors.push(`Inconsistência crítica em ${cat}: saldo normal R$ ${saldoNormal.toFixed(2)} vs saldo efetivo R$ ${saldoEfetivo.toFixed(2)}`);
+          }
+        }
+        
+        // Verifica saldos negativos críticos
+        if (saldoNormal < 0 && catN !== 'ENERGIA ELÉTRICA' && catN !== 'COSIP') {
+          this.errors.push(`Saldo negativo crítico em ${cat}: R$ ${saldoNormal.toFixed(2)}`);
+        }
+      }
+      
+      // Valida pool de energia
+      const poolBalance = energyPoolManager.getPoolBalance();
+      if (poolBalance < 0) {
+        this.errors.push(`Pool de energia tem saldo negativo: R$ ${poolBalance.toFixed(2)}`);
+      }
+      
+      return this.errors.length === 0;
+    } catch (error) {
+      this.errors.push(`Erro na validação do sistema: ${error.message}`);
+      return false;
+    }
+  }
+
+  // Obtém erros da última validação
+  getErrors() {
+    return this.errors;
+  }
+
+  // Obtém avisos da última validação
+  getWarnings() {
+    return this.warnings;
+  }
+
+  // Limpa erros e avisos
+  clear() {
+    this.errors = [];
+    this.warnings = [];
+  }
+}
+
+// Instância global do validador
+const categoryValidator = new CategoryValidator();
+
+// Funções globais de validação
+function validateCreditOperation(categoria, valor, descricao = '') {
+  return categoryValidator.validateCredit(categoria, valor, descricao);
+}
+
+function validateEmpenhoOperation(categoria, valor, referenciaId = '') {
+  return categoryValidator.validateEmpenho(categoria, valor, referenciaId);
+}
+
+function validateLiquidacaoOperation(empenhoId, valor) {
+  return categoryValidator.validateLiquidacao(empenhoId, valor);
+}
+
+function validateSystemIntegrity() {
+  return categoryValidator.validateSystemIntegrity();
+}
+
+function getValidationErrors() {
+  return categoryValidator.getErrors();
+}
+
+function getValidationWarnings() {
+  return categoryValidator.getWarnings();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FUNÇÕES LEGADAS (MANTIDAS PARA COMPATIBILIDADE)
+// ═══════════════════════════════════════════════════════════
 function totalPagamentos(cat,refId){
   if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Pagamento'&&(cat?normalizarCategoria(l.categoria||'')===normalizarCategoria(cat):true)&&l.referenciaId===refId));
   return sum(getLancsAtivos('Pagamento',cat||null));
@@ -2491,20 +2824,8 @@ function saldoCat(cat){
 //   − empenhos(ENERGIA ELÉTRICA) − empenhos(COSIP)
 // O crédito NUNCA deve ser registrado diretamente em COSIP no módulo Registrar Crédito.
 function saldoCatEfetivo(cat){
-  // Normaliza entrada para garantir que 'COSIP', 'Cosip', 'ENERGIA ELÉTRICA' etc. sejam tratados igualmente
-  const catN=normalizarCategoria(cat);
-  // Tanto ENERGIA ELÉTRICA quanto COSIP usam o mesmo pool de crédito (ENERGIA ELÉTRICA)
-  if(catN==='ENERGIA ELÉTRICA'||catN==='COSIP'){
-    const creditosEnergia=sum(getLancsAtivos('Entrada','ENERGIA ELÉTRICA'));
-    const transfEEnergia=sum(getLancsAtivos('Transferência Entrada','ENERGIA ELÉTRICA'));
-    const transfSEnergia=sum(getLancsAtivos('Transferência Saída','ENERGIA ELÉTRICA'));
-    const empEnergia=totalEmpenhosEXE('ENERGIA ELÉTRICA');
-    const empCosip=totalEmpenhosEXE('COSIP');
-    // Saldo do pool: crédito menos TODOS os empenhos (Energia + COSIP)
-    return creditosEnergia+transfEEnergia-empEnergia-empCosip-transfSEnergia;
-  }
-  // Para todas as demais categorias: saldo normal
-  return saldoCat(catN);
+  // Usa o gerenciador de pool centralizado
+  return energyPoolManager.getEffectiveBalance(cat);
 }
 
 // Saldo empenhado disponível para liquidação
@@ -2844,38 +3165,18 @@ function renderDashboard(){
   `;
 
   // Execução por categoria — apenas EXE, empenhado = inicial + reforços do módulo Empenho.
-  // ★ REGRA COSIP: a categoria COSIP não registra crédito próprio — usa o pool de ENERGIA ELÉTRICA.
-  //   Para exibição no dashboard, usamos creditoEfetivo(c) que retorna o crédito do pool para COSIP.
-  //   O saldo a empenhar de COSIP é calculado como saldoCatEfetivo() (pool compartilhado).
-  function creditoEfetivoParaDash(c){
-    const catN=normalizarCategoria(c);
-    if(catN==='COSIP'){
-      // COSIP mostra o crédito da ENERGIA ELÉTRICA (pool compartilhado)
-      return totalCreditosOriginais('ENERGIA ELÉTRICA');
-    }
-    return totalCreditosOriginais(catN);
-  }
-  // Filtro: exibe categorias que têm crédito próprio OU empenhos (inclusive COSIP via pool)
-  const catRows=DEFAULT_CATS.filter(c=>{
-    if(normalizarCategoria(c)==='COSIP') return totalEmpenhosEXE(c)>0; // COSIP só aparece se tiver empenhos
-    return totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0;
-  }).map(c=>{
-    const te=creditoEfetivoParaDash(c);
+  const catRows=DEFAULT_CATS.filter(c=>totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0).map(c=>{
+    const te=totalCreditosOriginais(c);
     const tem=totalEmpenhosEXE(c);
     const tl=totalLiquidacoesEXE(c);
     // "Pago" = pagamentos via state.lancamentos (módulo Saída) +
     //          liquidações do módulo especializado marcadas como pago='Sim' e de empenhos EXE
     const tp=totalPagamentosEXE(c);
-    // Saldo a empenhar: para COSIP usa pool efetivo; para demais usa saldoCat normal
-    const saldoEmp=normalizarCategoria(c)==='COSIP'?saldoCatEfetivo(c):te-tem;
+    const saldoEmp=te-tem;
     const pe=te>0?Math.round(tem/te*100):0;
-    const isCosip=normalizarCategoria(c)==='COSIP';
-    const credCell=isCosip
-      ?`<td class="r text-green" title="COSIP usa o pool de crédito da ENERGIA ELÉTRICA">${fmtBR(te)} <span style="font-size:9px;color:var(--amber)">⚡pool</span></td>`
-      :`<td class="r text-green">${fmtBR(te)}</td>`;
     return`<tr>
       <td>${catIcon(c)} <strong>${c}</strong></td>
-      ${credCell}
+      <td class="r text-green">${fmtBR(te)}</td>
       <td class="r text-blue">${fmtBR(tem)}</td>
       <td class="r" style="color:var(--amber)">${fmtBR(tl)}</td>
       <td class="r text-green">${fmtBR(tp)}</td>
