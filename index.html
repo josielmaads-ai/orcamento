@@ -1855,6 +1855,40 @@ function importarJSON(evt){
         }
         return a;
       });
+      // ── Migração: tipoRegistro discriminador ──────────────────────────────
+      state.lancamentos.forEach(l=>{
+        if(l.tipo==='Anulação'&&!l.tipoRegistro) l.tipoRegistro='ANULACAO';
+      });
+      const _impGruposEmp={};
+      state.lancamentos.forEach(l=>{
+        if(l.tipo!=='Empenho'||l.tipoRegistro)return;
+        const k=l.empenhoCadId||l.referencia||l.numeroEmpenho||'__';
+        if(!_impGruposEmp[k])_impGruposEmp[k]=[];
+        _impGruposEmp[k].push(l);
+      });
+      Object.values(_impGruposEmp).forEach(arr=>{
+        arr.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
+        arr.forEach((l,i)=>{l.tipoRegistro=i===0?'INICIAL':'REFORCO';});
+      });
+      // ── Migração: competência ausente em empenhos ──────────────────────────
+      state.lancamentos.forEach(l=>{
+        if(l.tipo==='Empenho'&&l.status==='Ativo'&&!l.competencia){
+          const d=new Date((l.data||'')+'T12:00:00');
+          const now=new Date();
+          l.competencia=!isNaN(d.getTime())
+            ?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')
+            :now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+        }
+      });
+      // ── Migração AE: propagar empenhoCadId para lançamentos filhos ─────────
+      (state.empenhosCad||[]).forEach(e=>{
+        if(!e.acaoId||e.status==='Excluído')return;
+        state.lancamentos.forEach(l=>{
+          if(l.status!=='Ativo')return;
+          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.referenciaId===e.id);
+          if(isFilho&&!l.empenhoCadId) l.empenhoCadId=e.id;
+        });
+      });
       const resumo = {
         lancamentos: state.lancamentos.length,
         contratos: state.contratos.length,
@@ -4337,6 +4371,9 @@ function renderRelatorioFiltros(){
     }).join('');
   }
 }
+// Guarda o último conjunto filtrado para o CSV respeitar os mesmos filtros
+let _relFiltradoAtual = [];
+
 function gerarRelatorio(){
   const de=document.getElementById('rel-de').value;
   const ate=document.getElementById('rel-ate').value;
@@ -4345,9 +4382,10 @@ function gerarRelatorio(){
   const fonte=document.getElementById('rel-fonte').value;
   const ptres=document.getElementById('rel-ptres').value;
   const nd=document.getElementById('rel-nd').value;
-  // Novos filtros
   const tipoExeRap=document.getElementById('rel-tipo-exe-rap')?.value||'';
   const competencia=document.getElementById('rel-competencia')?.value||'';
+  const agrupar=document.getElementById('rel-agrupar')?.value||'';
+
   let l=[...state.lancamentos].filter(x=>x.status==='Ativo');
   if(de)l=l.filter(x=>x.data>=de);
   if(ate)l=l.filter(x=>x.data<=ate);
@@ -4356,42 +4394,90 @@ function gerarRelatorio(){
   if(fonte)l=l.filter(x=>x.fonte===fonte);
   if(ptres)l=l.filter(x=>x.ptres===ptres);
   if(nd)l=l.filter(x=>x.nd===nd);
-  // Filtro Tipo EXE/RAP — aplica apenas em Empenhos (lançamentos com tipoRecurso)
   if(tipoExeRap)l=l.filter(x=>{
     if(x.tipo==='Empenho')return(x.tipoRecurso||'EXE')===tipoExeRap;
     if(x.tipo==='Liquidação'||x.tipo==='Pagamento')return(x.tipoRecurso||'EXE')===tipoExeRap;
-    return true; // entradas e outros não filtrados por este campo
+    return true;
   });
-  // Filtro Mês de Competência
   if(competencia)l=l.filter(x=>(x.competencia||'')===competencia);
-  // Totais EXE
-  const totE=sum(l.filter(x=>x.tipo==='Entrada'));
-  const totEmpEXE=sum(l.filter(x=>x.tipo==='Empenho'&&(x.tipoRecurso||'EXE')==='EXE'));
-  const totEmpRAP=sum(l.filter(x=>x.tipo==='Empenho'&&x.tipoRecurso==='RAP'));
-  const totEmp=totEmpEXE+totEmpRAP;
-  const totLiqEXE=sum(l.filter(x=>x.tipo==='Liquidação'&&(x.tipoRecurso||'EXE')==='EXE'));
-  const totLiqRAP=sum(l.filter(x=>x.tipo==='Liquidação'&&x.tipoRecurso==='RAP'));
-  const totLiq=totLiqEXE+totLiqRAP;
-  const totPag=sum(l.filter(x=>x.tipo==='Pagamento'));
-  const totAnul=sum(l.filter(x=>x.tipo==='Anulação'));
-  const totTransf=sum(l.filter(x=>x.tipo==='Transferência Saída'));
-  const periodo=(de?fmtData(de):'início')+' a '+(ate?fmtData(ate):'hoje');
-  const pExecEXE=totE>0?Math.round(totEmpEXE/totE*100):0;
-  const pExecGeral=totE>0?Math.round(totEmp/totE*100):0;
-  // Label do filtro aplicado
+
+  // Persiste para CSV filtrado
+  _relFiltradoAtual = l;
+
+  // ── Totais corrigidos ──────────────────────────────────────────────────────
+  // Liquidações: conta tipo='Liquidação' E tipo='Pagamento'+liquidacaoId
+  // (quando marcado como pago, o tipo do lançamento muda de Liquidação → Pagamento,
+  //  mas o registro continua sendo uma liquidação — sem esta correção Liquidado = R$ 0)
+  const isLiqPago = x => x.tipo==='Pagamento' && x.liquidacaoId;
+  const totE       = sum(l.filter(x=>x.tipo==='Entrada'));
+  const totEmpEXE  = sum(l.filter(x=>x.tipo==='Empenho'&&(x.tipoRecurso||'EXE')==='EXE'));
+  const totEmpRAP  = sum(l.filter(x=>x.tipo==='Empenho'&&x.tipoRecurso==='RAP'));
+  const totEmp     = totEmpEXE+totEmpRAP;
+  const totLiqEXE  = sum(l.filter(x=>(x.tipo==='Liquidação'||isLiqPago(x))&&(x.tipoRecurso||'EXE')==='EXE'));
+  const totLiqRAP  = sum(l.filter(x=>(x.tipo==='Liquidação'||isLiqPago(x))&&x.tipoRecurso==='RAP'));
+  const totLiq     = totLiqEXE+totLiqRAP;
+  // Pagamentos: apenas lançamentos tipo 'Pagamento' (inclui os do módulo Liquidação marcados como pagos)
+  const totPag     = sum(l.filter(x=>x.tipo==='Pagamento'));
+  const totAnul    = sum(l.filter(x=>x.tipo==='Anulação'));
+  const totTransf  = sum(l.filter(x=>x.tipo==='Transferência Saída'));
+  const periodo    = (de?fmtData(de):'início')+' a '+(ate?fmtData(ate):'hoje');
+  const pExecEXE   = totE>0?Math.round(totEmpEXE/totE*100):0;
+  const pExecGeral = totE>0?Math.round(totEmp/totE*100):0;
+
   const filtrosLabel=[
     cat?'Cat: '+cat:'',
     tipo?'Fase: '+tipo:'',
     tipoExeRap?'Tipo: '+tipoExeRap:'',
     competencia?(()=>{const p=competencia.split('-');return'Comp: '+(p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:competencia);})():'',
     fonte?'Fonte: '+fonte.split('–')[0].trim():'',
-    ptres?'PTRES: '+ptres:''
+    ptres?'PTRES: '+ptres:'',
+    agrupar?'Agrup: '+{'nd':'ND','cat':'Categoria','mes':'Mês','tipo':'EXE/RAP'}[agrupar]:''
   ].filter(Boolean).join(' · ');
+
+  // ── Tabela de lançamentos (com agrupamento opcional) ──────────────────────
+  const rowFn = x => {
+    const tipoTag=x.tipo==='Empenho'?(x.tipoRecurso==='RAP'?'<span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:800">RAP</span>':'<span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:800">EXE</span>'):'';
+    const compLabel=x.competencia?(()=>{const p=x.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:x.competencia;})():'—';
+    return`<tr><td><code style="font-size:10px">${x.id}</code></td><td>${fmtData(x.data)}</td><td style="font-size:11px;color:var(--gold);white-space:nowrap">${compLabel}</td><td>${tagFase(x.tipo)}</td><td>${tipoTag}</td><td>${catIcon(x.categoria)} ${x.categoria}</td><td style="font-size:11px;color:var(--text3)">${(x.fonte||'').split('–')[0]||'—'}</td><td style="font-size:11px;color:var(--text3)">${x.ptres||'—'}</td><td>${x.descricao}</td><td class="r ${x.tipo==='Entrada'?'text-green':'text-red'}">${fmtBR(x.valor)}</td></tr>`;
+  };
+
+  let tabelaHTML = '';
+  if(agrupar && l.length > 0){
+    // Agrupar lançamentos pelo campo escolhido
+    const keyFn = x => {
+      if(agrupar==='nd') return x.nd||'Sem ND';
+      if(agrupar==='cat') return x.categoria||'Sem Categoria';
+      if(agrupar==='mes'){const p=(x.competencia||x.data||'').slice(0,7).split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+(p[0]||'?'):'—';}
+      if(agrupar==='tipo') return (x.tipoRecurso||'EXE')==='RAP'?'RAP — Restos a Pagar':'EXE — Exercício Corrente';
+      return '—';
+    };
+    const grupos={};
+    l.slice().reverse().forEach(x=>{const k=keyFn(x);if(!grupos[k])grupos[k]=[];grupos[k].push(x);});
+    tabelaHTML=Object.keys(grupos).sort().map(gk=>{
+      const rows=grupos[gk];
+      const totGrupo=sum(rows.filter(x=>x.tipo!=='Entrada'));
+      return`<div class="tbl-wrap" style="margin-bottom:14px">
+        <div class="tbl-head" style="background:var(--bg4);display:flex;justify-content:space-between;align-items:center">
+          <div class="tbl-title" style="font-size:11px;color:var(--gold)">${gk}</div>
+          <div style="font-size:11px;color:var(--text3)">${rows.length} reg. · Total: ${fmtBR(totGrupo)}</div>
+        </div>
+        <div class="scroll-h"><table><thead><tr><th>ID</th><th>Data</th><th>Competência</th><th>Fase</th><th>Tipo</th><th>Categoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th></tr></thead>
+        <tbody>${rows.map(rowFn).join('')}</tbody></table></div>
+      </div>`;
+    }).join('');
+  } else {
+    tabelaHTML=`<div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Lançamentos filtrados — ${l.length} registros</div></div>
+      <div class="scroll-h"><table><thead><tr><th>ID</th><th>Data</th><th>Competência</th><th>Fase</th><th>Tipo</th><th>Categoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th></tr></thead>
+      <tbody>${l.length?l.slice().reverse().map(rowFn).join(''):'<tr class="empty-row"><td colspan="10">Nenhum registro encontrado</td></tr>'}
+      </tbody></table></div></div>`;
+  }
+
   document.getElementById('rel-resultado').innerHTML=`
     <div class="card">
       <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Relatório — ${periodo}${filtrosLabel?' · '+filtrosLabel:''}</div>
       ${tipoExeRap?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">◆</span><div>Filtro ativo: somente lançamentos do tipo <strong>${tipoExeRap==='EXE'?'EXE — Exercício':'RAP — Restos a Pagar'}</strong></div></div>`:''}
       ${competencia?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">📅</span><div>Competência filtrada: <strong>${(()=>{const p=competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:competencia;})()}</strong></div></div>`:''}
+      ${agrupar?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">⊞</span><div>Agrupamento ativo por: <strong>${{'nd':'Natureza da Despesa','cat':'Categoria','mes':'Mês de Competência','tipo':'Tipo EXE/RAP'}[agrupar]}</strong></div></div>`:''}
       <div class="kpi-grid" style="margin-bottom:10px">
         <div class="kpi accent-green"><div class="kpi-label">Créditos Originais</div><div class="kpi-value text-green">${fmtBR(totE)}</div></div>
         <div class="kpi accent-blue">
@@ -4409,22 +4495,18 @@ function gerarRelatorio(){
         <div class="kpi accent-purple"><div class="kpi-label">% Exec. EXE / Geral</div><div class="kpi-value">${semaforo(pExecEXE)}</div><div class="kpi-sub">${pExecGeral}% geral (EXE+RAP)</div></div>
       </div>
       ${totTransf>0?`<div class="info-box info"><span class="info-icon">⇄</span><div>Transferências internas no período: <strong>${fmtBR(totTransf)}</strong> — Não incluídas no total de créditos.</div></div>`:''}
-      <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Lançamentos filtrados — ${l.length} registros</div></div>
-      <div class="scroll-h"><table><thead><tr><th>ID</th><th>Data</th><th>Competência</th><th>Fase</th><th>Tipo</th><th>Categoria</th><th>Fonte</th><th>PTRES</th><th>Descrição</th><th class="r">Valor</th></tr></thead>
-      <tbody>${l.length?l.slice().reverse().map(x=>{
-        const tipoTag=x.tipo==='Empenho'?(x.tipoRecurso==='RAP'?'<span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:800">RAP</span>':'<span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:800">EXE</span>'):'';
-        const compLabel=x.competencia?(()=>{const p=x.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:x.competencia;})():'—';
-        return`<tr><td><code style="font-size:10px">${x.id}</code></td><td>${fmtData(x.data)}</td><td style="font-size:11px;color:var(--gold);white-space:nowrap">${compLabel}</td><td>${tagFase(x.tipo)}</td><td>${tipoTag}</td><td>${catIcon(x.categoria)} ${x.categoria}</td><td style="font-size:11px;color:var(--text3)">${(x.fonte||'').split('–')[0]||'—'}</td><td style="font-size:11px;color:var(--text3)">${x.ptres||'—'}</td><td>${x.descricao}</td><td class="r ${x.tipo==='Entrada'?'text-green':'text-red'}">${fmtBR(x.valor)}</td></tr>`;
-      }).join(''):'<tr class="empty-row"><td colspan="10">Nenhum registro encontrado</td></tr>'}
-      </tbody></table></div></div>
+      ${tabelaHTML}
     </div>`;
 }
 function exportarRelatorioCSV(){
-  const l=state.lancamentos.filter(x=>x.status==='Ativo');
-  let csv='ID,Data,Fase,Categoria,Subcategoria,Fonte,PTRES,ND,Descricao,Valor,Referencia\n';
-  l.forEach(x=>{csv+=`"${x.id}","${x.data}","${x.tipo}","${x.categoria||''}","${x.subcategoria||''}","${x.fonte||''}","${x.ptres||''}","${x.nd||''}","${(x.descricao||'').replace(/"/g,"'")}","${x.valor}","${x.referencia||''}"\n`;});
+  // Usa os lançamentos filtrados pela última execução de gerarRelatorio(); se não houver, exporta tudo
+  const l=(_relFiltradoAtual && _relFiltradoAtual.length > 0)
+    ? _relFiltradoAtual
+    : state.lancamentos.filter(x=>x.status==='Ativo');
+  let csv='ID,Data,Competencia,Fase,TipoRecurso,Categoria,Subcategoria,Fonte,PTRES,ND,Descricao,Valor,Referencia,LiquidacaoId\n';
+  l.forEach(x=>{csv+=`"${x.id}","${x.data}","${x.competencia||''}","${x.tipo}","${x.tipoRecurso||'EXE'}","${x.categoria||''}","${x.subcategoria||''}","${x.fonte||''}","${x.ptres||''}","${x.nd||''}","${(x.descricao||'').replace(/"/g,"'")}","${x.valor}","${x.referencia||''}","${x.liquidacaoId||''}"\n`;});
   downloadFile(csv,'relatorio_orcamento_'+new Date().toISOString().slice(0,10)+'.csv','text/csv');
-  toast('CSV exportado!','success');
+  toast('CSV exportado com '+l.length+' registros (filtros aplicados)!','success');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4920,7 +5002,15 @@ function gerarRelatorioContratos(){
           ${cts.map(c=>{
             const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
             const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
-            const liqC=sum(sumLancsByContratoEXE('Liquidação',c.id))+sum(sumLancsByContratoEXE('Pagamento',c.id));
+            // liqC: soma todos os lançamentos que são liquidações (tipo='Liquidação') OU
+            // liquidações pagas (tipo='Pagamento'+liquidacaoId). Sem deduplicação, pois
+            // ao marcar pago o tipo muda de Liquidação → Pagamento (não são registros duplos).
+            const liqLancs = sumLancsByContratoEXE('Liquidação',c.id);
+            const pagLancs = sumLancsByContratoEXE('Pagamento',c.id);
+            // Pagamentos com liquidacaoId = liquidações pagas (já incluídas como 'Liquidação' até a mudança de tipo)
+            // Pagamentos SEM liquidacaoId = pagamentos diretos do módulo Saída (adicionais)
+            const pagDiretos = pagLancs.filter(l=>!l.liquidacaoId);
+            const liqC = sum(liqLancs) + sum(pagLancs.filter(l=>l.liquidacaoId)) + sum(pagDiretos);
             const mesesCells=mesFiltro
               ?`<td class="r">${fmtBR(pm[parseInt(mesFiltro)-1])}</td>`
               :pm.map(v=>`<td class="r" style="font-size:10px;color:${v>0?'var(--gold)':'var(--text4)'}">${v>0?fmtBR(v).replace('R$ ',''):'-'}</td>`).join('');
@@ -5112,6 +5202,40 @@ async function driveCarregar(){
         a.previstoMensalArr=Array(12).fill(+Number(pm).toFixed(2));
       }
       return a;
+    });
+    // ── Migração: tipoRegistro discriminador (INICIAL/REFORCO/ANULACAO) ──────
+    state.lancamentos.forEach(l=>{
+      if(l.tipo==='Anulação'&&!l.tipoRegistro) l.tipoRegistro='ANULACAO';
+    });
+    const _drGruposEmp={};
+    state.lancamentos.forEach(l=>{
+      if(l.tipo!=='Empenho'||l.tipoRegistro)return;
+      const k=l.empenhoCadId||l.referencia||l.numeroEmpenho||'__';
+      if(!_drGruposEmp[k])_drGruposEmp[k]=[];
+      _drGruposEmp[k].push(l);
+    });
+    Object.values(_drGruposEmp).forEach(arr=>{
+      arr.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
+      arr.forEach((l,i)=>{l.tipoRegistro=i===0?'INICIAL':'REFORCO';});
+    });
+    // ── Migração: competência ausente em empenhos ─────────────────────────────
+    state.lancamentos.forEach(l=>{
+      if(l.tipo==='Empenho'&&l.status==='Ativo'&&!l.competencia){
+        const d=new Date((l.data||'')+'T12:00:00');
+        const now=new Date();
+        l.competencia=!isNaN(d.getTime())
+          ?d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')
+          :now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+      }
+    });
+    // ── Migração AE: propagar acaoId de empenhosCad para lançamentos filhos ──
+    (state.empenhosCad||[]).forEach(e=>{
+      if(!e.acaoId||e.status==='Excluído')return;
+      state.lancamentos.forEach(l=>{
+        if(l.status!=='Ativo')return;
+        const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.referenciaId===e.id);
+        if(isFilho&&!l.empenhoCadId) l.empenhoCadId=e.id;
+      });
     });
     salvar();init();
     toast('✓ Dados carregados do Google Drive!','success');
@@ -8318,23 +8442,39 @@ function gerarRelatorioRAP(){
   const grupos = {};
   empsRap.forEach(l=>{
     const k = l.referencia||l.numeroEmpenho||l.empenhoCadId||l.id;
-    if(!grupos[k]) grupos[k]={numero:k, cat:l.categoria, fornNome:l.fornNome||'—',
+    if(!grupos[k]) grupos[k]={numero:k, referencia:l.referencia||'', cat:l.categoria, fornNome:l.fornNome||'—',
       empenhado:0, liquidado:0, pago:0, empCadId:l.empenhoCadId};
     grupos[k].empenhado += l.valor;
   });
 
   // Calcular liquidado e pago por empenho
   Object.values(grupos).forEach(g=>{
+    // Busca liquidações pelo empCadId OU pelo número do empenho (referencia)
     const liqsDoEmp = (state.liquidacoes||[]).filter(l=>{
       if(l.status==='Excluído') return false;
-      const empCad = (state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
-      return empCad && empCad.id === g.empCadId;
+      if(g.empCadId){
+        const empCad = (state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
+        if(empCad && empCad.id === g.empCadId) return true;
+      }
+      // Fallback: compara nEmpenho com o número do empenho (campo referencia do grupo)
+      return l.nEmpenho === g.numero || l.nEmpenho === g.referencia;
     });
     g.liquidado = liqsDoEmp.reduce((s,l)=>s+(l.valorBruto||0),0);
-    // Pago
+    // Se não há liquidações no módulo, usa lançamentos tipo Liquidação dos state.lancamentos
+    if(g.liquidado===0){
+      g.liquidado = sum(state.lancamentos.filter(l=>
+        l.status==='Ativo' &&
+        (l.tipo==='Liquidação'||(l.tipo==='Pagamento'&&l.liquidacaoId)) &&
+        l.tipoRecurso==='RAP' &&
+        (l.referencia===g.numero || (g.empCadId && l.referenciaId===g.empCadId))
+      ));
+    }
+    // Pago: via lançamentos do módulo liquidacoes
     const liqIds = new Set(liqsDoEmp.map(l=>l.id));
     g.pago = state.lancamentos.filter(l=>
-      l.status==='Ativo' && l.tipo==='Pagamento' && liqIds.has(l.liquidacaoId)
+      l.status==='Ativo' && l.tipo==='Pagamento' &&
+      (liqIds.size>0 ? liqIds.has(l.liquidacaoId) :
+        l.tipoRecurso==='RAP' && (l.referencia===g.numero || (g.empCadId && l.referenciaId===g.empCadId)))
     ).reduce((s,l)=>s+l.valor,0);
   });
 
