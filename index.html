@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SUCO v1.0 — Sistema Unificado de Controle Orçamentário · IFPI Campus SJP</title>
+<title>SUCO v1.1 — Sistema Unificado de Controle Orçamentário · IFPI Campus SJP</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23111118'/><path d='M5 23 L11 14 L17 18 L25 8' stroke='%23f5a623' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='25' cy='8' r='3' fill='%2300e676'/><circle cx='25' cy='8' r='1.4' fill='%23111118'/></svg>" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
@@ -499,7 +499,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div id="sidebar-saldo"><div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">Sem dados</div></div>
   </div>
   <div class="sidebar-footer">
-    <div class="sf-text">IFPI Campus São João do Piauí · <strong style="color:var(--gold)">SUCO v1.0</strong><br>localStorage · Soft-delete · Auditoria</div>
+    <div class="sf-text">IFPI Campus São João do Piauí · <strong style="color:var(--gold)">SUCO v1.1</strong><br>localStorage · Soft-delete · Auditoria</div>
   </div>
 </aside>
 
@@ -550,7 +550,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   </div>
   <!-- Card RAP -->
   <div id="dash-rap-card" style="margin-bottom:14px"></div>
-  <div class="page-footer">José Marcondes Ribeiro Coelho – Contador · IFPI Campus São João do Piauí · COCF · <strong>SUCO v1.0</strong></div>
+  <div class="page-footer">José Marcondes Ribeiro Coelho – Contador · IFPI Campus São João do Piauí · COCF · <strong>SUCO v1.1</strong></div>
 </div>
 
 <!-- ════════ REGISTRAR CRÉDITO ════════ -->
@@ -1167,7 +1167,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 <!-- ════════ RELATÓRIOS ════════ -->
 <div id="page-relatorios" class="page">
   <div class="page-header">
-    <div><div class="page-title"><span>📊</span>Relatórios e Indicadores</div><div class="page-sub">Geração dinâmica de relatórios financeiros orçamentários · SUCO v1.0</div></div>
+    <div><div class="page-title"><span>📊</span>Relatórios e Indicadores</div><div class="page-sub">Geração dinâmica de relatórios financeiros orçamentários · SUCO v1.1</div></div>
   </div>
   <div class="card">
     <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Filtros Avançados</div>
@@ -1318,7 +1318,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 // ═══════════════════════════════════════════════════════════
 //  CONSTANTES E DEFAULTS
 // ═══════════════════════════════════════════════════════════
-const VERSION = '6.0';
+const VERSION = '6.1'; // Rev. técnica completa — correções de integração financeira
 const STORAGE_KEY = 'sysOrcV6';
 
 const DEFAULT_FONTES = ['Fonte 0100 – Tesouro','Fonte 0250 – Recursos Próprios','Fonte 0112 – FNDE','Fonte 0601 – MEC','Fonte 0632 – CAPES'];
@@ -1908,8 +1908,15 @@ function importarJSON(evt){
       const empsOrfos=(state.empenhosCad||[]).filter(e=>e.contratoId&&!contratosIds.has(e.contratoId)).length;
       if(empsOrfos>0)console.warn(`[SUCO] Integridade: ${empsOrfos} empenho(s) cadastrado(s) com contratoId sem contrato correspondente.`);
       auditLog('IMPORT','SISTEMA','JSON','Dados importados de arquivo JSON',{file:file.name,...resumo,integridade:{liqsOrfas,empsOrfos}});
-      salvar();showPage('dashboard');
-      toast('✓ Backup restaurado! ('+Object.entries(resumo).map(([k,v])=>k+': '+v).join(' · ')+(liqsOrfas||empsOrfos?` ⚠ verifique console`:'')+')');
+      salvar();
+      // CORREÇÃO: Re-renderizar todos os módulos críticos após importação
+      // para garantir sincronização completa entre módulos
+      if(typeof energyPoolManager!=='undefined') energyPoolManager.invalidateCache();
+      showPage('dashboard');
+      // Re-inicializar formulários que dependem de listas dinâmicas
+      try{ if(typeof renderSidebarSaldo==='function') renderSidebarSaldo(); }catch(e){}
+      try{ if(typeof renderConfig==='function') renderConfig(); }catch(e){}
+      toast('✓ Backup restaurado! ('+Object.entries(resumo).map(([k,v])=>k+': '+v).join(' · ')+(liqsOrfas||empsOrfos?` ⚠ verifique console`:'')+')','success');
     }catch(err){toast('Erro ao importar: arquivo inválido ou corrompido','error');}
   };
   reader.readAsText(file);
@@ -1993,9 +2000,10 @@ function executarResetSaldos(modalId){
   const log=[];
 
   // ── 1. Lançamentos financeiros ─────────────────────────────
-  const tiposCredito   =['Entrada','Saída','Transferência','Anulação de Crédito'];
-  const tiposEmpenho   =['Empenho','Anulação de Empenho'];
-  const tiposLiquidacao=['Liquidação','Pagamento','Anulação de Liquidação'];
+  // CORREÇÃO: usar os tipos reais gravados em state.lancamentos
+  const tiposCredito   =['Entrada','Transferência Entrada','Transferência Saída'];
+  const tiposEmpenho   =['Empenho','Anulação'];
+  const tiposLiquidacao=['Liquidação','Pagamento'];
   const antes=state.lancamentos.length;
   let tiposRemover=[];
   if(resetCredito)   tiposRemover=[...tiposRemover,...tiposCredito];
@@ -2038,7 +2046,9 @@ function executarResetSaldos(modalId){
 
   document.getElementById(modalId)?.remove();
   salvar();
-  renderSidebarSaldo();
+  // CORREÇÃO: renderSidebarSaldo não existe — usar renderSidebar (função correta)
+  if(typeof energyPoolManager!=='undefined') energyPoolManager.invalidateCache();
+  renderSidebar();
   showPage('dashboard');
   toast(`Reset concluído — ${log.join(' · ')}. Cadastros preservados.`,'warn');
 }
@@ -2731,7 +2741,7 @@ class CategoryValidator {
       
       // Validação de referência única para empenhos
       if (referenciaId) {
-        const empenhoExistente = state.empenhos.find(e => 
+        const empenhoExistente = (state.empenhosCad||[]).find(e => 
           e.referenciaId === referenciaId && e.status === 'Ativo'
         );
         if (empenhoExistente) {
@@ -2760,7 +2770,7 @@ class CategoryValidator {
         throw new Error('Valor da liquidação deve ser maior que zero');
       }
       
-      const empenho = state.empenhos.find(e => e.id === empenhoId && e.status === 'Ativo');
+      const empenho = (state.empenhosCad||[]).find(e => e.id === empenhoId && e.status !== 'Excluído');
       if (!empenho) {
         throw new Error('Empenho não encontrado ou inativo');
       }
@@ -4078,10 +4088,15 @@ function renderContratoLista(){
       else alertaHtml=`<span class="ct-alerta ok">✓ ${diasVenc}d</span>`;
     }
     const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
-    const liqC=sum(sumLancsByContratoEXE('Liquidação',c.id));
-    const pagC=sum(sumLancsByContratoEXE('Pagamento',c.id));
+    // CORREÇÃO: liqC = liquidado total (Liquidação + Pagamento-de-liquidação), deduplicado por ID.
+    const _ctLiqLancs=sumLancsByContratoEXE('Liquidação',c.id);
+    const _ctPagLancs=sumLancsByContratoEXE('Pagamento',c.id);
+    const _ctDedupIds=new Set();
+    const _ctDedupAll=[..._ctLiqLancs,..._ctPagLancs].filter(l=>{if(_ctDedupIds.has(l.id))return false;_ctDedupIds.add(l.id);return true;});
+    const liqC=sum(_ctDedupAll);
+    const pagC=sum(_ctPagLancs);
     const pExec=c.valorTotal>0?Math.round(empC/c.valorTotal*100):0;
-    const pLiq=empC>0?Math.round((liqC+pagC)/empC*100):0;
+    const pLiq=empC>0?Math.round(liqC/empC*100):0;
     return`<div class="ct-card">
       <div class="ct-header">
         <div><div class="ct-nome">${c.nContrato||'S/N'} — ${c.nome}</div><div class="ct-meta">${c.empresa||''} · CNPJ: ${c.cnpj||'—'} · ${c.tipoServico||''}</div></div>
@@ -4105,11 +4120,16 @@ function renderContratoExec(){
   const cts=state.contratos.filter(c=>c.status!=='Excluído');
   const rows=cts.map(c=>{
     const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
-    const liqC=sum(sumLancsByContratoEXE('Liquidação',c.id));
-    const pagC=sum(sumLancsByContratoEXE('Pagamento',c.id));
+    // CORREÇÃO: liqC = total liquidado (Liquidação + Pagamento de liquidação), deduplicado.
+    const _execLiq=sumLancsByContratoEXE('Liquidação',c.id);
+    const _execPag=sumLancsByContratoEXE('Pagamento',c.id);
+    const _execDedIds=new Set();
+    const _execDedup=[..._execLiq,..._execPag].filter(l=>{if(_execDedIds.has(l.id))return false;_execDedIds.add(l.id);return true;});
+    const liqC=sum(_execDedup);
+    const pagC=sum(_execPag);
     const saldo=(c.valorTotal||0)-empC;
     const pExec=c.valorTotal>0?Math.round(empC/c.valorTotal*100):0;
-    const pLiqEmp=empC>0?Math.round((liqC+pagC)/empC*100):0;
+    const pLiqEmp=empC>0?Math.round(liqC/empC*100):0;
     return`<tr>
       <td><strong>${c.nContrato||'S/N'}</strong><br><span style="font-size:11px;color:var(--text3)">${c.nome}</span></td>
       <td class="r">${fmtBR(c.valorTotal||0)}</td>
@@ -4141,9 +4161,18 @@ function renderContratoDash(){
 
   // Total Empenhado EXE (contratos + apoio ao ensino)
   const totEmpContratosEXE=sum(state.lancamentos.filter(l=>empEXEonly(l)&&(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO')));
-  // Total Liquidado EXE
-  const totLiqContratosEXE=sum(state.lancamentos.filter(l=>liqEXEonly(l)&&(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO')));
-  // Total Pago EXE
+  // CORREÇÃO: totLiqContratosEXE — inclui lançamentos tipo Liquidação E Pagamento com liquidacaoId
+  // (quando uma liquidação é marcada como paga, tipo muda Liquidação→Pagamento+liquidacaoId)
+  const _dashLiqCatFilter=l=>(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO')&&(l.tipoRecurso||'EXE')==='EXE'&&l.status==='Ativo';
+  const _dashLiqArr=state.lancamentos.filter(l=>l.tipo==='Liquidação'&&_dashLiqCatFilter(l));
+  const _dashPagLiqArr=state.lancamentos.filter(l=>l.tipo==='Pagamento'&&l.liquidacaoId&&_dashLiqCatFilter(l));
+  const _dashPagDirArr=state.lancamentos.filter(l=>l.tipo==='Pagamento'&&!l.liquidacaoId&&_dashLiqCatFilter(l));
+  // Deduplicar: liqArr + pagLiqArr (liquidações pagas não existem em ambos simultaneamente,
+  // mas deduplicamos por ID para segurança em dados legados)
+  const _dashLiqDedIds=new Set();
+  const _dashLiqDedup=[..._dashLiqArr,..._dashPagLiqArr].filter(l=>{if(_dashLiqDedIds.has(l.id))return false;_dashLiqDedIds.add(l.id);return true;});
+  const totLiqContratosEXE=sum(_dashLiqDedup);
+  // Total Pago EXE = pagamentos efetivos (Pagamento puro sem duplicar liquidações)
   const totPagContratosEXE=sum(state.lancamentos.filter(l=>pagEXEonly(l)&&(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO')));
 
   // Valor contratado total
@@ -4817,7 +4846,8 @@ function renderHistorico(){
   }
   let all=[...state.lancamentos];
   if(tipo)all=all.filter(x=>x.tipo===tipo);
-  if(cat)all=all.filter(x=>x.categoria===cat);
+  // CORREÇÃO: usar normalizarCategoria para comparação robusta no histórico
+  if(cat){const catN=normalizarCategoria(cat);all=all.filter(x=>normalizarCategoria(x.categoria||'')===catN);}
   if(status)all=all.filter(x=>x.status===status);
   if(de)all=all.filter(x=>x.data>=de);
   if(ate)all=all.filter(x=>x.data<=ate);
@@ -4898,7 +4928,8 @@ function gerarRelatorio(){
   let l=[...state.lancamentos].filter(x=>x.status==='Ativo');
   if(de)l=l.filter(x=>x.data>=de);
   if(ate)l=l.filter(x=>x.data<=ate);
-  if(cat)l=l.filter(x=>x.categoria===cat);
+  // CORREÇÃO: usar normalizarCategoria para comparação robusta
+  if(cat){const catN=normalizarCategoria(cat);l=l.filter(x=>normalizarCategoria(x.categoria||'')===catN);}
   if(tipo)l=l.filter(x=>x.tipo===tipo);
   if(fonte)l=l.filter(x=>x.fonte===fonte);
   if(ptres)l=l.filter(x=>x.ptres===ptres);
@@ -5261,104 +5292,164 @@ function renderAeDetalhe(){
   const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
   const pm=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
   const totPrev=comp?aePrevistoAcao(a,comp):(pm.reduce((s,v)=>s+v,0)||a.previsto||0);
-  const tAcao=aeTotaisAcao(a.id,comp);
-  const emp=tAcao.empenhado;
-  const liq=tAcao.liquidado;
-  const pag=tAcao.pago;
-  const liqPag=liq+pag;
-  const saldoNEmp=totPrev-emp;
-  const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  el.innerHTML+=`
-    <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
-      <div class="kpi accent-gold"><div class="kpi-label">Previsto Total</div><div class="kpi-value text-gold" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(totPrev)}</div></div>
-      <div class="kpi accent-blue"><div class="kpi-label">Empenhado</div><div class="kpi-value text-blue" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(emp)}</div><div class="kpi-sub">inic: ${fmtBR(tAcao.inicial)} · reforço: ${fmtBR(tAcao.reforcos)}</div></div>
-      <div class="kpi accent-amber"><div class="kpi-label">Liquidado / Pago</div><div class="kpi-value" style="color:var(--amber);font-size:clamp(13px,1.8vw,22px)">${fmtBR(liqPag)}</div><div class="kpi-sub">liq: ${fmtBR(liq)} · pag: ${fmtBR(pag)}</div></div>
-      <div class="kpi ${saldoNEmp<0?'accent-red':'accent-green'}"><div class="kpi-label">Saldo Não Empenhado</div><div class="kpi-value ${saldoNEmp<0?'text-red':'text-green'}" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(saldoNEmp)}</div></div>
-      <div class="kpi accent-purple"><div class="kpi-label">Tipo</div><div class="kpi-value" style="color:var(--purple);font-size:14px;padding-top:4px">${a.tipo||'Benefício'}</div></div>
+  const tAcao  = aeTotaisAcao(a.id, comp);
+  const emp    = tAcao.empenhado;
+  const liq    = tAcao.liquidado;
+  const pag    = tAcao.pago;
+  const saldoNEmp = totPrev - emp;
+  // ── grade de colunas da tabela (6 colunas fixas) ─────────────────────────
+  // MÊS | PREVISTO | TOTAL EMP. | LIQUIDADO | PAGO | SALDO
+  const TCOLS = '110px 1fr 1fr 1fr 1fr 1fr';
+  const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  el.innerHTML += `
+    <!-- ── KPI CARDS: 6 cards individuais ── -->
+    <div class="kpi-grid" style="grid-template-columns:repeat(6,1fr);margin-bottom:18px">
+      <div class="kpi accent-gold">
+        <div class="kpi-label">Previsto Total</div>
+        <div class="kpi-value text-gold" style="font-size:clamp(12px,1.6vw,22px)">${fmtBR(totPrev)}</div>
+        <div class="kpi-sub">valor previsto da ação</div>
+      </div>
+      <div class="kpi accent-blue">
+        <div class="kpi-label">Empenhado</div>
+        <div class="kpi-value text-blue" style="font-size:clamp(12px,1.6vw,22px)">${fmtBR(emp)}</div>
+        <div class="kpi-sub">módulo Empenho</div>
+      </div>
+      <div class="kpi accent-amber">
+        <div class="kpi-label">Liquidado</div>
+        <div class="kpi-value" style="color:var(--amber);font-size:clamp(12px,1.6vw,22px)">${fmtBR(liq)}</div>
+        <div class="kpi-sub">módulo Liquidação</div>
+      </div>
+      <div class="kpi accent-teal">
+        <div class="kpi-label">Pago</div>
+        <div class="kpi-value" style="color:var(--teal);font-size:clamp(12px,1.6vw,22px)">${fmtBR(pag)}</div>
+        <div class="kpi-sub">módulo Liquidação</div>
+      </div>
+      <div class="kpi ${saldoNEmp<0?'accent-red':'accent-green'}">
+        <div class="kpi-label">Saldo Não Empenhado</div>
+        <div class="kpi-value ${saldoNEmp<0?'text-red':'text-green'}" style="font-size:clamp(12px,1.6vw,22px)">${fmtBR(saldoNEmp)}</div>
+        <div class="kpi-sub">previsto − empenhado</div>
+      </div>
+      <div class="kpi accent-purple">
+        <div class="kpi-label">Tipo</div>
+        <div class="kpi-value" style="color:var(--purple);font-size:14px;padding-top:4px">${a.tipo||'Benefício'}</div>
+        <div class="kpi-sub">categoria da ação</div>
+      </div>
     </div>
+
+    <!-- ── TABELA MENSAL ── -->
     <div style="margin-top:0">
       ${comp?`<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📅</span><div>Detalhe filtrado pela competência: <strong>${labelFiltro}</strong>.</div></div>`:''}
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:10px 16px;background:rgba(0,166,81,.06);border:1px solid rgba(0,166,81,.2);border-radius:10px">
-        <span style="font-size:18px">📅</span>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 16px;background:rgba(0,166,81,.06);border:1px solid rgba(0,166,81,.2);border-radius:10px">
+        <span style="font-size:16px">📅</span>
         <div style="font-size:12px;color:var(--text2);line-height:1.5">
-          O mês exibido é sempre o <strong style="color:var(--exe)">mês de competência do registro original</strong>
-          — independente da data de alteração ou sincronização.
+          Cada valor é exibido exclusivamente no <strong style="color:var(--exe)">mês de competência do registro original</strong>
+          — sem acumulação entre meses.
         </div>
       </div>
-      <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;overflow:hidden;margin-top:0">
-      <div style="display:flex;align-items:center;gap:10px;padding:13px 16px;background:linear-gradient(135deg,rgba(68,138,255,.10),rgba(68,138,255,.03));border-bottom:1px solid var(--blue-border)">
-        <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px rgba(68,138,255,.5)"></div>
-        <span style="font-size:13px;font-weight:700;color:var(--blue);letter-spacing:.04em;text-transform:uppercase">Detalhe Mensal — ${a.nome||a.tipo||'Ação'}</span>
-        <span style="font-size:10px;color:var(--text3);margin-left:auto">Previsto · Empenho · Liquidado · Pago · Saldo</span>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:0">
-        <div style="display:grid;grid-template-columns:100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:9px 16px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border-bottom:2px solid var(--border3)">
+
+      <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;overflow:hidden">
+
+        <!-- cabeçalho da tabela -->
+        <div style="display:flex;align-items:center;gap:10px;padding:13px 18px;background:linear-gradient(135deg,rgba(68,138,255,.10),rgba(68,138,255,.03));border-bottom:1px solid var(--blue-border)">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px rgba(68,138,255,.5);flex-shrink:0"></div>
+          <span style="font-size:13px;font-weight:700;color:var(--blue);letter-spacing:.04em;text-transform:uppercase">${a.nome||a.tipo||'Ação'} — Competência Mensal</span>
+          <span style="font-size:10px;color:var(--text3);margin-left:auto">Previsto · Empenhado · Liquidado · Pago · Saldo</span>
+        </div>
+
+        <!-- linha de títulos das colunas -->
+        <div style="display:grid;grid-template-columns:${TCOLS};gap:0;padding:9px 18px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border-bottom:2px solid var(--border3)">
           <div style="font-size:9px;font-weight:800;color:var(--text3);letter-spacing:.14em;text-transform:uppercase">MÊS</div>
           <div style="font-size:9px;font-weight:800;color:var(--gold);letter-spacing:.14em;text-transform:uppercase;text-align:right">PREVISTO</div>
-          <div style="font-size:9px;font-weight:800;color:var(--exe);letter-spacing:.14em;text-transform:uppercase;text-align:right">EMP.INICIAL</div>
-          <div style="font-size:9px;font-weight:800;color:var(--green2);letter-spacing:.14em;text-transform:uppercase;text-align:right">REFORÇOS</div>
-          <div style="font-size:9px;font-weight:800;color:var(--blue2);letter-spacing:.14em;text-transform:uppercase;text-align:right;background:rgba(68,138,255,.07);border-radius:4px;padding:2px 4px">TOTAL EMP.</div>
+          <div style="font-size:9px;font-weight:800;color:var(--blue2);letter-spacing:.14em;text-transform:uppercase;text-align:right;background:rgba(68,138,255,.09);border-radius:4px;padding:2px 6px">TOTAL EMP.</div>
           <div style="font-size:9px;font-weight:800;color:var(--amber);letter-spacing:.14em;text-transform:uppercase;text-align:right">LIQUIDADO</div>
-          <div style="font-size:9px;font-weight:800;color:var(--green);letter-spacing:.14em;text-transform:uppercase;text-align:right">PAGO</div>
+          <div style="font-size:9px;font-weight:800;color:var(--teal);letter-spacing:.14em;text-transform:uppercase;text-align:right">PAGO</div>
           <div style="font-size:9px;font-weight:800;color:var(--gold2);letter-spacing:.14em;text-transform:uppercase;text-align:right">SALDO</div>
         </div>
+
+        <!-- linhas dos meses -->
         ${(()=>{
-          const MESES_ABR2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-          const anoAtual=new Date().getFullYear();
-          return pm.map((v,i)=>{
-            const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
-            const mesForaDoFiltro=comp&&prefix!==comp;
-            const previstoM=mesForaDoFiltro?0:v;
-            const tMes=mesForaDoFiltro?{inicial:0,reforcos:0,empenhado:0,liquidado:0,pago:0}:aeTotaisAcao(a.id,prefix);
-            const inicialM=tMes.inicial;
-            const reforcoM=tMes.reforcos;
-            const empM=tMes.empenhado;
-            const liqM=tMes.liquidado;
-            const pagM=tMes.pago;
-            const saldoM=previstoM-empM;
-            const temDados=previstoM>0||empM>0||liqM>0||pagM>0;
-            const pct=previstoM>0?Math.min(100,Math.round(empM/previstoM*100)):0;
-            const pctColor=pct>=80?'var(--green)':pct>=40?'var(--amber)':'var(--red)';
-            const mesAbr=MESES_ABR2[i];
+          const anoAtual = new Date().getFullYear();
+          return pm.map((v, i)=>{
+            // ── competência deste mês ──────────────────────────────────────
+            const prefix      = anoAtual + '-' + String(i+1).padStart(2,'0');
+            // Se há filtro de competência global e este mês não é o filtrado, exibe vazio
+            const mesOculto   = comp && prefix !== comp;
+            const previstoM   = mesOculto ? 0 : v;
+            // aeTotaisAcao com competência exata deste mês — sem acumulação
+            const tMes        = mesOculto
+              ? {empenhado:0, liquidado:0, pago:0}
+              : aeTotaisAcao(a.id, prefix);
+            const empM  = tMes.empenhado;
+            const liqM  = tMes.liquidado;
+            const pagM  = tMes.pago;
+            const saldoM = previstoM - empM;
+            const temDados = previstoM > 0 || empM > 0 || liqM > 0 || pagM > 0;
+            const mesAbr   = MESES_ABR[i];
+
+            // linha sem dados: exibe apagada
             if(!temDados){
-              return '<div style="display:grid;grid-template-columns:100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:7px 16px;border-radius:0;border:1px solid transparent;border-top:1px solid var(--border);opacity:.25">'
+              return '<div style="display:grid;grid-template-columns:'+TCOLS+';gap:0;padding:7px 18px;border-top:1px solid var(--border);opacity:.22">'
                 +'<div style="font-size:11px;font-weight:600;color:var(--text4)">'+mesAbr+'/'+anoAtual+'</div>'
-                +'<div style="text-align:right;font-size:11px;color:var(--text4)">—</div>'.repeat(7)
+                +'<div style="text-align:right;font-size:11px;color:var(--text4)">—</div>'.repeat(5)
                 +'</div>';
             }
-            const colV=(val,clr)=>val>0
-              ?'<span style="font-size:12px;font-weight:700;color:'+clr+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(val)+'</span>'
-              :'<span style="color:var(--text4);font-size:11px">—</span>';
-            const saldoColor=saldoM<0?'var(--red)':'var(--gold)';
-            const saldoVal=(previstoM>0||empM>0)?'<span style="font-size:12px;font-weight:800;color:'+saldoColor+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(saldoM)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>';
-            const barHtml=(previstoM>0||empM>0)
-              ?'<div style="padding:0 16px 8px;display:flex;align-items:center;gap:8px"><div style="flex:1;height:3px;background:var(--bg5);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px;transition:width .4s"></div></div><span style="font-size:9px;color:'+pctColor+';font-weight:700;white-space:nowrap">'+pct+'% emp.</span></div>'
-              :'';
-            const zebraBase=i%2===0?'rgba(255,255,255,.014)':'transparent';
-            return '<div style="border-top:1px solid var(--border);background:'+zebraBase+';overflow:hidden;transition:background .12s" onmouseover="this.style.background=\'rgba(68,138,255,.05)\'" onmouseout="this.style.background=\''+zebraBase+'\'">'
-              +'<div style="display:grid;grid-template-columns:100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:10px 16px;align-items:center">'
-              +'<div><div style="font-size:12px;font-weight:700;color:var(--gold)">'+mesAbr+'</div><div style="font-size:9px;color:var(--text4)">'+anoAtual+'</div></div>'
-              +'<div style="text-align:right">'+(previstoM>0?'<span style="font-size:12px;font-weight:600;color:var(--text2);font-family:\'IBM Plex Mono\',monospace">'+fmtBR(previstoM)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>')+'</div>'
-              +'<div style="text-align:right">'+colV(inicialM,'var(--exe)')+'</div>'
-              +'<div style="text-align:right">'+colV(reforcoM,'var(--green2)')+'</div>'
-              +'<div style="text-align:right;background:rgba(68,138,255,.05);border-radius:4px;padding:2px 4px">'+colV(empM,'var(--blue2)')+'</div>'
-              +'<div style="text-align:right">'+colV(liqM,'var(--amber)')+'</div>'
-              +'<div style="text-align:right">'+colV(pagM,'var(--green)')+'</div>'
-              +'<div style="text-align:right">'+saldoVal+'</div>'
+
+            // helpers de célula
+            const cel = (val, clr) => val > 0
+              ? '<span style="font-size:12px;font-weight:700;color:'+clr+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(val)+'</span>'
+              : '<span style="color:var(--text4);font-size:11px">—</span>';
+
+            const saldoClr  = saldoM < 0 ? 'var(--red)' : 'var(--gold)';
+            const saldoCel  = (previstoM > 0 || empM > 0)
+              ? '<span style="font-size:12px;font-weight:800;color:'+saldoClr+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(saldoM)+'</span>'
+              : '<span style="color:var(--text4);font-size:11px">—</span>';
+
+            // barra de progresso de empenho
+            const pct      = previstoM > 0 ? Math.min(100, Math.round(empM / previstoM * 100)) : 0;
+            const pctClr   = pct >= 80 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--red)';
+            const barHtml  = (previstoM > 0 || empM > 0)
+              ? '<div style="padding:0 18px 8px;display:flex;align-items:center;gap:8px">'
+                +'<div style="flex:1;height:3px;background:var(--bg5);border-radius:3px;overflow:hidden">'
+                +'<div style="height:100%;width:'+pct+'%;background:'+pctClr+';border-radius:3px;transition:width .4s"></div></div>'
+                +'<span style="font-size:9px;color:'+pctClr+';font-weight:700;white-space:nowrap">'+pct+'% emp.</span></div>'
+              : '';
+
+            const zebraBase = i % 2 === 0 ? 'rgba(255,255,255,.013)' : 'transparent';
+            return '<div style="border-top:1px solid var(--border);background:'+zebraBase+';overflow:hidden;transition:background .12s"'
+              +' onmouseover="this.style.background=\'rgba(68,138,255,.05)\'"'
+              +' onmouseout="this.style.background=\''+zebraBase+'\'">'
+              +'<div style="display:grid;grid-template-columns:'+TCOLS+';gap:0;padding:10px 18px;align-items:center">'
+              // MÊS
+              +'<div><div style="font-size:12px;font-weight:700;color:var(--gold)">'+mesAbr+'</div>'
+              +'<div style="font-size:9px;color:var(--text4)">'+anoAtual+'</div></div>'
+              // PREVISTO
+              +'<div style="text-align:right">'
+              +(previstoM > 0
+                ? '<span style="font-size:12px;font-weight:600;color:var(--text2);font-family:\'IBM Plex Mono\',monospace">'+fmtBR(previstoM)+'</span>'
+                : '<span style="color:var(--text4);font-size:11px">—</span>')
+              +'</div>'
+              // TOTAL EMP.
+              +'<div style="text-align:right;background:rgba(68,138,255,.05);border-radius:4px;padding:2px 4px">'+cel(empM,'var(--blue2)')+'</div>'
+              // LIQUIDADO
+              +'<div style="text-align:right">'+cel(liqM,'var(--amber)')+'</div>'
+              // PAGO
+              +'<div style="text-align:right">'+cel(pagM,'var(--teal)')+'</div>'
+              // SALDO
+              +'<div style="text-align:right">'+saldoCel+'</div>'
               +'</div>'+barHtml+'</div>';
           }).join('');
         })()}
-        <div style="display:grid;grid-template-columns:100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:13px 16px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border:1px solid var(--border2);border-top:2px solid var(--gold-border);border-radius:0 0 10px 10px">
-          <div style="font-size:11px;font-weight:800;color:var(--gold);letter-spacing:.06em">TOTAL</div>
+
+        <!-- rodapé totais -->
+        <div style="display:grid;grid-template-columns:${TCOLS};gap:0;padding:13px 18px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border-top:2px solid var(--gold-border)">
+          <div style="font-size:11px;font-weight:800;color:var(--gold);letter-spacing:.06em;align-self:center">TOTAL</div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--gold);font-family:'IBM Plex Mono',monospace">${fmtBR(totPrev)}</span></div>
-          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--exe);font-family:'IBM Plex Mono',monospace">${fmtBR(tAcao.inicial)}</span></div>
-          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--green2);font-family:'IBM Plex Mono',monospace">${fmtBR(tAcao.reforcos)}</span></div>
-          <div style="text-align:right;background:rgba(68,138,255,.07);border-radius:4px;padding:2px 4px"><span style="font-size:12px;font-weight:800;color:var(--blue2);font-family:'IBM Plex Mono',monospace">${fmtBR(emp)}</span></div>
+          <div style="text-align:right;background:rgba(68,138,255,.07);border-radius:4px;padding:2px 6px"><span style="font-size:12px;font-weight:800;color:var(--blue2);font-family:'IBM Plex Mono',monospace">${fmtBR(emp)}</span></div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--amber);font-family:'IBM Plex Mono',monospace">${fmtBR(liq)}</span></div>
-          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--green);font-family:'IBM Plex Mono',monospace">${fmtBR(pag)}</span></div>
+          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--teal);font-family:'IBM Plex Mono',monospace">${fmtBR(pag)}</span></div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:${saldoNEmp<0?'var(--red)':'var(--gold)'};font-family:'IBM Plex Mono',monospace">${fmtBR(saldoNEmp)}</span></div>
         </div>
-      </div>
+
       </div>
     </div>`; /* end renderAeDetalhe */
 }
@@ -5387,9 +5478,14 @@ function renderContratoDetalhe(){
   const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
   const totPrevMensal=pm.reduce((s,v)=>s+v,0);
   const emp=sum(sumLancsByContratoEXE('Empenho',c.id));
-  const liq=sum(sumLancsByContratoEXE('Liquidação',c.id));
-  const pag=sum(sumLancsByContratoEXE('Pagamento',c.id));
-  const liqPag=liq+pag;
+  // CORREÇÃO: deduplicar liq/pag para evitar double-count quando Liquidação vira Pagamento
+  const _detLiqLancs=sumLancsByContratoEXE('Liquidação',c.id);
+  const _detPagLancs=sumLancsByContratoEXE('Pagamento',c.id);
+  const _detDedIds=new Set();
+  const _detDedup=[..._detLiqLancs,..._detPagLancs].filter(l=>{if(_detDedIds.has(l.id))return false;_detDedIds.add(l.id);return true;});
+  const liq=sum(_detLiqLancs); // liquidado puro (sem pagamentos)
+  const pag=sum(_detPagLancs); // pago efetivo
+  const liqPag=sum(_detDedup); // total liquidado+pago deduplicado
   const valorRef=c.valorTotal||totPrevMensal||0;
   const saldoNEmp=valorRef-emp;
   const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -5436,9 +5532,18 @@ function renderContratoDetalhe(){
             const filtMes=l=>l.competencia===prefix;
             const empsDoMes=sumLancsByContratoEXE('Empenho',c.id).filter(filtMes);
             const inicialM=sum(empsDoMes.filter(l=>l.tipoRegistro==='INICIAL'));
-            const reforcoM=sum(empsDoMes.filter(l=>l.tipoRegistro==='REFORCO'||(!l.tipoRegistro&&l.tipo==='Empenho')));
+            // CORREÇÃO: exclui INICIAL dos reforços para evitar dupla contagem.
+            // Lançamentos sem tipoRegistro (legados) são tratados como REFORCO somente se
+            // NÃO forem INICIAL, garantindo que empM = inicialM + reforcoM sem sobreposição.
+            const reforcoM=sum(empsDoMes.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO'||(l.tipo==='Empenho'&&!l.tipoRegistro)));
             const empM=inicialM+reforcoM;
-            const liqM=sum([...sumLancsByContratoEXE('Liquidação',c.id),...sumLancsByContratoEXE('Pagamento',c.id)].filter(filtMes));
+            // CORREÇÃO: deduplicação de liqM — Pagamento com liquidacaoId já representa
+            // uma Liquidação que teve o tipo alterado; ambos NÃO coexistem no mesmo período
+            // mas a fusão de dois arrays pode somar duplicatas. Usar Set de IDs para deduplicar.
+            const _liqRaw=[...sumLancsByContratoEXE('Liquidação',c.id),...sumLancsByContratoEXE('Pagamento',c.id)];
+            const _liqIds=new Set();
+            const _liqDedup=_liqRaw.filter(l=>{if(_liqIds.has(l.id))return false;_liqIds.add(l.id);return true;});
+            const liqM=sum(_liqDedup.filter(filtMes));
             const saldoM=empM-liqM;
             const nEmpsMes=[...new Set(empsDoMes.map(l=>l.referencia||l.numeroEmpenho||'').filter(Boolean))].join(', ')||'—';
             const temDados=v>0||empM>0||liqM>0;
@@ -5510,15 +5615,19 @@ function gerarRelatorioContratos(){
           ${cts.map(c=>{
             const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
             const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
-            // liqC: soma todos os lançamentos que são liquidações (tipo='Liquidação') OU
-            // liquidações pagas (tipo='Pagamento'+liquidacaoId). Sem deduplicação, pois
-            // ao marcar pago o tipo muda de Liquidação → Pagamento (não são registros duplos).
-            const liqLancs = sumLancsByContratoEXE('Liquidação',c.id);
-            const pagLancs = sumLancsByContratoEXE('Pagamento',c.id);
-            // Pagamentos com liquidacaoId = liquidações pagas (já incluídas como 'Liquidação' até a mudança de tipo)
-            // Pagamentos SEM liquidacaoId = pagamentos diretos do módulo Saída (adicionais)
-            const pagDiretos = pagLancs.filter(l=>!l.liquidacaoId);
-            const liqC = sum(liqLancs) + sum(pagLancs.filter(l=>l.liquidacaoId)) + sum(pagDiretos);
+            // CORREÇÃO: liqC — usa apenas Liquidação + Pagamento deduplicados por ID.
+            // Quando uma Liquidação é marcada como paga, seu tipo muda para Pagamento
+            // com liquidacaoId — nunca existe duplicata real. Mas ao unir os dois arrays
+            // é preciso deduplicar por ID para evitar contagem dobrada em dados legados.
+            const _liqLancs = sumLancsByContratoEXE('Liquidação',c.id);
+            const _pagLancs = sumLancsByContratoEXE('Pagamento',c.id);
+            const _liqAllIds = new Set();
+            const _liqAll = [..._liqLancs,..._pagLancs].filter(l=>{
+              if(_liqAllIds.has(l.id))return false;
+              _liqAllIds.add(l.id);
+              return true;
+            });
+            const liqC = sum(_liqAll);
             const mesesCells=mesFiltro
               ?`<td class="r">${fmtBR(pm[parseInt(mesFiltro)-1])}</td>`
               :pm.map(v=>`<td class="r" style="font-size:10px;color:${v>0?'var(--gold)':'var(--text4)'}">${v>0?fmtBR(v).replace('R$ ',''):'-'}</td>`).join('');
@@ -5748,7 +5857,10 @@ async function driveCarregar(){
         if(e.acaoId&&!l.acaoId) l.acaoId=e.acaoId;
       });
     });
-    salvar();init();
+    salvar();
+    // CORREÇÃO: invalidar cache do pool de energia e re-renderizar via init()
+    if(typeof energyPoolManager!=='undefined') energyPoolManager.invalidateCache();
+    init();
     toast('✓ Dados carregados do Google Drive!','success');
   }catch(e){toast('Erro ao carregar do Drive: '+e.message,'error');console.error(e);}
 }
@@ -10093,7 +10205,7 @@ document.getElementById('modal-edit-empenho').addEventListener('click',function(
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════
-     MÓDULO: EXPORTAÇÃO PDF EXECUTIVO — SUCO v1.0
+     MÓDULO: EXPORTAÇÃO PDF EXECUTIVO — SUCO v1.1
      Dependência: jsPDF (carregado via CDN ao acionar)
      Autor: SUCO · IFPI Campus São João do Piauí
 ════════════════════════════════════════════════════════════ -->
@@ -10233,23 +10345,27 @@ function coletarDadosRelatorio(){
     const emp = (state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId||e.id===l.referenciaId||e.numero===l.referencia);
     return !emp || (emp.tipoEmp||'EXE')==='EXE';
   }));
+  // CORREÇÃO: totalLiquidacoesEXE já inclui pagamentos-de-liquidação (quando tipo muda para Pagamento+liquidacaoId)
   const totLiq   = totalLiquidacoesEXE();
   const totPag   = totalPagamentosEXE();
   const totRap   = totalEmpenhosRAP();
   const saldoD   = totCred - totEmp + totAnul;
+  // CORREÇÃO: empLiq = saldo empenhado líquido (empenhado bruto - anulações)
   const empLiq   = totEmp - totAnul;
+  // CORREÇÃO: txExec = % do empenhado líquido sobre o crédito total (taxa de execução orçamentária correta)
   const txExec   = totCred > 0 ? Math.min(100, Math.round(empLiq/totCred*100)) : 0;
 
   // Execução por categoria
   const catRows = DEFAULT_CATS.map(c => {
     const cred = totalCreditosOriginais(c);
     const emp  = totalEmpenhosEXE(c);
+    // CORREÇÃO: liq inclui pagamentos-de-liquidação via totalLiquidacoesEXE
     const liq  = totalLiquidacoesEXE(c);
     const pag  = totalPagamentosEXE(c);
     const sal  = saldoCat(c);
-    const pct  = cred > 0 ? Math.min(100, Math.round(emp/cred*100)) : 0;
+    const txC  = cred > 0 ? Math.min(100, Math.round(emp/cred*100)) : 0;
     if(!cred && !emp) return null;
-    return { cat: c, cred, emp, liq, pag, sal, pct };
+    return { cat: c, cred, emp, liq, pag, sal, pct: txC };
   }).filter(Boolean);
 
   // Saldo por fonte
@@ -10270,9 +10386,10 @@ function coletarDadosRelatorio(){
     return { ptres: p, cred: e, emp: emp-anul, sal: e-(emp-anul) };
   }).filter(Boolean);
 
-  // Empenhos cadastrados (top 30)
+  // Empenhos cadastrados (top 30, ordenados por data descendente)
   const empenhos = (state.empenhosCad||[])
     .filter(e => e.status !== 'Excluído')
+    .sort((a,b)=>(b.data||'').localeCompare(a.data||''))
     .slice(0, 30);
 
   // Últimos 15 lançamentos ativos
@@ -10352,7 +10469,7 @@ async function gerarPDF(){
       doc.setFontSize(7);
       doc.setTextColor(...C.midGray);
       doc.setFont('helvetica','normal');
-      doc.text(`SUCO v1.0 · IFPI Campus São João do Piauí · COCF · ${autor}`, ML, ry);
+      doc.text(`SUCO v1.1 · IFPI Campus São João do Piauí · COCF · ${autor}`, ML, ry);
       doc.text(`Emitido em ${pdfDataHoje()} · Página ${paginaAtual}`, PW - MR, ry, {align:'right'});
       // Linha dourada no rodapé
       doc.setDrawColor(...C.goldDark);
@@ -10486,7 +10603,7 @@ async function gerarPDF(){
     doc.setTextColor(...C.gold);
     doc.setFontSize(18);
     doc.setFont('helvetica','bold');
-    doc.text('SUCO v1.0', ML+22, 21);
+    doc.text('SUCO v1.1', ML+22, 21);
 
     doc.setFontSize(9);
     doc.setFont('helvetica','normal');
@@ -10755,7 +10872,7 @@ async function gerarPDF(){
       doc.setFontSize(7);
       doc.setTextColor(...C.midGray);
       doc.setFont('helvetica','normal');
-      doc.text(`SUCO v1.0 · IFPI Campus São João do Piauí · COCF · ${autor}`, ML, ryy);
+      doc.text(`SUCO v1.1 · IFPI Campus São João do Piauí · COCF · ${autor}`, ML, ryy);
       doc.text(`Emitido em ${pdfDataHoje()} · Página ${pg} de ${totalPaginas}`, PW-MR, ryy, {align:'right'});
       doc.setDrawColor(...C.goldDark);
       doc.setLineWidth(0.3);
