@@ -2235,104 +2235,160 @@ function aeEntradas(comp){
     l.status==='Ativo'&&l.tipo==='Entrada'&&aeIsCat(l.categoria)&&(!comp||(l.competencia||'')===comp)
   );
 }
-function aeLiquidacoesRegistros(acaoId,comp){
-  const usados=new Set();
-  const principais=(state.liquidacoes||[]).filter(lq=>{
-    if(!aeAtivo(lq))return false;
-    const emp=aeEmpCadFromLiq(lq);
-    if(!aeIsCat(lq.categoria||emp?.categoria))return false;
-    const aid=aeAcaoIdFromLiq(lq);
-    if(acaoId&&aid!==acaoId)return false;
-    if(comp&&aeCompFromLiq(lq)!==comp)return false;
-    usados.add(lq.id);
+// ═══════════════════════════════════════════════════════════════════════════
+// aeLiquidacoesRegistros — fonte única de verdade para liquidado/pago por ação
+//
+// REGRA DE FONTE:
+//   Caminho A (autoritativo) — state.liquidacoes:
+//     Registros criados pelo módulo Liquidação. Possuem nEmpenho que vincula ao
+//     empenhosCad, do qual extraímos o acaoId. Usados sempre que ativos.
+//
+//   Caminho B (fallback) — state.lancamentos tipo='Liquidação':
+//     Lançamentos criados diretamente em "Registrar Saída" sem passar pelo módulo
+//     Liquidação (registros antigos ou importados). Incluídos APENAS se NÃO houver
+//     registro espelho ativo em state.liquidacoes (verificado via liquidacaoId ou
+//     via nEmpenho+valor para evitar double-count).
+//
+//   ⚠️  Lançamentos tipo='Pagamento' com liquidacaoId apontam para um registro de
+//   state.liquidacoes que já está no Caminho A — NUNCA incluídos no Caminho B.
+//
+// FILTRO DE COMPETÊNCIA:
+//   Usa a competência do empenhosCad vinculado como referência temporal,
+//   igual ao que o módulo de empenho usa, garantindo consistência.
+// ═══════════════════════════════════════════════════════════════════════════
+function aeLiquidacoesRegistros(acaoId, comp){
+  // ── Caminho A: state.liquidacoes (módulo Liquidação) ───────────────────
+  const idsLiqUsados = new Set();   // ids de state.liquidacoes já processados
+  const nEmpUsados   = new Set();   // nEmpenhos já somados (deduplicação extra)
+
+  const principais = (state.liquidacoes||[]).filter(lq=>{
+    if(!aeAtivo(lq)) return false;
+    // Vinculação com empenhosCad para obter acaoId
+    const emp = aeEmpCadFromLiq(lq);
+    // A categoria AE pode vir do próprio registro ou do empenho vinculado
+    if(!aeIsCat(lq.categoria||emp?.categoria)) return false;
+    const aid = aeAcaoIdFromLiq(lq);
+    if(acaoId && aid !== acaoId) return false;
+    // Filtro de competência: herda do empenhosCad (mesma fonte que o módulo Empenho)
+    if(comp && aeCompFromLiq(lq) !== comp) return false;
+    idsLiqUsados.add(lq.id);
+    if(lq.nEmpenho) nEmpUsados.add(lq.nEmpenho);
     return true;
   }).map(lq=>({
-    id:lq.id,
-    liquidado:valorBrutoLiquidacao(lq),
-    pago:lq.pago==='Sim'?(lq.valorLiquido||lq.valorBruto||0):0
+    id: lq.id,
+    liquidado: valorBrutoLiquidacao(lq),
+    // Pago = valor líquido apenas quando explicitamente marcado como pago
+    pago: lq.pago==='Sim' ? (lq.valorLiquido||lq.valorBruto||0) : 0
   }));
-  // ★ FIX AE: o fallback cobre lançamentos de liquidação sem registro espelho em
-  //   state.liquidacoes (ou cujo espelho foi excluído). Excluímos qualquer lançamento
-  //   cujo liquidacaoId referencia um registro EXISTENTE (ativo ou não) em liquidacoes,
-  //   pois o caminho principal já o contabiliza (se ativo) ou ele foi anulado (inativo).
-  const liquidacoesIds=new Set((state.liquidacoes||[]).map(lq=>lq.id));
-  const fallback=(state.lancamentos||[]).filter(l=>{
-    if(l.status!=='Ativo'||(l.tipo!=='Liquidação'&&l.tipo!=='Pagamento'))return false;
-    // Excluir se: (a) já processado no caminho principal, ou
-    //            (b) liquidacaoId existe em state.liquidacoes (mesmo que inativo/excluído)
-    //            → evita double-count e contagem de liquidações anuladas
-    if(l.liquidacaoId&&(usados.has(l.liquidacaoId)||liquidacoesIds.has(l.liquidacaoId)))return false;
-    const emp=aeEmpCadFromLanc(l);
-    if(!aeIsCat(l.categoria||emp?.categoria))return false;
-    const aid=aeAcaoIdFromLanc(l);
-    if(acaoId&&aid!==acaoId)return false;
-    if(comp&&aeCompFromLanc(l)!==comp)return false;
+
+  // ── Caminho B: state.lancamentos tipo='Liquidação' (fallback) ──────────
+  // Conjunto completo de ids de state.liquidacoes (ativos + inativos) para
+  // barrar lançamentos cujo espelho existe em qualquer estado.
+  const todosIdsLiq = new Set((state.liquidacoes||[]).map(lq=>lq.id));
+
+  const fallback = (state.lancamentos||[]).filter(l=>{
+    if(l.status!=='Ativo') return false;
+    // Somente lançamentos originados do módulo de saída (tipo Liquidação direto)
+    // Pagamentos com liquidacaoId = espelho de state.liquidacoes → já no Caminho A
+    if(l.tipo==='Pagamento') return false; // pagamentos sempre via Caminho A
+    if(l.tipo!=='Liquidação') return false;
+    // Excluir se há espelho em state.liquidacoes (ativo ou não) — evita double-count
+    if(l.liquidacaoId && todosIdsLiq.has(l.liquidacaoId)) return false;
+    // Excluir se o nEmpenho deste lançamento já foi contabilizado no Caminho A
+    const numEmp = l.referencia || l.numeroEmpenho || '';
+    if(numEmp && nEmpUsados.has(numEmp)) return false;
+    const emp = aeEmpCadFromLanc(l);
+    if(!aeIsCat(l.categoria||emp?.categoria)) return false;
+    const aid = aeAcaoIdFromLanc(l);
+    if(acaoId && aid !== acaoId) return false;
+    if(comp && aeCompFromLanc(l) !== comp) return false;
     return true;
   }).map(l=>({
-    id:l.id,
-    liquidado:l.tipo==='Liquidação'?(l.valor||0):0,
-    pago:l.tipo==='Pagamento'?(l.valor||0):0
+    id: l.id,
+    liquidado: l.valor||0,
+    pago: 0   // lançamentos diretos de saída sem passagem pelo módulo Liquidação não têm "pago"
   }));
+
   return principais.concat(fallback);
 }
-function aeTotaisAcao(acaoId,comp){
-  // ── Lançamentos vinculados (caminho principal) ──────────────────────────
-  const emps=(state.lancamentos||[]).filter(l=>{
-    if(!aeIsEmpenhoLanc(l))return false;
-    if(aeAcaoIdFromLanc(l)!==acaoId)return false;
-    if(comp&&aeCompFromLanc(l)!==comp)return false;
-    return true;
-  });
-  const inicialLancs=sum(emps.filter(l=>l.tipoRegistro==='INICIAL'));
-  // ★ FIX AE: removido '||!l.tipoRegistro' — lançamentos sem tipoRegistro sem empenhoCadId
-  //   reconhecido são tratados pelo fallback (inicialCad). Incluí-los aqui causava
-  //   double-count quando o fallback também os somava via empenhosCad.
-  const reforcosLancs=sum(emps.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO'));
 
-  // ── Fallback: empenhosCad AE desta ação sem lançamento INICIAL ──────────
-  // Garante que empenhos cadastrados no módulo Empenho (valorInicial + reforços)
-  // que ainda não geraram lançamento INICIAL sejam contabilizados corretamente.
-  // Regra de Ouro: empenhado = Valor Inicial do Registro + Valor Reforçado (módulo Empenho)
-  let inicialCad=0, reforcosCad=0;
-  // ★ FIX AE: conjunto de ids de lançamentos REFORCO já somados no caminho principal
-  //   para evitar double-count no fallback abaixo.
-  const reforcosJaSomados=new Set(emps.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO').map(l=>l.id));
+// ═══════════════════════════════════════════════════════════════════════════
+// aeTotaisAcao — agrega empenhado/liquidado/pago de uma ação por competência
+//
+// FONTE DOS EMPENHOS:
+//   Fonte primária  → state.empenhosCad (módulo Empenho): campo valorInicial +
+//                     lançamentos de reforço vinculados ao empenhosCad.
+//   O caminho via state.lancamentos INICIAL é usado como complemento apenas
+//   quando não há empenhosCad vinculado (lançamentos diretos sem cadastro).
+//
+// DEDUPLICAÇÃO:
+//   Um empenho é contabilizado UMA única vez. Prioridade: empenhosCad.
+//   Se há lançamento INICIAL vinculado ao empenhosCad, o valor já está em
+//   e.valorInicial — NÃO somamos o lançamento separadamente.
+//   Lançamentos INICIAIS sem empenhosCad vinculado são somados diretamente.
+//
+// FILTRO DE COMPETÊNCIA:
+//   Para empenhosCad: usa e.competencia (campo do módulo Empenho).
+//   Para lançamentos sem empenhosCad: usa l.competencia diretamente.
+// ═══════════════════════════════════════════════════════════════════════════
+function aeTotaisAcao(acaoId, comp){
+  // ── Fase 1: empenhos via empenhosCad (fonte autoritativa do módulo Empenho) ──
+  let inicialCad   = 0;
+  let reforcosCad  = 0;
+  // Rastreia ids de empenhosCad e números de empenho já contabilizados
+  const empCadIdsContab  = new Set();
+  const empCadNumsContab = new Set();
+
   (state.empenhosCad||[]).forEach(e=>{
     if(!empenhoCadAtivo(e)) return;
-    if((e.tipoEmp||'EXE')!=='EXE') return;                      // somente EXE
-    if(!aeIsCat(e.categoria||'')) return;                         // somente categoria AE
-    if(e.acaoId!==acaoId) return;                                  // somente desta ação
-    if(comp&&(e.competencia||'')!==comp) return;                   // respeita mês de competência
-    // Verifica se já existe lançamento INICIAL vinculado (para não duplicar)
-    const temLancInicial=emps.some(l=>
-      l.tipoRegistro==='INICIAL'&&
-      (l.empenhoCadId===e.id||l.referencia===e.numero||l.numeroEmpenho===e.numero)
+    if((e.tipoEmp||'EXE')!=='EXE') return;          // somente EXE no módulo AE
+    if(!aeIsCat(e.categoria||'')) return;             // somente categoria AE
+    if(e.acaoId !== acaoId) return;                   // somente desta ação
+    if(comp && (e.competencia||'') !== comp) return;  // respeita mês de competência
+
+    // Valor inicial do empenho cadastrado (fonte do módulo Empenho)
+    inicialCad += (e.valorInicial||0);
+    empCadIdsContab.add(e.id);
+    if(e.numero) empCadNumsContab.add(e.numero);
+
+    // Reforços: lançamentos vinculados a este empenhosCad com tipoRegistro REFORCO
+    const reforcosDesteEmp = (state.lancamentos||[]).filter(l=>
+      l.status==='Ativo' &&
+      l.tipo==='Empenho' &&
+      (l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO') &&
+      (l.empenhoCadId===e.id || l.referencia===e.numero || l.numeroEmpenho===e.numero)
     );
-    if(temLancInicial) return; // já computado via lançamentos
-    // Soma valorInicial do cadastro como "inicial" (sem duplicar)
-    inicialCad+=(e.valorInicial||0);
-    // ★ FIX AE: soma apenas reforços que NÃO foram já somados no caminho principal
-    //   (antes a ausência de acaoId no lançamento REFORCO os excluía do caminho principal,
-    //   mas agora que acaoId é sempre gravado, eles são somados lá — sem deduplicação
-    //   aqui causaria double-count em dados novos).
-    const reforcosDesteEmp=sum((state.lancamentos||[]).filter(l=>
-      l.status==='Ativo'&&l.tipo==='Empenho'&&
-      (l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO')&&
-      (l.empenhoCadId===e.id||l.referencia===e.numero||l.numeroEmpenho===e.numero)&&
-      !reforcosJaSomados.has(l.id)   // ★ evita double-count
-    ));
-    reforcosCad+=reforcosDesteEmp;
+    reforcosCad += reforcosDesteEmp.reduce((s,l)=>s+(l.valor||0),0);
   });
 
-  const inicial=inicialLancs+inicialCad;
-  const reforcos=reforcosLancs+reforcosCad;
-  const liqs=aeLiquidacoesRegistros(acaoId,comp);
+  // ── Fase 2: lançamentos INICIAIS SEM empenhosCad vinculado (saída direta) ──
+  // Cobre lançamentos criados antes do módulo Empenho ser implantado ou
+  // importados de sistemas externos sem cadastro de empenho.
+  let inicialLancs  = 0;
+  let reforcosLancs = 0;
+
+  (state.lancamentos||[]).forEach(l=>{
+    if(!aeIsEmpenhoLanc(l)) return;
+    if(aeAcaoIdFromLanc(l) !== acaoId) return;
+    if(comp && aeCompFromLanc(l) !== comp) return;
+    // Pular se já contabilizado via empenhosCad (evita double-count)
+    if(l.empenhoCadId && empCadIdsContab.has(l.empenhoCadId)) return;
+    const numEmp = l.referencia||l.numeroEmpenho||'';
+    if(numEmp && empCadNumsContab.has(numEmp)) return;
+    // Lançamento direto sem empenhosCad vinculado
+    if(l.tipoRegistro==='INICIAL') inicialLancs  += (l.valor||0);
+    if(l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO') reforcosLancs += (l.valor||0);
+  });
+
+  const inicial  = inicialCad  + inicialLancs;
+  const reforcos = reforcosCad + reforcosLancs;
+  const liqs = aeLiquidacoesRegistros(acaoId, comp);
   return {
     inicial,
     reforcos,
-    empenhado:inicial+reforcos,
-    liquidado:liqs.reduce((s,l)=>s+l.liquidado,0),
-    pago:liqs.reduce((s,l)=>s+l.pago,0)
+    empenhado : inicial + reforcos,
+    liquidado : liqs.reduce((s,l)=>s+l.liquidado, 0),
+    pago      : liqs.reduce((s,l)=>s+l.pago,      0)
   };
 }
 function aePrevistoAcao(a,comp){
@@ -5209,15 +5265,13 @@ function renderAeDetalhe(){
   const emp=tAcao.empenhado;
   const liq=tAcao.liquidado;
   const pag=tAcao.pago;
-  const totRecebido=sum(aeEntradas(comp));
   const liqPag=liq+pag;
   const saldoNEmp=totPrev-emp;
   const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   el.innerHTML+=`
-    <div class="kpi-grid" style="grid-template-columns:repeat(6,1fr);margin-bottom:14px">
+    <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
       <div class="kpi accent-gold"><div class="kpi-label">Previsto Total</div><div class="kpi-value text-gold" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(totPrev)}</div></div>
-      <div class="kpi accent-green"><div class="kpi-label">Crédito Recebido AE</div><div class="kpi-value text-green" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(totRecebido)}</div><div class="kpi-sub">categoria AE</div></div>
-      <div class="kpi accent-blue"><div class="kpi-label">Empenhado</div><div class="kpi-value text-blue" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(emp)}</div></div>
+      <div class="kpi accent-blue"><div class="kpi-label">Empenhado</div><div class="kpi-value text-blue" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(emp)}</div><div class="kpi-sub">inic: ${fmtBR(tAcao.inicial)} · reforço: ${fmtBR(tAcao.reforcos)}</div></div>
       <div class="kpi accent-amber"><div class="kpi-label">Liquidado / Pago</div><div class="kpi-value" style="color:var(--amber);font-size:clamp(13px,1.8vw,22px)">${fmtBR(liqPag)}</div><div class="kpi-sub">liq: ${fmtBR(liq)} · pag: ${fmtBR(pag)}</div></div>
       <div class="kpi ${saldoNEmp<0?'accent-red':'accent-green'}"><div class="kpi-label">Saldo Não Empenhado</div><div class="kpi-value ${saldoNEmp<0?'text-red':'text-green'}" style="font-size:clamp(13px,1.8vw,22px)">${fmtBR(saldoNEmp)}</div></div>
       <div class="kpi accent-purple"><div class="kpi-label">Tipo</div><div class="kpi-value" style="color:var(--purple);font-size:14px;padding-top:4px">${a.tipo||'Benefício'}</div></div>
@@ -5231,17 +5285,22 @@ function renderAeDetalhe(){
           — independente da data de alteração ou sincronização.
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-        <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:6px 14px;background:var(--bg4);border-radius:8px;border:1px solid var(--border2)">
-          <div style="font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase">MÊS</div>
-          <div style="font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;text-align:right">PREVISTO</div>
-          <div style="font-size:9.5px;font-weight:700;color:var(--teal);letter-spacing:.1em;text-transform:uppercase;text-align:right">CRÉDITO AE</div>
-          <div style="font-size:9.5px;font-weight:700;color:var(--exe);letter-spacing:.1em;text-transform:uppercase;text-align:right">EMP.INICIAL</div>
-          <div style="font-size:9.5px;font-weight:700;color:var(--green2);letter-spacing:.1em;text-transform:uppercase;text-align:right">REFORÇOS</div>
-          <div style="font-size:9.5px;font-weight:700;color:var(--blue2);letter-spacing:.1em;text-transform:uppercase;text-align:right">TOTAL EMP.</div>
-          <div style="font-size:9.5px;font-weight:700;color:var(--amber2);letter-spacing:.1em;text-transform:uppercase;text-align:right">LIQUIDADO</div>
-          <div style="font-size:9.5px;font-weight:700;color:var(--green2);letter-spacing:.1em;text-transform:uppercase;text-align:right">PAGO</div>
-          <div style="font-size:9.5px;font-weight:700;color:var(--gold2);letter-spacing:.1em;text-transform:uppercase;text-align:right">SALDO</div>
+      <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;overflow:hidden;margin-top:0">
+      <div style="display:flex;align-items:center;gap:10px;padding:13px 16px;background:linear-gradient(135deg,rgba(68,138,255,.10),rgba(68,138,255,.03));border-bottom:1px solid var(--blue-border)">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px rgba(68,138,255,.5)"></div>
+        <span style="font-size:13px;font-weight:700;color:var(--blue);letter-spacing:.04em;text-transform:uppercase">Detalhe Mensal — ${a.nome||a.tipo||'Ação'}</span>
+        <span style="font-size:10px;color:var(--text3);margin-left:auto">Previsto · Empenho · Liquidado · Pago · Saldo</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <div style="display:grid;grid-template-columns:100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:9px 16px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border-bottom:2px solid var(--border3)">
+          <div style="font-size:9px;font-weight:800;color:var(--text3);letter-spacing:.14em;text-transform:uppercase">MÊS</div>
+          <div style="font-size:9px;font-weight:800;color:var(--gold);letter-spacing:.14em;text-transform:uppercase;text-align:right">PREVISTO</div>
+          <div style="font-size:9px;font-weight:800;color:var(--exe);letter-spacing:.14em;text-transform:uppercase;text-align:right">EMP.INICIAL</div>
+          <div style="font-size:9px;font-weight:800;color:var(--green2);letter-spacing:.14em;text-transform:uppercase;text-align:right">REFORÇOS</div>
+          <div style="font-size:9px;font-weight:800;color:var(--blue2);letter-spacing:.14em;text-transform:uppercase;text-align:right;background:rgba(68,138,255,.07);border-radius:4px;padding:2px 4px">TOTAL EMP.</div>
+          <div style="font-size:9px;font-weight:800;color:var(--amber);letter-spacing:.14em;text-transform:uppercase;text-align:right">LIQUIDADO</div>
+          <div style="font-size:9px;font-weight:800;color:var(--green);letter-spacing:.14em;text-transform:uppercase;text-align:right">PAGO</div>
+          <div style="font-size:9px;font-weight:800;color:var(--gold2);letter-spacing:.14em;text-transform:uppercase;text-align:right">SALDO</div>
         </div>
         ${(()=>{
           const MESES_ABR2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -5250,7 +5309,6 @@ function renderAeDetalhe(){
             const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
             const mesForaDoFiltro=comp&&prefix!==comp;
             const previstoM=mesForaDoFiltro?0:v;
-            const recM=mesForaDoFiltro?0:sum(aeEntradas(prefix));
             const tMes=mesForaDoFiltro?{inicial:0,reforcos:0,empenhado:0,liquidado:0,pago:0}:aeTotaisAcao(a.id,prefix);
             const inicialM=tMes.inicial;
             const reforcoM=tMes.reforcos;
@@ -5258,55 +5316,52 @@ function renderAeDetalhe(){
             const liqM=tMes.liquidado;
             const pagM=tMes.pago;
             const saldoM=previstoM-empM;
-            const temDados=previstoM>0||recM>0||empM>0||liqM>0||pagM>0;
+            const temDados=previstoM>0||empM>0||liqM>0||pagM>0;
             const pct=previstoM>0?Math.min(100,Math.round(empM/previstoM*100)):0;
             const pctColor=pct>=80?'var(--green)':pct>=40?'var(--amber)':'var(--red)';
             const mesAbr=MESES_ABR2[i];
             if(!temDados){
-              return '<div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:8px 14px;border-radius:8px;opacity:.3">'
+              return '<div style="display:grid;grid-template-columns:100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:7px 16px;border-radius:0;border:1px solid transparent;border-top:1px solid var(--border);opacity:.25">'
                 +'<div style="font-size:11px;font-weight:600;color:var(--text4)">'+mesAbr+'/'+anoAtual+'</div>'
-                +'<div style="text-align:right;font-size:11px;color:var(--text4)">—</div>'.repeat(8)
+                +'<div style="text-align:right;font-size:11px;color:var(--text4)">—</div>'.repeat(7)
                 +'</div>';
             }
-            const fmtV=val=>val>0?fmtBR(val):'—';
             const colV=(val,clr)=>val>0
               ?'<span style="font-size:12px;font-weight:700;color:'+clr+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(val)+'</span>'
               :'<span style="color:var(--text4);font-size:11px">—</span>';
             const saldoColor=saldoM<0?'var(--red)':'var(--gold)';
             const saldoVal=(previstoM>0||empM>0)?'<span style="font-size:12px;font-weight:800;color:'+saldoColor+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(saldoM)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>';
             const barHtml=(previstoM>0||empM>0)
-              ?'<div style="padding:0 14px 8px;display:flex;align-items:center;gap:8px"><div style="flex:1;height:3px;background:var(--bg5);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px;transition:width .4s"></div></div><span style="font-size:9px;color:'+pctColor+';font-weight:700;white-space:nowrap">'+pct+'% emp.</span></div>'
+              ?'<div style="padding:0 16px 8px;display:flex;align-items:center;gap:8px"><div style="flex:1;height:3px;background:var(--bg5);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+pctColor+';border-radius:3px;transition:width .4s"></div></div><span style="font-size:9px;color:'+pctColor+';font-weight:700;white-space:nowrap">'+pct+'% emp.</span></div>'
               :'';
-            return '<div style="border-radius:10px;border:1px solid var(--border2);background:var(--bg3);overflow:hidden;transition:border-color .15s" onmouseover="this.style.borderColor=\'var(--exe-border)\'" onmouseout="this.style.borderColor=\'var(--border2)\'">'
-              +'<div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:10px 14px;align-items:center">'
+            const zebraBase=i%2===0?'rgba(255,255,255,.014)':'transparent';
+            return '<div style="border-top:1px solid var(--border);background:'+zebraBase+';overflow:hidden;transition:background .12s" onmouseover="this.style.background=\'rgba(68,138,255,.05)\'" onmouseout="this.style.background=\''+zebraBase+'\'">'
+              +'<div style="display:grid;grid-template-columns:100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:10px 16px;align-items:center">'
               +'<div><div style="font-size:12px;font-weight:700;color:var(--gold)">'+mesAbr+'</div><div style="font-size:9px;color:var(--text4)">'+anoAtual+'</div></div>'
               +'<div style="text-align:right">'+(previstoM>0?'<span style="font-size:12px;font-weight:600;color:var(--text2);font-family:\'IBM Plex Mono\',monospace">'+fmtBR(previstoM)+'</span>':'<span style="color:var(--text4);font-size:11px">—</span>')+'</div>'
-              +'<div style="text-align:right">'+colV(recM,'var(--teal)')+'</div>'
               +'<div style="text-align:right">'+colV(inicialM,'var(--exe)')+'</div>'
               +'<div style="text-align:right">'+colV(reforcoM,'var(--green2)')+'</div>'
-              +'<div style="text-align:right">'+colV(empM,'var(--blue2)')+'</div>'
+              +'<div style="text-align:right;background:rgba(68,138,255,.05);border-radius:4px;padding:2px 4px">'+colV(empM,'var(--blue2)')+'</div>'
               +'<div style="text-align:right">'+colV(liqM,'var(--amber)')+'</div>'
               +'<div style="text-align:right">'+colV(pagM,'var(--green)')+'</div>'
               +'<div style="text-align:right">'+saldoVal+'</div>'
               +'</div>'+barHtml+'</div>';
           }).join('');
         })()}
-        <div style="display:grid;grid-template-columns:90px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:12px 14px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border:2px solid var(--gold-border);border-radius:10px;margin-top:4px">
+        <div style="display:grid;grid-template-columns:100px 1fr 1fr 1fr 1fr 1fr 1fr 1fr;gap:0;padding:13px 16px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border:1px solid var(--border2);border-top:2px solid var(--gold-border);border-radius:0 0 10px 10px">
           <div style="font-size:11px;font-weight:800;color:var(--gold);letter-spacing:.06em">TOTAL</div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--gold);font-family:'IBM Plex Mono',monospace">${fmtBR(totPrev)}</span></div>
-          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--teal);font-family:'IBM Plex Mono',monospace">${fmtBR(totRecebido)}</span></div>
-          <div style="text-align:right;grid-column:span 2"></div>
-          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--blue2);font-family:'IBM Plex Mono',monospace">${fmtBR(emp)}</span></div>
+          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--exe);font-family:'IBM Plex Mono',monospace">${fmtBR(tAcao.inicial)}</span></div>
+          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--green2);font-family:'IBM Plex Mono',monospace">${fmtBR(tAcao.reforcos)}</span></div>
+          <div style="text-align:right;background:rgba(68,138,255,.07);border-radius:4px;padding:2px 4px"><span style="font-size:12px;font-weight:800;color:var(--blue2);font-family:'IBM Plex Mono',monospace">${fmtBR(emp)}</span></div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--amber);font-family:'IBM Plex Mono',monospace">${fmtBR(liq)}</span></div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--green);font-family:'IBM Plex Mono',monospace">${fmtBR(pag)}</span></div>
           <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:${saldoNEmp<0?'var(--red)':'var(--gold)'};font-family:'IBM Plex Mono',monospace">${fmtBR(saldoNEmp)}</span></div>
         </div>
       </div>
-    </div>`;
+      </div>
+    </div>`; /* end renderAeDetalhe */
 }
-
-// ═══════════════════════════════════════════════════════════
-//  CONTRATOS — DETALHE POR CONTRATO
 // ═══════════════════════════════════════════════════════════
 function renderContratoDetalhe(){
   const el=document.getElementById('contratos-detalhe');
