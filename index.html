@@ -1857,6 +1857,39 @@ function carregar(){
       if(_aeVinc>0)
         console.info('Migração AE: '+_aeVinc+' lançamento(s) com acaoId/empenhoCadId restaurado/atualizado.');
 
+      // ── ★ MIGRAÇÃO HISTÓRICA CONTRATOS CONTINUADOS ────────────────────────────
+      // Espelha a lógica da migração AE para empenhos vinculados a contratos.
+      // Garante que lançamentos históricos (INICIAL, REFORCO, Liquidação, Pagamento)
+      // de empenhos com contratoId recebam empenhoCadId e referenciaId corretos,
+      // tornando-os visíveis em sumLancsByContratoEXE (Método 1 e Método 2).
+      // NÃO altera lançamentos que já possuem os campos corretamente preenchidos.
+      let _ctVinc=0;
+      const _CATS_CT=new Set(['CONTRATOS','APOIO AO ENSINO']);
+      (state.empenhosCad||[]).forEach(e=>{
+        if(!e.contratoId||e.status==='Excluído') return;
+        if(!_CATS_CT.has((e.categoria||'').toUpperCase())) return;
+        state.lancamentos.forEach(l=>{
+          if(l.status!=='Ativo') return;
+          // Identificar lançamentos filhos do empenho (mesmo critério da migração AE)
+          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.numeroEmpenho===e.numero)||(l.referenciaId===e.id);
+          if(!isFilho) return;
+          let mudou=false;
+          // 1) Garantir empenhoCadId sempre presente (habilita Método 2 em sumLancsByContratoEXE)
+          if(!l.empenhoCadId){ l.empenhoCadId=e.id; mudou=true; }
+          // 2) Para Empenho (INICIAL/REFORCO): se referenciaId não aponta para o contrato, corrigir
+          //    Isso habilita Método 1 em sumLancsByContratoEXE para lançamentos históricos
+          if((l.tipo==='Empenho')&&l.referenciaId!==e.contratoId){
+            l.referenciaId=e.contratoId; mudou=true;
+          }
+          // 3) Herdar tipoRecurso do empenho cadastrado se ausente
+          if(!l.tipoRecurso){ l.tipoRecurso=e.tipoEmp||'EXE'; mudou=true; }
+          if(mudou) _ctVinc++;
+        });
+      });
+      if(_ctVinc>0)
+        console.info('Migração CONTRATOS: '+_ctVinc+' lançamento(s) histórico(s) reindexado(s) para contratos continuados.');
+      // ── FIM MIGRAÇÃO HISTÓRICA CONTRATOS CONTINUADOS ─────────────────────────
+
       // Log de migração automática
       console.log('✅ Categorias normalizadas automaticamente ao carregar');
       console.log('✅ Usando DEFAULT_CATS em todos os módulos para garantir consistência');
@@ -2018,6 +2051,30 @@ function importarJSON(evt){
           if(e.acaoId&&!l.acaoId) l.acaoId=e.acaoId;
         });
       });
+      // ── ★ MIGRAÇÃO HISTÓRICA CONTRATOS CONTINUADOS (importação) ──────────────
+      // Espelho do bloco de loadData: garante que dados importados de versões anteriores
+      // recebam empenhoCadId e referenciaId corretos para sumLancsByContratoEXE.
+      let _impCtVinc=0;
+      const _IMP_CATS_CT=new Set(['CONTRATOS','APOIO AO ENSINO']);
+      (state.empenhosCad||[]).forEach(e=>{
+        if(!e.contratoId||e.status==='Excluído') return;
+        if(!_IMP_CATS_CT.has((e.categoria||'').toUpperCase())) return;
+        state.lancamentos.forEach(l=>{
+          if(l.status!=='Ativo') return;
+          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.numeroEmpenho===e.numero)||(l.referenciaId===e.id);
+          if(!isFilho) return;
+          let mudou=false;
+          if(!l.empenhoCadId){ l.empenhoCadId=e.id; mudou=true; }
+          if((l.tipo==='Empenho')&&l.referenciaId!==e.contratoId){
+            l.referenciaId=e.contratoId; mudou=true;
+          }
+          if(!l.tipoRecurso){ l.tipoRecurso=e.tipoEmp||'EXE'; mudou=true; }
+          if(mudou) _impCtVinc++;
+        });
+      });
+      if(_impCtVinc>0)
+        console.info('Importação CONTRATOS: '+_impCtVinc+' lançamento(s) histórico(s) reindexado(s) para contratos continuados.');
+      // ── FIM MIGRAÇÃO HISTÓRICA CONTRATOS CONTINUADOS (importação) ────────────
       const resumo = {
         lancamentos: state.lancamentos.length,
         contratos: state.contratos.length,
@@ -2250,14 +2307,20 @@ function sumLancsByContratoEXE(tipo, contratoId){
     l.status === 'Ativo' && l.tipo === tipo && l.referenciaId === contratoId && isEXE(l)
   );
   // Método 2: via empenho cadastrado vinculado ao contrato + filtro EXE
-  const empsDoContrato = (state.empenhosCad || [])
-    .filter(e => e.contratoId === contratoId && e.status !== 'Excluído' && (e.tipoEmp || 'EXE') === 'EXE')
-    .map(e => e.id);
+  const _empsCT = (state.empenhosCad || [])
+    .filter(e => e.contratoId === contratoId && e.status !== 'Excluído' && (e.tipoEmp || 'EXE') === 'EXE');
+  const empsDoContrato = _empsCT.map(e => e.id);
+  // ★ Método 3 (fallback histórico): resolução por número do empenho para lançamentos legados
+  //   sem empenhoCadId preenchido. Garante que registros antigos de qualquer tipo sejam incluídos.
+  const empsNumerosDoContrato = _empsCT.map(e => e.numero).filter(Boolean);
   const porEmpCad = empsDoContrato.length ? state.lancamentos.filter(l => {
     if (l.status !== 'Ativo' || l.tipo !== tipo || !isEXE(l)) return false;
-    if (tipo === 'Empenho') return empsDoContrato.includes(l.empenhoCadId);
+    if (tipo === 'Empenho') return empsDoContrato.includes(l.empenhoCadId) ||
+      empsNumerosDoContrato.includes(l.referencia) || empsNumerosDoContrato.includes(l.numeroEmpenho);
     if (tipo === 'Liquidação' || tipo === 'Pagamento')
-      return empsDoContrato.includes(l.referenciaId) || empsDoContrado_via_liq(l, empsDoContrato);
+      return empsDoContrato.includes(l.referenciaId) || empsDoContrado_via_liq(l, empsDoContrato) ||
+        empsNumerosDoContrato.includes(l.referencia) || empsNumerosDoContrato.includes(l.nEmpenho) ||
+        empsNumerosDoContrato.includes(l.nEmpenhoCosip||'__NONE__');
     return false;
   }) : [];
   const ids = new Set([...porRef.map(x => x.id), ...porEmpCad.map(x => x.id)]);
@@ -2549,6 +2612,92 @@ function aeTotaisGeral(comp){
   },{previsto:0,inicial:0,reforcos:0,empenhado:0,liquidado:0,pago:0,recebido:sum(aeEntradas(comp))});
 }
 function sum(arr){return arr.reduce((s,l)=>s+(l.valor||0),0)}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ctTotaisContrato — agrega empenhado/liquidado/pago de um contrato
+//
+// FONTE DOS EMPENHOS (igual a aeTotaisAcao — fonte autoritativa):
+//   Fase 1 → state.empenhosCad com contratoId == contratoId:
+//            valorInicial (campo do módulo Empenho) +
+//            lançamentos tipoRegistro REFORCO vinculados ao empenho.
+//   Fase 2 → lançamentos INICIAL sem empenhosCad vinculado (dados legados
+//            sem cadastro de empenho — compatibilidade retroativa).
+//
+// FILTRO DE COMPETÊNCIA:
+//   Quando comp é informado (ex: '2026-05'), filtra apenas dados daquele mês.
+//   Para empenhosCad: usa e.competencia.
+//   Para reforços / lançamentos diretos: usa l.competencia.
+// ═══════════════════════════════════════════════════════════════════════════
+function ctTotaisContrato(contratoId, comp){
+  const CATS_CT = new Set(['CONTRATOS','APOIO AO ENSINO']);
+  let inicialCad  = 0;
+  let reforcosCad = 0;
+  const empCadIdsContab  = new Set();
+  const empCadNumsContab = new Set();
+
+  // ── Fase 1: empenhosCad vinculados ao contrato (fonte autoritativa) ──────
+  (state.empenhosCad||[]).forEach(e=>{
+    if(!empenhoCadAtivo(e)) return;
+    if((e.tipoEmp||'EXE')!=='EXE') return;
+    if(!CATS_CT.has((e.categoria||'').toUpperCase())) return;
+    if(e.contratoId !== contratoId) return;
+    if(comp && (e.competencia||'') !== comp) return;
+    inicialCad += (e.valorInicial||0);
+    empCadIdsContab.add(e.id);
+    if(e.numero) empCadNumsContab.add(e.numero);
+    // Reforços: lançamentos REFORCO vinculados a este empenho
+    (state.lancamentos||[]).forEach(l=>{
+      if(l.status!=='Ativo'||l.tipo!=='Empenho') return;
+      if(l.tipoRegistro!=='REFORCO'&&l.tipoRegistro!=='REFORÇO') return;
+      if(comp && (l.competencia||'')!==comp) return;
+      if(l.empenhoCadId===e.id||l.referencia===e.numero||l.numeroEmpenho===e.numero)
+        reforcosCad += (l.valor||0);
+    });
+  });
+
+  // ── Fase 2: lançamentos INICIAL sem empenhosCad vinculado (legados) ──────
+  let inicialLancs  = 0;
+  let reforcosLancs = 0;
+  (state.lancamentos||[]).forEach(l=>{
+    if(l.status!=='Ativo'||l.tipo!=='Empenho') return;
+    if((l.tipoRecurso||'EXE')!=='EXE') return;
+    // Vínculo ao contrato: referenciaId direto OU empenhoCadId já contabilizado
+    const vinculado = l.referenciaId===contratoId ||
+      (l.empenhoCadId && empCadIdsContab.has(l.empenhoCadId)) ||
+      ((l.referencia||l.numeroEmpenho) && empCadNumsContab.has(l.referencia||l.numeroEmpenho||''));
+    if(!vinculado) return;
+    if(comp && (l.competencia||'')!==comp) return;
+    // Pular se já contabilizado via empenhosCad (evitar double-count)
+    if(l.empenhoCadId && empCadIdsContab.has(l.empenhoCadId)) return;
+    const numEmp = l.referencia||l.numeroEmpenho||'';
+    if(numEmp && empCadNumsContab.has(numEmp)) return;
+    if(l.tipoRegistro==='INICIAL'||!l.tipoRegistro) inicialLancs  += (l.valor||0);
+    if(l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO') reforcosLancs += (l.valor||0);
+  });
+
+  const inicial  = inicialCad  + inicialLancs;
+  const reforcos = reforcosCad + reforcosLancs;
+
+  // ── Liquidado / Pago: via sumLancsByContratoEXE (mantém lógica existente) ─
+  const _liqArr = sumLancsByContratoEXE('Liquidação', contratoId);
+  const _pagArr = sumLancsByContratoEXE('Pagamento',  contratoId);
+  const _liqFilt = comp ? _liqArr.filter(l=>(l.competencia||'')===comp) : _liqArr;
+  const _pagFilt = comp ? _pagArr.filter(l=>(l.competencia||'')===comp) : _pagArr;
+  const _liqDedIds = new Set();
+  const _liqDedup = [..._liqFilt,..._pagFilt].filter(l=>{
+    if(_liqDedIds.has(l.id)) return false; _liqDedIds.add(l.id); return true;
+  });
+  return {
+    inicial,
+    reforcos,
+    empenhado : inicial + reforcos,
+    liquidado : sum(_liqDedup),
+    pago      : sum(_pagFilt)
+  };
+}
+// Atalho: retorna apenas o valor total empenhado de um contrato (sem filtro de competência)
+function ctEmpenhado(contratoId){ return ctTotaisContrato(contratoId).empenhado; }
+// ── FIM ctTotaisContrato ─────────────────────────────────────────────────
 // Créditos originais (SOMENTE entradas — Anulação reduz empenho, não aumenta crédito)
 function totalCreditosOriginais(cat){
   if(cat)return sum(getLancsAtivos('Entrada',cat));
@@ -4203,6 +4352,16 @@ function excluirLancamento(id){
     else if(_saidaTab==='transferencia')renderTransferencias();
     else if(_saidaTab==='liquidacao')renderLiqPags();
     renderEntradas();
+    // ★ CORREÇÃO 005 — Atualizar módulo Contratos Continuados se estiver aberto
+    (function(){
+      const _pg=document.getElementById('page-contratos');
+      if(!_pg||!_pg.classList.contains('active'))return;
+      const _tab=(document.querySelector('.mtab.active[id^="ct-tab-"]')||{}).id||'';
+      if(_tab==='ct-tab-lista')renderContratoLista();
+      else if(_tab==='ct-tab-execucao')renderContratoExec();
+      else if(_tab==='ct-tab-dashboard')renderContratoDash();
+      else if(_tab==='ct-tab-detalhe')renderContratoDetalhe();
+    })();
   });
 }
 
@@ -4235,7 +4394,7 @@ function renderContratoLista(){
       else if(diasVenc<=30)alertaHtml=`<span class="ct-alerta vencendo">⏰ Vence em ${diasVenc}d</span>`;
       else alertaHtml=`<span class="ct-alerta ok">✓ ${diasVenc}d</span>`;
     }
-    const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
+    const empC=ctEmpenhado(c.id);
     // CORREÇÃO: liqC = liquidado total (Liquidação + Pagamento-de-liquidação), deduplicado por ID.
     const _ctLiqLancs=sumLancsByContratoEXE('Liquidação',c.id);
     const _ctPagLancs=sumLancsByContratoEXE('Pagamento',c.id);
@@ -4267,7 +4426,7 @@ function renderContratoLista(){
 function renderContratoExec(){
   const cts=state.contratos.filter(c=>c.status!=='Excluído');
   const rows=cts.map(c=>{
-    const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
+    const empC=ctEmpenhado(c.id);
     // CORREÇÃO: liqC = total liquidado (Liquidação + Pagamento de liquidação), deduplicado.
     const _execLiq=sumLancsByContratoEXE('Liquidação',c.id);
     const _execPag=sumLancsByContratoEXE('Pagamento',c.id);
@@ -4289,7 +4448,7 @@ function renderContratoExec(){
       <td class="r">${empC>0?semaforo(pLiqEmp):'—'}</td>
     </tr>`;
   });
-  document.getElementById('contratos-execucao').innerHTML=`<div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Execução por contrato</div></div><div class="scroll-h"><table><thead><tr><th>Contrato</th><th class="r">Valor Total</th><th class="r">Empenhado</th><th class="r">Liquidado</th><th class="r">Pago</th><th class="r">Saldo</th><th class="r">% Empenho</th><th class="r">% Liq./Pag.</th></tr></thead><tbody>${rows.length?rows.join(''):'<tr class="empty-row"><td colspan="8">Nenhum contrato</td></tr>'}</tbody></table></div></div>`;
+  document.getElementById('contratos-execucao').innerHTML=`<div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Execução por contrato</div></div><div class="scroll-h"><table><thead><tr><th>Contrato</th><th class="r">Valor Total</th><th class="r">Empenhado</th><th class="r">Liquidado</th><th class="r">Pago</th><th class="r">Saldo p/ Empenhar</th><th class="r">% Empenho</th><th class="r">% Liq./Pag.</th></tr></thead><tbody>${rows.length?rows.join(''):'<tr class="empty-row"><td colspan="8">Nenhum contrato</td></tr>'}</tbody></table></div></div>`;
 }
 function renderContratoDash(){
   const cts=state.contratos.filter(c=>c.status!=='Excluído');
@@ -4307,8 +4466,8 @@ function renderContratoDash(){
   // Total Recebido — Apoio ao Ensino (Registrar Crédito, categoria APOIO AO ENSINO)
   const totRecApoio=sum(getLancsAtivos('Entrada','APOIO AO ENSINO'));
 
-  // Total Empenhado EXE (contratos + apoio ao ensino)
-  const totEmpContratosEXE=sum(state.lancamentos.filter(l=>empEXEonly(l)&&(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO')));
+  // Total Empenhado EXE (contratos + apoio ao ensino) — fonte autoritativa: valorInicial + reforços
+  const totEmpContratosEXE=cts.reduce((s,c)=>s+ctEmpenhado(c.id),0);
   // CORREÇÃO: totLiqContratosEXE — inclui lançamentos tipo Liquidação E Pagamento com liquidacaoId
   // (quando uma liquidação é marcada como paga, tipo muda Liquidação→Pagamento+liquidacaoId)
   const _dashLiqCatFilter=l=>(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO')&&(l.tipoRecurso||'EXE')==='EXE'&&l.status==='Ativo';
@@ -4336,13 +4495,9 @@ function renderContratoDash(){
       const arr=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
       return s+(arr[mi]||0);
     },0);
-    // Empenhado pelo mês de competência (EXE only) — fonte de verdade: campo competencia
-    // RAP excluído via empEXEonly(); fallback por data removido — competência é obrigatória
-    const empM=sum(state.lancamentos.filter(l=>{
-      if(!empEXEonly(l))return false;
-      if(!(l.categoria==='CONTRATOS'||l.categoria==='APOIO AO ENSINO'))return false;
-      return (l.competencia||'')===prefixo;
-    }));
+    // Empenhado pelo mês de competência — fonte autoritativa: ctTotaisContrato(id, prefixo)
+    // Soma valorInicial + reforços de cada contrato filtrado por competência
+    const empM=cts.reduce((s,c)=>s+ctTotaisContrato(c.id,prefixo).empenhado,0);
     return{prev,empM};
   });
   const totDistribPrev=distribMensal.reduce((s,d)=>s+d.prev,0);
@@ -4373,7 +4528,7 @@ function renderContratoDash(){
       </tbody></table></div>
     </div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Situação dos Contratos</div></div><table><thead><tr><th>Empresa</th><th>N° Contrato</th><th class="r">% Execução</th><th class="r">Saldo Disponível</th><th>Situação</th></tr></thead><tbody>${cts.map(c=>{
-      const emp=sum(sumLancsByContratoEXE('Empenho',c.id));
+      const emp=ctEmpenhado(c.id);
       const saldo=(c.valorTotal||0)-emp;
       const pct=c.valorTotal>0?Math.round(emp/c.valorTotal*100):0;
       const sit=pct>=80?'<span class="ct-alerta ok">🟢 Normal</span>':pct>=50?'<span class="ct-alerta vencendo">🟡 Atenção</span>':'<span class="ct-alerta vencido" style="background:transparent;border:none">🔴 Crítico</span>';
@@ -5625,7 +5780,7 @@ function renderContratoDetalhe(){
   if(!c)return;
   const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
   const totPrevMensal=pm.reduce((s,v)=>s+v,0);
-  const emp=sum(sumLancsByContratoEXE('Empenho',c.id));
+  const emp=ctEmpenhado(c.id);
   // CORREÇÃO: deduplicar liq/pag para evitar double-count quando Liquidação vira Pagamento
   const _detLiqLancs=sumLancsByContratoEXE('Liquidação',c.id);
   const _detPagLancs=sumLancsByContratoEXE('Pagamento',c.id);
@@ -5679,12 +5834,11 @@ function renderContratoDetalhe(){
             const prefix=anoAtual+'-'+String(i+1).padStart(2,'0');
             const filtMes=l=>l.competencia===prefix;
             const empsDoMes=sumLancsByContratoEXE('Empenho',c.id).filter(filtMes);
-            const inicialM=sum(empsDoMes.filter(l=>l.tipoRegistro==='INICIAL'));
-            // CORREÇÃO: exclui INICIAL dos reforços para evitar dupla contagem.
-            // Lançamentos sem tipoRegistro (legados) são tratados como REFORCO somente se
-            // NÃO forem INICIAL, garantindo que empM = inicialM + reforcoM sem sobreposição.
-            const reforcoM=sum(empsDoMes.filter(l=>l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO'||(l.tipo==='Empenho'&&!l.tipoRegistro)));
-            const empM=inicialM+reforcoM;
+            // ★ FONTE AUTORITATIVA: ctTotaisContrato por competência — usa valorInicial + reforços
+            const _ctMes=ctTotaisContrato(c.id, prefix);
+            const inicialM=_ctMes.inicial;
+            const reforcoM=_ctMes.reforcos;
+            const empM=_ctMes.empenhado;
             // CORREÇÃO: deduplicação de liqM — Pagamento com liquidacaoId já representa
             // uma Liquidação que teve o tipo alterado; ambos NÃO coexistem no mesmo período
             // mas a fusão de dois arrays pode somar duplicatas. Usar Set de IDs para deduplicar.
@@ -5762,7 +5916,7 @@ function gerarRelatorioContratos(){
         <tbody>
           ${cts.map(c=>{
             const pm=Array.isArray(c.previstoMensalArr)?c.previstoMensalArr:Array(12).fill(0);
-            const empC=sum(sumLancsByContratoEXE('Empenho',c.id));
+            const empC=ctEmpenhado(c.id);
             // CORREÇÃO: liqC — usa apenas Liquidação + Pagamento deduplicados por ID.
             // Quando uma Liquidação é marcada como paga, seu tipo muda para Pagamento
             // com liquidacaoId — nunca existe duplicata real. Mas ao unir os dois arrays
@@ -6435,6 +6589,7 @@ function abrirModalReforco(empCadId){
       toast('Saldo insuficiente em '+catRef+(e.categoria==='COSIP'?' (pool COSIP+Energia)':'')+': '+fmtBR(saldoCategoria),'warn');
       return false;
     }
+    // ★ CORREÇÃO CRÍTICA 001c — Propagar contratoId do empenho para reforço
     const l={
       id: shortId('R'),
       tipo: 'Empenho',
@@ -6455,6 +6610,8 @@ function abrirModalReforco(empCadId){
       pi: e.pi||'',
       fornNome: e.fornNome||'',
       referencia: e.numero,
+      // ★ CORREÇÃO: referenciaId preenchido com contratoId quando vinculado
+      referenciaId: e.contratoId || e.id,
       status: 'Ativo',
       ts: new Date().toISOString()
     };
@@ -6466,6 +6623,13 @@ function abrirModalReforco(empCadId){
     if(typeof renderDashboard==='function')renderDashboard();
     if(typeof renderEntradas==='function')renderEntradas();
     if(typeof renderCatGrid==='function')renderCatGrid();
+    // ★ CORREÇÃO CRÍTICA 001d — Atualizar módulo CONTRATOS se empenho vinculado
+    if(e.contratoId){
+      if(typeof renderContratoLista === 'function') try{ renderContratoLista(); }catch(ex){}
+      if(typeof renderContratoDetalhe === 'function') try{ renderContratoDetalhe(); }catch(ex){}
+      if(typeof renderContratoExec === 'function') try{ renderContratoExec(); }catch(ex){}
+      if(typeof renderContratoDash === 'function') try{ renderContratoDash(); }catch(ex){}
+    }
     toast('✅ Reforço de '+fmtBR(valor)+' adicionado!','success');
   });
   const now=new Date().toISOString().slice(0,10);
@@ -6540,6 +6704,13 @@ function abrirModalAnular(empCadId){
     if(typeof renderDashboard==='function')renderDashboard();
     if(typeof renderEntradas==='function')renderEntradas();
     if(typeof renderCatGrid==='function')renderCatGrid();
+    // ★ CORREÇÃO CRÍTICA 003a — Atualizar módulo CONTRATOS se empenho vinculado
+    if(e.contratoId){
+      if(typeof renderContratoLista === 'function') try{ renderContratoLista(); }catch(ex){}
+      if(typeof renderContratoDetalhe === 'function') try{ renderContratoDetalhe(); }catch(ex){}
+      if(typeof renderContratoExec === 'function') try{ renderContratoExec(); }catch(ex){}
+      if(typeof renderContratoDash === 'function') try{ renderContratoDash(); }catch(ex){}
+    }
     toast('✅ Anulação de '+fmtBR(valor)+' registrada!','success');
   });
   const now=new Date().toISOString().slice(0,10);
@@ -8585,6 +8756,16 @@ function togglePagoLiquidacao(id,valor){
   }
   auditLog('UPDATE','LIQUIDACAO',id,'Pagamento alterado: '+antes+'→'+valor,{id,pago:valor});
   salvar();renderDashboard();renderSidebar();renderLiquidacoes();_aeRefreshSeAberto(); // ★ A003
+  // ★ CORREÇÃO 001 — Atualizar módulo Contratos Continuados se estiver aberto
+  (function(){
+    const _pg=document.getElementById('page-contratos');
+    if(!_pg||!_pg.classList.contains('active'))return;
+    const _tab=(document.querySelector('.mtab.active[id^="ct-tab-"]')||{}).id||'';
+    if(_tab==='ct-tab-lista')renderContratoLista();
+    else if(_tab==='ct-tab-execucao')renderContratoExec();
+    else if(_tab==='ct-tab-dashboard')renderContratoDash();
+    else if(_tab==='ct-tab-detalhe')renderContratoDetalhe();
+  })();
   toast('Pagamento marcado como: '+valor,'success');
 }
 
@@ -8597,6 +8778,16 @@ function excluirLiquidacao(id){
     if(lanc){lanc.status='Excluído';lanc.tsModif=new Date().toISOString();}
     auditLog('DELETE','LIQUIDACAO',id,'Liquidação excluída',l);
     salvar();closeModal();renderLiquidacoes();renderDashboard();renderSidebar();_aeRefreshSeAberto();
+    // ★ CORREÇÃO 001b — Atualizar módulo Contratos Continuados se estiver aberto
+    (function(){
+      const _pg=document.getElementById('page-contratos');
+      if(!_pg||!_pg.classList.contains('active'))return;
+      const _tab=(document.querySelector('.mtab.active[id^="ct-tab-"]')||{}).id||'';
+      if(_tab==='ct-tab-lista')renderContratoLista();
+      else if(_tab==='ct-tab-execucao')renderContratoExec();
+      else if(_tab==='ct-tab-dashboard')renderContratoDash();
+      else if(_tab==='ct-tab-detalhe')renderContratoDetalhe();
+    })();
     toast('Liquidação excluída e saldo do empenho restaurado','warn');
   });
 }
@@ -10533,6 +10724,12 @@ function registrarReforco(){
     }
   }
 
+  // ★ CORREÇÃO CRÍTICA 001 — Propagação do contratoId para consolidação correta
+  // Se o empenho cadastrado está vinculado a um contrato, o reforço herda essa vinculação
+  // via referenciaId, permitindo que sumLancsByContratoEXE localize corretamente todos
+  // os valores empenhados (inicial + reforços) pelo Método 1 (referenciaId direto).
+  const contratoVinculado = empCad.contratoId || '';
+
   const l = {
     id: shortId('RF'),
     tipo: 'Empenho',
@@ -10550,7 +10747,9 @@ function registrarReforco(){
     pi: empCad.pi || '',
     fornNome: empCad.fornNome || '',
     referencia: empCad.numero,
-    referenciaId: empCadId,
+    // ★ CORREÇÃO: referenciaId preenchido com contratoId quando o empenho está vinculado
+    // Isso garante que a consolidação via sumLancsByContratoEXE inclua os reforços corretamente
+    referenciaId: contratoVinculado || empCadId,
     status: 'Ativo',
     ts: new Date().toISOString()
   };
@@ -10563,6 +10762,14 @@ function registrarReforco(){
   fecharModalReforco();
   renderSaidaForms(); renderSaidas(); renderSidebar(); renderDashboard(); renderEntradas(); renderCatGrid();
   if(typeof renderCadastroEmpenhos === 'function') renderCadastroEmpenhos();
+  // ★ CORREÇÃO CRÍTICA 001b — Atualizar módulo CONTRATOS CONTINUADOS após reforço
+  // Se o empenho está vinculado a um contrato, os cards/tabelas precisam refletir o novo valor
+  if(contratoVinculado){
+    if(typeof renderContratoLista === 'function') try{ renderContratoLista(); }catch(e){}
+    if(typeof renderContratoDetalhe === 'function') try{ renderContratoDetalhe(); }catch(e){}
+    if(typeof renderContratoExec === 'function') try{ renderContratoExec(); }catch(e){}
+    if(typeof renderContratoDash === 'function') try{ renderContratoDash(); }catch(e){}
+  }
   toast('[REFORÇO] Saldo de ' + fmtBR(valor) + ' adicionado ao empenho ' + empCad.numero + '!','success');
 }
 </script>
@@ -10942,6 +11149,13 @@ function registrarAnulacaoNovo(){
   if(typeof renderEntradas==='function') renderEntradas();
   if(typeof renderCatGrid==='function') renderCatGrid();
   if(typeof renderAnulacoes==='function') renderAnulacoes();
+  // ★ CORREÇÃO CRÍTICA 003b — Atualizar módulo CONTRATOS se empenho vinculado
+  if(empCad.contratoId){
+    if(typeof renderContratoLista === 'function') try{ renderContratoLista(); }catch(ex){}
+    if(typeof renderContratoDetalhe === 'function') try{ renderContratoDetalhe(); }catch(ex){}
+    if(typeof renderContratoExec === 'function') try{ renderContratoExec(); }catch(ex){}
+    if(typeof renderContratoDash === 'function') try{ renderContratoDash(); }catch(ex){}
+  }
 
   toast('↩ Anulação de '+fmtBR(valor)+' registrada no empenho '+empCad.numero+'!','warn');
 }
