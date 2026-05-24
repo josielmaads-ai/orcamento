@@ -860,8 +860,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="field" style="margin-bottom:18px">
       <label>Tipo de Empenho<span class="required-mark">*</span></label>
       <!-- Inputs ocultos para manter compatibilidade com lógica existente -->
-      <input type="radio" name="cemp-exe-rap" id="cemp-exe" value="EXE" checked style="display:none" onchange="cempValidarAno();cempAtualizarSaldoInfo()">
-      <input type="radio" name="cemp-exe-rap" id="cemp-rap" value="RAP" style="display:none" onchange="cempValidarAno();cempAtualizarSaldoInfo()">
+      <input type="radio" name="cemp-exe-rap" id="cemp-exe" value="EXE" checked style="display:none" onchange="cempValidarAno();cempAtualizarSaldoInfo();_cempAplicarTravaRap()">
+      <input type="radio" name="cemp-exe-rap" id="cemp-rap" value="RAP" style="display:none" onchange="cempValidarAno();cempAtualizarSaldoInfo();_cempAplicarTravaRap()">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
         <!-- Card EXE -->
         <div id="card-tipo-exe" onclick="selecionarTipoEmpenho('EXE')" style="
@@ -3070,6 +3070,27 @@ function saldoEmpenhado(cat){
 // ═══════════════════════════════════════════════════════════
 //  NAVEGAÇÃO
 // ═══════════════════════════════════════════════════════════
+// ★ ALTERAÇÃO 003 — Sincronização automática do módulo AE
+// Chamada após qualquer mutação que possa afetar dados de Assistência Estudantil.
+// Re-renderiza a aba AE ativa apenas se a página AE estiver visível — sem impacto se não estiver aberta.
+function _aeRefreshSeAberto(){
+  const pgAE=document.getElementById('page-ae');
+  if(!pgAE||!pgAE.classList.contains('active'))return;
+  // Determinar aba ativa e re-renderizá-la
+  const tabs=['acoes','gerenciar','detalhe','mensal','dashboard'];
+  for(const t of tabs){
+    const pane=document.getElementById('ae-'+t);
+    if(pane&&pane.style.display!=='none'){
+      if(t==='acoes')renderAeAcoes();
+      else if(t==='gerenciar')renderAeGerenciar();
+      else if(t==='detalhe')renderAeDetalhe();
+      else if(t==='mensal')renderAeMensal();
+      else if(t==='dashboard')renderAeDash();
+      break;
+    }
+  }
+}
+
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -3576,7 +3597,7 @@ function registrarCredito(){
   };
   state.lancamentos.push(l);
   auditLog('CREATE','LANCAMENTO',l.id,'Crédito registrado: '+desc,l);
-  salvar();renderCatGrid();renderEntradas();renderSidebar();
+  salvar();renderCatGrid();renderEntradas();renderSidebar();_aeRefreshSeAberto(); // ★ A003
   toast('Crédito registrado com sucesso!','success');
   limparFormCredito();
 }
@@ -4174,7 +4195,7 @@ function excluirLancamento(id){
       if(ent){ent.status='Excluído';ent.tsModif=new Date().toISOString();}
     }
     auditLog('DELETE','LANCAMENTO',id,'Lançamento excluído: '+l.descricao,l);
-    salvar();closeModal();renderDashboard();renderSidebar();
+    salvar();closeModal();renderDashboard();renderSidebar();_aeRefreshSeAberto(); // ★ A003
     toast('Lançamento excluído (soft-delete)','warn');
     // Re-render based on current tab
     if(_saidaTab==='empenho')renderSaidas();
@@ -6811,6 +6832,8 @@ function cempSelecionarCat(cat){
     const tit=document.getElementById('cemp-campos-titulo');
     if(tit)tit.textContent='4º — Dados do Empenho';
     cempAtualizarSaldoInfo();
+    // ★ ALTERAÇÃO 002: AE não permite RAP
+    _cempAplicarTravaRap();
     return;
   }
   // ★ AE-MAT: categoria especial — AE com natureza de Material de Consumo (chamada interna por cempAeEscolherSubtipo)
@@ -6841,6 +6864,13 @@ function cempSelecionarCat(cat){
   const tit=document.getElementById('cemp-campos-titulo');
   if(tit)tit.textContent='3º — Dados do Empenho';
   cempAtualizarSaldoInfo();
+  // ★ ALTERAÇÃO 002: verificar se categoria tem restrição RAP; se não, remover trava visual
+  const CATS_APENAS_EXE_DEF=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS E PASSAGENS'];
+  if(CATS_APENAS_EXE_DEF.includes(cat)){
+    _cempAplicarTravaRap();
+  } else {
+    _cempRemoverTravaRap();
+  }
   cempMontarVinculo(cat);
   const campos=document.getElementById('cemp-campos-area');
   if(campos)campos.style.display='';
@@ -7103,6 +7133,14 @@ function registrarCadastroEmpenho(){
     }
   }
   if(state.empenhosCad.find(e=>e.numero===numero&&e.status!=='Excluído')){toast('Empenho '+numero+' já cadastrado.','warn');return;}
+  // ★ ALTERAÇÃO 002 — Validação na persistência: bloquear RAP para categorias restritas
+  const CATS_APENAS_EXE_PERSIST=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS E PASSAGENS'];
+  if(CATS_APENAS_EXE_PERSIST.includes(_cempCat) && tipoEmp==='RAP'){
+    toast('❌ Bloqueado: A categoria "'+_cempCat+'" não permite RAP. Utilize Exercício Corrente (EXE).','warn');
+    // Forçar retorno ao estado EXE visualmente
+    selecionarTipoEmpenho('EXE');
+    return;
+  }
   if(tipoEmp==='EXE'){
     // REGRA COSIP: usa saldo da ENERGIA ELÉTRICA como referência
     const saldoDisp=saldoCatEfetivo(_cempCat);
@@ -7550,6 +7588,13 @@ function salvarEdicaoEmpenho(){
   if(!competencia){toast('Competência obrigatória','warn');return;}
   if(valorNovo<=0){toast('Valor inicial deve ser maior que zero','warn');return;}
 
+  // ★ ALTERAÇÃO 002 — Validação na edição: bloquear RAP para categorias restritas
+  const CATS_APENAS_EXE_EDIT=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS E PASSAGENS'];
+  if(CATS_APENAS_EXE_EDIT.includes(normalizarCategoria(categoria)) && tipoEmp==='RAP'){
+    toast('❌ Bloqueado: A categoria "'+categoria+'" não permite RAP. Utilize Exercício Corrente (EXE).','warn');
+    return;
+  }
+
   // Verificar número duplicado (exceto o próprio)
   const duplicado=state.empenhosCad.find(x=>x.id!==id&&x.status!=='Excluído'&&x.numero===numero);
   if(duplicado){toast('Já existe outro empenho com o número '+numero,'warn');return;}
@@ -7595,6 +7640,7 @@ function salvarEdicaoEmpenho(){
   renderCadastroEmpenhos();
   if(typeof renderDashboard==='function')renderDashboard();
   if(typeof renderSidebar==='function')renderSidebar();
+  _aeRefreshSeAberto(); // ★ ALTERAÇÃO 003: sincronizar módulo AE após edição de empenho
   toast('✓ Empenho '+numero+' atualizado com sucesso!','success');
 }
 // ═══════════════════════════════════════════════════════════
@@ -7831,11 +7877,17 @@ function liqAeEscolherSubtipo(subtipo){
   ['liq-data','liq-data-emissao'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=today;});
 }
 
-// Formulário Material de Consumo quando empenho é de AE (ALTERAÇÃO 002)
+// Formulário Material de Consumo quando empenho é de AE
+// ★ ALTERAÇÃO 001: Ação importada automaticamente do empenho — seletor removido
 function liqFormAeMatConsumo(){
-  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  const emp=_liqEmpId?(state.empenhosCad||[]).find(x=>x.id===_liqEmpId):null;
+  const acaoVinc=emp&&emp.acaoId?(state.acoes||[]).find(a=>a.id===emp.acaoId):null;
+  const acaoNome=acaoVinc?acaoVinc.nome+(acaoVinc.tipo?' · '+acaoVinc.tipo:''):'(não vinculada)';
+  const acaoHtml=acaoVinc
+    ?`<div class="field" style="margin-top:10px"><label>Ação AE <span style="font-size:9px;color:var(--gold);background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:6px;padding:2px 7px;margin-left:4px">🔒 Importada do Empenho</span></label><div style="background:var(--gold-bg);border:1.5px solid var(--gold-border);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;color:var(--gold2);display:flex;align-items:center;gap:8px">✓ ${acaoNome}</div><input type="hidden" id="liq-ae-acao" value="${acaoVinc.id}"></div>`
+    :`<div class="field" style="margin-top:10px"><label>Ação AE</label><div style="background:var(--amber-bg);border:1.5px solid var(--amber-border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--amber)">⚠ Empenho sem ação vinculada — verifique o cadastro do empenho</div><input type="hidden" id="liq-ae-acao" value=""></div>`;
   return `<div class="card"><div class="card-title"><span class="card-title-dot" style="background:var(--green)"></span>Liquidação — Assistência Estudantil · Material de Consumo</div>
-  <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">ℹ️</span><div>O saldo consumido será do empenho de <strong>Assistência Estudantil</strong>. A liquidação será contabilizada na <strong>Ação</strong> escolhida abaixo.</div></div>
+  <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">ℹ️</span><div>O saldo consumido será do empenho de <strong>Assistência Estudantil</strong>. A ação foi importada automaticamente do empenho cadastrado.</div></div>
   <div class="form-grid cols3">
     <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="liq-data"></div>
     <div class="field"><label>Valor Total NF (R$)<span class="required-mark">*</span></label><input type="number" id="liq-vlr-nf" min="0" step="0.01" placeholder="0,00" oninput="liqCalcAeMat()"></div>
@@ -7847,7 +7899,7 @@ function liqFormAeMatConsumo(){
     <div class="field"><label>Pregão</label><input type="text" id="liq-pregao" placeholder="90023/2025"></div>
     <div class="field"><label>Processo SUAP</label><input type="text" id="liq-suap" placeholder="23186.000148/2026-66"></div>
   </div>
-  <div class="field" style="margin-top:10px"><label>Ação<span class="required-mark">*</span></label><select id="liq-ae-acao"><option value="">— Selecione a Ação —</option>${acoes.map(a=>`<option value="${a.id}">${a.nome}</option>`).join('')}</select></div>
+  ${acaoHtml}
   <div class="card" style="margin-top:14px;background:var(--bg4)">
     <div class="card-title" style="font-size:10px">⚡ Preview</div>
     <div id="liq-calc-preview" style="font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:2"></div>
@@ -8105,12 +8157,19 @@ function liqCalcContratos(){
 
 // Formulário AE
 function liqFormAE(){
-  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
-  return `<div class="card"><div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Liquidação — Assistência Estudantil</div>
+  // ★ ALTERAÇÃO 001: Ação importada automaticamente do empenho cadastrado (acaoId)
+  // O seletor manual NÃO é exibido; a ação já foi definida no cadastro do empenho (Passo 0 AE).
+  const emp=_liqEmpId?(state.empenhosCad||[]).find(x=>x.id===_liqEmpId):null;
+  const acaoVinc=emp&&emp.acaoId?(state.acoes||[]).find(a=>a.id===emp.acaoId):null;
+  const acaoNome=acaoVinc?acaoVinc.nome+( acaoVinc.tipo?' · '+acaoVinc.tipo:''):'(não vinculada)';
+  const acaoHtml=acaoVinc
+    ?`<div style="grid-column:1/-1"><label class="field" style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;display:block">Ação AE <span style="font-size:9px;color:var(--gold);background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:6px;padding:2px 7px;margin-left:4px">🔒 Importada do Empenho</span></label><div style="background:var(--gold-bg);border:1.5px solid var(--gold-border);border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;color:var(--gold2);display:flex;align-items:center;gap:8px">✓ ${acaoNome}</div><input type="hidden" id="liq-ae-acao" value="${acaoVinc.id}"></div>`
+    :`<div style="grid-column:1/-1"><label class="field" style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;display:block">Ação AE</label><div style="background:var(--amber-bg);border:1.5px solid var(--amber-border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--amber);display:flex;align-items:center;gap:8px">⚠ Empenho sem ação vinculada — verifique o cadastro do empenho</div><input type="hidden" id="liq-ae-acao" value=""></div>`;
+  return `<div class="card"><div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Liquidação — Assistência Estudantil · Edital / Monitoria</div>
   <div class="form-grid cols2">
     <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="liq-data"></div>
     <div class="field"><label>Valor da Liquidação (R$)<span class="required-mark">*</span></label><input type="number" id="liq-vlr-nf" min="0" step="0.01" placeholder="0,00"></div>
-    <div class="field" style="grid-column:1/-1"><label>Ação</label><select id="liq-ae-acao"><option value="">—</option>${acoes.map(a=>`<option value="${a.id}">${a.nome}</option>`).join('')}</select></div>
+    ${acaoHtml}
     <div class="field" style="grid-column:1/-1"><label>Introdução (até 300 car.)</label><textarea id="liq-introducao" rows="3" maxlength="300" placeholder="Descrição para o SIAFI..."></textarea></div>
     <div class="field"><label>Mês de Referência</label><select id="liq-mes-ref">${MESES_FULL.map((m,i)=>`<option value="${m.toUpperCase()}">${m}</option>`).join('')}</select></div>
     <div class="field"><label>Edital (até 100 car.)</label><input type="text" id="liq-edital" maxlength="100" placeholder="Nº do edital"></div>
@@ -8438,7 +8497,7 @@ function registrarLiquidacao(grupo){
     ?'[AE·Mat.Consumo] Liquidação: '+emp.numero+' · '+fmtBR(vlr)+' · Ação: '+(state.acoes.find(a=>a.id===obj.acaoId)?.nome||'—')
     :'Liquidação registrada: '+emp.numero+' · '+fmtBR(vlr);
   auditLog('CREATE','LIQUIDACAO',obj.id,_auditDesc,obj);
-  salvar();renderLiquidacoes();renderDashboard();renderSidebar();
+  salvar();renderLiquidacoes();renderDashboard();renderSidebar();_aeRefreshSeAberto();
   const _toastMsg=grupo==='ae-mat'
     ?'✓ Liquidação AE·Material de Consumo registrada! Saldo consumido em Assistência Estudantil.'
     :'Liquidação registrada com sucesso! O saldo do empenho foi consumido.';
@@ -8525,7 +8584,7 @@ function togglePagoLiquidacao(id,valor){
     lanc.tsModif=new Date().toISOString();
   }
   auditLog('UPDATE','LIQUIDACAO',id,'Pagamento alterado: '+antes+'→'+valor,{id,pago:valor});
-  salvar();renderDashboard();renderSidebar();renderLiquidacoes();
+  salvar();renderDashboard();renderSidebar();renderLiquidacoes();_aeRefreshSeAberto(); // ★ A003
   toast('Pagamento marcado como: '+valor,'success');
 }
 
@@ -8537,7 +8596,7 @@ function excluirLiquidacao(id){
     const lanc=state.lancamentos.find(x=>x.liquidacaoId===id);
     if(lanc){lanc.status='Excluído';lanc.tsModif=new Date().toISOString();}
     auditLog('DELETE','LIQUIDACAO',id,'Liquidação excluída',l);
-    salvar();closeModal();renderLiquidacoes();renderDashboard();renderSidebar();
+    salvar();closeModal();renderLiquidacoes();renderDashboard();renderSidebar();_aeRefreshSeAberto();
     toast('Liquidação excluída e saldo do empenho restaurado','warn');
   });
 }
@@ -8619,8 +8678,18 @@ function editarLiquidacao(id){
       l.senar=senar;
       l.totalRetencoes=Math.round((prev+gilrat+senar)*10000)/10000;
       l.valorLiquido=Math.round((vlr-l.totalRetencoes)*100)/100;
+    } else if(l.grupo==='ae' && l.subcategoria==='Material de Consumo'){
+      // ★ AE-MAT: cálculo idêntico ao de Material de Consumo (5,85%)
+      l.pregao=get('pregao');
+      const empAeMat=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
+      const fornAeMat=empAeMat&&empAeMat.cnpj?buscarFornecedorPorDoc(empAeMat.cnpj):null;
+      const isSimplesAeMat=fornAeMat&&fornAeMat.simplesNacional==='Sim';
+      const tribFedAeMat=isSimplesAeMat?0:Math.round(vlr*5.85)/100;
+      l.tribFed=tribFedAeMat;
+      l.totalRetencoes=tribFedAeMat;
+      l.valorLiquido=Math.round((vlr-tribFedAeMat)*100)/100;
     } else {
-      // diarias, ae - sem retenções
+      // diarias, ae edital/monitoria — sem retenções
       l.totalRetencoes=0;
       l.valorLiquido=vlr;
     }
@@ -8648,7 +8717,7 @@ function editarLiquidacao(id){
     }
     
     auditLog('UPDATE','LIQUIDACAO',id,'Liquidação editada: '+l.nEmpenho,l);
-    salvar();closeModal();renderLiquidacoes();renderDashboard();renderSidebar();
+    salvar();closeModal();renderLiquidacoes();renderDashboard();renderSidebar();_aeRefreshSeAberto();
     toast('Liquidação atualizada com sucesso!','success');
   });
   
@@ -8666,7 +8735,20 @@ function editarLiquidacao(id){
       <div class="field"><label>NP/DH</label><input type="text" id="edit-liq-npdh" value="${l.npDh||''}"></div>
       <div class="field"><label>Mês de Pagamento</label><input type="text" id="edit-liq-mespag" value="${l.mesPag||''}"></div>
       <div class="field"><label>Processo SUAP</label><input type="text" id="edit-liq-suap" value="${l.suap||''}"></div>`;
+  } else if(l.grupo==='ae' && l.subcategoria==='Material de Consumo'){
+    // ★ AE-MAT: empenho AE liquidado como Material de Consumo — usa campos de NF/Pregão
+    campos=`
+      <div class="field"><label>Data</label><input type="date" id="edit-liq-data" value="${l.data}"></div>
+      <div class="field"><label>Valor Total NF (R$)</label><input type="number" id="edit-liq-valorbruto" value="${l.valorBruto}" min="0" step="0.01"></div>
+      <div class="field"><label>Número da NF</label><input type="text" id="edit-liq-nf" value="${l.nf||''}"></div>
+      <div class="field"><label>Data de Emissão</label><input type="date" id="edit-liq-dataemissao" value="${l.dataEmissao||''}"></div>
+      <div class="field"><label>Mês de Referência</label><input type="text" id="edit-liq-mesref" value="${l.mesRef||''}"></div>
+      <div class="field"><label>NP/DH</label><input type="text" id="edit-liq-npdh" value="${l.npDh||''}"></div>
+      <div class="field"><label>Mês de Pagamento</label><input type="text" id="edit-liq-mespag" value="${l.mesPag||''}"></div>
+      <div class="field"><label>Pregão</label><input type="text" id="edit-liq-pregao" value="${l.pregao||''}"></div>
+      <div class="field"><label>Processo SUAP</label><input type="text" id="edit-liq-suap" value="${l.suap||''}"></div>`;
   } else if(l.grupo==='ae'){
+    // AE Edital/Monitoria — campos de texto livre
     campos=`
       <div class="field"><label>Data</label><input type="date" id="edit-liq-data" value="${l.data}"></div>
       <div class="field"><label>Valor (R$)</label><input type="number" id="edit-liq-valorbruto" value="${l.valorBruto}" min="0" step="0.01"></div>
@@ -9319,6 +9401,9 @@ function selecionarTipoEmpenho(tipo){
   cempValidarAno();
   cempAtualizarSaldoInfo();
 
+  // ★ ALTERAÇÃO 002 — Trava RAP: ASSISTÊNCIA ESTUDANTIL e DIÁRIAS E PASSAGENS só permitem EXE
+  _cempAplicarTravaRap();
+
   // ITEM 6 — Campos condicionais EXE vs RAP:
   // EXE: PTRES, Natureza da Despesa e Plano Interno são obrigatórios/visíveis
   // RAP: esses campos são ocultados e removidos da validação (RAP é desvinculado dos créditos do exercício)
@@ -9346,6 +9431,78 @@ function selecionarTipoEmpenho(tipo){
 }
 
 
+
+// ★ ALTERAÇÃO 002 — Função de trava RAP por categoria
+// Categorias ASSISTÊNCIA ESTUDANTIL e DIÁRIAS E PASSAGENS não permitem RAP.
+// Chamada por selecionarTipoEmpenho e cempSelecionarCat para garantir consistência.
+function _cempAplicarTravaRap(){
+  const CATS_APENAS_EXE=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS E PASSAGENS'];
+  if(!CATS_APENAS_EXE.includes(_cempCat)) return; // sem restrição para outras categorias
+
+  const rapRadio=document.getElementById('cemp-rap');
+  const exeRadio=document.getElementById('cemp-exe');
+  const cardRap=document.getElementById('card-tipo-rap');
+  const checkRap=document.getElementById('card-rap-check');
+  const titleRap=document.getElementById('card-rap-title');
+
+  // Se RAP estiver selecionado, forçar EXE automaticamente
+  if(rapRadio&&rapRadio.checked){
+    if(exeRadio) exeRadio.checked=true;
+    if(rapRadio) rapRadio.checked=false;
+    // Disparar atualização visual do card EXE
+    selecionarTipoEmpenho('EXE');
+  }
+
+  // Bloquear visualmente o card RAP
+  if(cardRap){
+    cardRap.style.opacity='0.35';
+    cardRap.style.pointerEvents='none';
+    cardRap.style.cursor='not-allowed';
+    cardRap.title='RAP não permitido para '+_cempCat+'. Esta categoria exige Exercício Corrente (EXE).';
+    const badge=cardRap.querySelector('[style*="font-size:10px"]');
+    // Substituir badge por aviso
+    if(checkRap){checkRap.style.background='var(--red)';checkRap.style.color='#fff';checkRap.textContent='✕';}
+    if(titleRap) titleRap.style.color='var(--red)';
+  }
+
+  // Exibir aviso na área de saldo
+  const infoEl=document.getElementById('cemp-saldo-info');
+  if(infoEl){
+    const avisoRap=`<div class="info-box" style="margin:4px 0 8px;background:rgba(255,68,68,.07);border-color:var(--red-border);color:var(--red2);padding:8px 12px;font-size:11.5px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:15px;flex-shrink:0">🔒</span>
+      <span><strong style="color:var(--red)">RAP bloqueado:</strong> A categoria <strong>${_cempCat}</strong> é exclusiva de Exercício Corrente (EXE). Empenhos desta categoria <strong>nunca</strong> podem ser Restos a Pagar.</span>
+    </div>`;
+    // Prepend aviso sem sobrescrever o saldo info
+    if(!infoEl.querySelector('#cemp-rap-bloqueio-aviso')){
+      const div=document.createElement('div');
+      div.id='cemp-rap-bloqueio-aviso';
+      div.innerHTML=avisoRap;
+      infoEl.prepend(div);
+    }
+  }
+}
+
+// Remove a trava visual do card RAP (chamada ao trocar para categoria sem restrição)
+function _cempRemoverTravaRap(){
+  const cardRap=document.getElementById('card-tipo-rap');
+  const checkRap=document.getElementById('card-rap-check');
+  const titleRap=document.getElementById('card-rap-title');
+  if(cardRap){
+    cardRap.style.opacity='';
+    cardRap.style.pointerEvents='';
+    cardRap.style.cursor='';
+    cardRap.title='';
+  }
+  // Restaurar visual do card RAP para estado inativo (não selecionado)
+  const exeRadio=document.getElementById('cemp-exe');
+  if(exeRadio&&exeRadio.checked){
+    if(checkRap){checkRap.style.background='var(--border2)';checkRap.style.color='var(--text4)';checkRap.textContent='○';}
+    if(titleRap) titleRap.style.color='var(--text3)';
+  }
+  // Remover aviso se existir
+  const aviso=document.getElementById('cemp-rap-bloqueio-aviso');
+  if(aviso)aviso.remove();
+}
 
 // Chamado quando o seletor EXE/RAP muda
 // ═══════════════════════════════════════════════════════════
@@ -9533,6 +9690,7 @@ function registrarSaida(){
     '['+tipoRecurso+'] Saída registrada: '+empCad.numero+' · '+cat+' · competência '+competencia, l);
   salvar();
   renderSaidaForms(); renderSaidas(); renderSidebar(); renderDashboard(); renderEntradas(); renderCatGrid();
+  _aeRefreshSeAberto(); // ★ A003: sincroniza módulo AE se empenho for de AE
   toast('['+tipoRecurso+'] Saída registrada no empenho '+empCad.numero+' · '+cat+'!','success');
   limparFormSaida();
 }
