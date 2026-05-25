@@ -9109,14 +9109,14 @@ function abrirDetalheLiquidacao(id){
     const iss=l.iss||0;
     const cv=l.contaVinculada||0;
     const totalRet=l.totalRetencoes||0;
-    const aPagar=l.aPagar||Math.round((l.valorBruto-inss-tribFed)*100)/100;
+    const aPagar=Math.round(((l.aPagar||Math.round((l.valorBruto-inss-tribFed)*100)/100)+0.01)*100)/100;
     sec2=`<div style="background:linear-gradient(135deg,rgba(255,171,64,.12),rgba(255,171,64,.04));border:2px solid var(--amber-border);border-radius:12px;padding:16px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:var(--amber);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--amber-border)">💰 SEÇÃO 2 — VALORES</div>
       ${[
         ['Valor Total NF',fmtBR(l.valorBruto),'var(--text)'],
         ['Base de Cálculo INSS',fmtBR(l.bcInss||0),'var(--text)'],
         ...(!isSimples?[['Tributos Federais (9,45%)',fmtBR(tribFed),'var(--red)']]:[[null,null,null]]),
-        ['INSS (11% s/ BC)',inss.toFixed(4).replace('.',','),'var(--red)'],
+        ['INSS (11% s/ BC)','R$ '+inss.toFixed(4).replace('.',','),'var(--red)'],
         ['ISS (5%)',fmtBR(iss),'var(--red)'],
         ['Conta Vinculada',fmtBR(cv),'var(--red)'],
         ['Total de Retenções',fmtBR(totalRet),'var(--red)'],
@@ -9150,20 +9150,36 @@ function abrirDetalheLiquidacao(id){
     // Código DARF IR e Natureza de Rendimentos (Erro 004)
     const darfIR=ct?ct.codigoDarf||'——':ct?ct.darfIr||'——':'——';
     const natRend=ct?ct.natRendimentos||'——':'——';
+    const cnpjEmpresa=l.cnpj||'—';
     const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
     const d2=isSimples?null:`RETENÇÃO DE TRIB FEDERAIS CONF IN 1234/2012 SOBRE PAGAMENTO DA NF Nº ${l.nf} DE ${dataEmissaoBR} - REF. À ${descObsAbrev}, NO MÊS DE ${l.mesRef}, CONF CONTRATO ${nContrato}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     const d3=`RETENÇÃO DE INSS SOBRE PAGAMENTO DA NF Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REF À ${descObsAbrev}, NO MÊS DE ${l.mesRef}, CONF CONTRATO ${nContrato}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     const d4=`RETENÇÃO DE ISS SOBRE PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
     const d5=`DEPÓSITO EM GARANTIA CONTA VINCULADA SOBRE PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
     const d6=`RETENÇÃO INSS PAGTO DA NF Nº ${l.nf} DE ${dataEmissaoBR} - REF À ${descObsAbrev} - NO IFPI-CAMPUS SÃO JOÃO/PI - NP ${l.npDh} - PROC SUAP ${l.suap}`;
+    // Valores formatados para exibir nas descrições (item 2.1–2.5)
+    const _vNF=fmtBR(l.valorBruto);
+    const _vTribFed=fmtBR(tribFed);
+    const _vBcInss=fmtBR(l.bcInss||0);
+    const _vInss='R$ '+inss.toFixed(4).replace('.',',');
+    const _vIss=fmtBR(iss);
+    const _vCv=fmtBR(cv);
+    // Helper: botão copiar valor inline
+    const btnCopyVal=(val)=>`<button style="margin-left:8px;padding:2px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border3);background:var(--bg4);color:var(--text3);cursor:pointer;font-family:'IBM Plex Mono',monospace;vertical-align:middle" onclick="navigator.clipboard.writeText('${val.replace(/'/g,"\\'")}').then(()=>toast('Copiado!','success'))">📋</button>`;
     descricoes=
-      descBlock('Descrição 1 — SIAFI (Liquidação)',d1)+
-      (d2?descBlock(`Descrição 2 — DDF055 Tributos Federais<br><div style="margin-top:6px;padding:6px 10px;background:rgba(245,200,66,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--gold)">Código DARF IR: ${darfIR} &nbsp;·&nbsp; Natureza de Rendimentos: ${natRend}</div>`,d2):'')+
-      descBlock(`Descrição 3 — DDF050 INSS<br><div style="margin-top:6px;padding:6px 10px;background:rgba(0,230,118,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--green)">Código: 1162 &nbsp;·&nbsp; Data Emissão: ${dataEmissaoBR} &nbsp;·&nbsp; APURAÇÃO: 20 MÊS SEGUINTE</div>`,d3)+
-      descBlock(`Descrição 4 — ISS<br><div style="margin-top:6px;padding:6px 10px;background:rgba(0,207,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--cyan)">FAVORECIDO ISS: 06553655000173</div>`,d4)+
-      descBlock(`Descrição 5 — DOB039 Conta Vinculada<br><div style="margin-top:6px;padding:6px 10px;background:rgba(170,102,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--purple)">CNPJ BB: 00000000000191 &nbsp;·&nbsp; 154704J</div>`,d5)+
+      // 2.1 Descrição 1 — valor total NF na frente do título
+      descBlock(`Descrição 1 — SIAFI (Liquidação) <span style="font-size:13px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace">${_vNF}</span>${btnCopyVal(_vNF)}`,d1)+
+      // 2.2 Descrição 2 — valor tributos federais; 3.1 cores diferenciadas; 3.2 CNPJ abaixo do DARF IR
+      (d2?descBlock(`Descrição 2 — DDF055 Tributos Federais <span style="font-size:13px;font-weight:700;color:var(--amber);font-family:'IBM Plex Mono',monospace">${_vTribFed}</span>${btnCopyVal(_vTribFed)}<div style="margin-top:6px;padding:6px 10px;background:rgba(245,200,66,.1);border-radius:6px;font-size:13px;font-weight:700"><span style="color:var(--text2)">Código DARF IR: <span style="color:var(--amber)">${darfIR}</span></span> &nbsp;·&nbsp; <span style="color:var(--text2)">Natureza de Rendimentos: <span style="color:var(--amber)">${natRend}</span></span><div style="margin-top:5px;font-size:12px;color:var(--cyan);font-family:'IBM Plex Mono',monospace">CNPJ: ${cnpjEmpresa}</div></div>`,d2):'')+
+      // 2.3 Descrição 3 — Base de Cálculo INSS e INSS com cores diferentes; 3.3 CNPJ abaixo de APURAÇÃO
+      descBlock(`Descrição 3 — DDF050 INSS <span style="font-size:12px;font-weight:700;color:var(--green);font-family:'IBM Plex Mono',monospace">BC: ${_vBcInss}</span> <span style="font-size:12px;font-weight:700;color:var(--teal);font-family:'IBM Plex Mono',monospace">INSS: ${_vInss}</span>${btnCopyVal(_vBcInss+' / '+_vInss)}<div style="margin-top:6px;padding:6px 10px;background:rgba(0,230,118,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--green)">Código: 1162 &nbsp;·&nbsp; Data Emissão: ${dataEmissaoBR} &nbsp;·&nbsp; APURAÇÃO: 20 MÊS SEGUINTE<div style="margin-top:5px;font-size:12px;color:var(--cyan);font-family:'IBM Plex Mono',monospace">CNPJ: ${cnpjEmpresa}</div></div>`,d3)+
+      // 2.4 Descrição 4 renomeada para DOB001; valor ISS na frente
+      descBlock(`Descrição 4 DOB001 — ISS <span style="font-size:13px;font-weight:700;color:var(--cyan);font-family:'IBM Plex Mono',monospace">${_vIss}</span>${btnCopyVal(_vIss)}<div style="margin-top:6px;padding:6px 10px;background:rgba(0,207,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--cyan)">FAVORECIDO ISS: 06553655000173</div>`,d4)+
+      // 2.5 Descrição 5 — valor conta vinculada na frente
+      descBlock(`Descrição 5 — DOB039 Conta Vinculada <span style="font-size:13px;font-weight:700;color:var(--purple);font-family:'IBM Plex Mono',monospace">${_vCv}</span>${btnCopyVal(_vCv)}<div style="margin-top:6px;padding:6px 10px;background:rgba(170,102,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--purple)">CNPJ BB: 00000000000191 &nbsp;·&nbsp; 154704J</div>`,d5)+
       descBlock(`Descrição 6 — REINF<br><div style="margin-top:6px;padding:6px 10px;background:rgba(255,68,68,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--red)">Mês de Pagamento: ${l.mesPag||'—'}</div>`,d6);
-    rodape=`<div style="margin-top:14px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px;font-size:13px;font-weight:700;color:var(--gold);text-align:center;letter-spacing:.04em;margin-bottom:8px">INCLUSÃO DE PRÉ DOC COM OS RESPECTIVOS DADOS BANCÁRIOS</div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px"><span style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</span><button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS').then(()=>toast('Copiado!','success'))">📋 Copiar</button></div>`;
+    // 4.2 Rodapé: botão de copiar no texto fixo "INCLUSÃO DE PRÉ DOC..."
+    rodape=`<div style="margin-top:14px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px;font-size:13px;font-weight:700;color:var(--gold);text-align:center;letter-spacing:.04em;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px">INCLUSÃO DE PRÉ DOC COM OS RESPECTIVOS DADOS BANCÁRIOS <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE PRÉ DOC COM OS RESPECTIVOS DADOS BANCÁRIOS').then(()=>toast('Copiado!','success'))">📋 Copiar</button></div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px"><span style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</span><button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS').then(()=>toast('Copiado!','success'))">📋 Copiar</button></div>`;
 
   } else if(l.grupo==='pnae'){
     // Busca contrato PNAE: 1) pelo pnaeContratoId do empenho, 2) pelo CPF/CNPJ da liquidação
