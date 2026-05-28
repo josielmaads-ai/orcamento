@@ -5963,14 +5963,24 @@ let _driveSyncTimer=null;
 let _driveSyncInProgress=false; // ★ mutex para evitar gravações simultâneas
 let _driveLastSyncChecksum='';  // ★ checksum para evitar gravações desnecessárias
 
-// ★ Gera checksum simples do estado para detectar mudanças reais
+// ★ Gera checksum do estado — inclui conteúdo serializado para detectar edições internas
+// CORREÇÃO: versão anterior usava apenas .length, perdendo edições em registros existentes
 function _driveStateChecksum(){
   try{
+    // Inclui lastSaved como âncora temporal + hash simplificado dos dados críticos
+    const _liqHash=(state.liquidacoes||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valorBruto||'')).join('|');
+    const _lancHash=(state.lancamentos||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valor||'')).join('|');
+    const _empHash=(state.empenhosCad||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valorInicial||'')).join('|');
     const s=JSON.stringify({
       lancamentos:(state.lancamentos||[]).length,
       empenhosCad:(state.empenhosCad||[]).length,
       liquidacoes:(state.liquidacoes||[]).length,
-      lastSaved:state.meta?.lastSaved||''
+      contratos:(state.contratos||[]).length,
+      fornecedores:(state.fornecedores||[]).length,
+      lastSaved:state.meta?.lastSaved||'',
+      _liqH:_liqHash.length>200?_liqHash.slice(0,200):_liqHash,
+      _lanH:_lancHash.length>200?_lancHash.slice(0,200):_lancHash,
+      _empH:_empHash.length>200?_empHash.slice(0,200):_empHash
     });
     return s;
   }catch(e){return Date.now().toString();}
@@ -9066,10 +9076,12 @@ function abrirDetalheLiquidacao(id){
       ${conteudo}
     </div>`;
   }
-  function infoRow(label,valor){
+  function infoRow(label,valor,comCopia){
+    const v=valor||'—';
+    const btnCopia=comCopia&&v!=='—'?`<button style="margin-left:6px;padding:1px 7px;font-size:11px;border-radius:4px;border:1px solid var(--border3);background:var(--bg4);color:var(--text3);cursor:pointer;font-family:'IBM Plex Mono',monospace;vertical-align:middle;transition:all .1s" onmouseenter="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseleave="this.style.borderColor='var(--border3)';this.style.color='var(--text3)'" onclick="navigator.clipboard.writeText('${v.replace(/'/g,"\\'")}').then(()=>toast('${label} copiado!','success'))">📋</button>`:'';
     return `<div style="background:rgba(255,255,255,.04);border-radius:6px;padding:8px 10px">
       <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">${label}</div>
-      <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace">${valor||'—'}</div>
+      <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;flex-wrap:wrap;gap:4px">${v}${btnCopia}</div>
     </div>`;
   }
 
@@ -9109,7 +9121,16 @@ function abrirDetalheLiquidacao(id){
     const iss=l.iss||0;
     const cv=l.contaVinculada||0;
     const totalRet=l.totalRetencoes||0;
-    const aPagar=Math.round(((l.aPagar||Math.round((l.valorBruto-inss-tribFed)*100)/100)+0.01)*100)/100;
+    // ★ ALTERAÇÃO 3 — Regra financeira: adicionar R$0,01 em "Valor a Pagar Campus"
+    // SOMENTE quando o 3º número após a vírgula do valor de INSS (11% s/ BC) for >= 5.
+    // Exemplo: INSS = 1989,7383 → casas decimais: 7,3,8,3 → 3ª = 8 ≥ 5 → +R$0,01
+    // Exemplo: INSS = 1989,7343 → casas decimais: 7,3,4,3 → 3ª = 4 < 5 → sem acréscimo
+    const _inssStr=inss.toFixed(4); // ex: "1989.7383"
+    const _inssDecStr=_inssStr.split('.')[1]||'0000'; // ex: "7383"
+    const _inssTercDecimal=parseInt(_inssDecStr[2]||'0',10); // índice 2 = 3ª casa
+    const _acrescentar01=(_inssTercDecimal>=5);
+    const _aPagarBase=l.aPagar||Math.round((l.valorBruto-inss-tribFed)*100)/100;
+    const aPagar=_acrescentar01?Math.round((_aPagarBase+0.01)*100)/100:Math.round(_aPagarBase*100)/100;
     sec2=`<div style="background:linear-gradient(135deg,rgba(255,171,64,.12),rgba(255,171,64,.04));border:2px solid var(--amber-border);border-radius:12px;padding:16px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:var(--amber);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--amber-border)">💰 SEÇÃO 2 — VALORES</div>
       ${[
@@ -9129,20 +9150,44 @@ function abrirDetalheLiquidacao(id){
     </div>`;
 
     // Seção 3 — Dados Bancários
+    const _s3Agencia=forn?forn.agencia||'—':'—';
+    const _s3Conta=forn?forn.conta||'—':'—';
+    const _s3Suap=l.suap||'—';
+    const _s3UltimoRC=ct?ct.ultimoRC||'—':'—';
+    const _s3ContaVinc=ct?ct.contaVinculada||'—':'—';
+    const _s3Situacao='DSP001';
+    function _s3BtnCopy(val,label){
+      if(!val||val==='—')return '';
+      const safe=val.replace(/'/g,"\\'");
+      return `<button style="margin-left:6px;padding:1px 7px;font-size:11px;border-radius:4px;border:1px solid var(--border3);background:var(--bg4);color:var(--text3);cursor:pointer;font-family:'IBM Plex Mono',monospace;vertical-align:middle;flex-shrink:0;transition:all .1s" onmouseenter="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseleave="this.style.borderColor='var(--border3)';this.style.color='var(--text3)'" onclick="navigator.clipboard.writeText('${safe}').then(()=>toast('${label} copiado!','success'))">📋</button>`;
+    }
     sec3=`<div style="background:linear-gradient(135deg,rgba(0,230,118,.12),rgba(0,230,118,.04));border:2px solid var(--green-border);border-radius:12px;padding:16px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:var(--green);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--green-border)">🏦 SEÇÃO 3 — DADOS BANCÁRIOS</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        ${[
-          ['Agência',forn?forn.agencia||'—':'—'],
-          ['Conta',forn?forn.conta||'—':'—'],
-          ['Processo SUAP',l.suap||'—'],
-          ['Último RC',ct?ct.ultimoRC||'—':'—'],
-          ['Número Conta Vinculada',ct?ct.contaVinculada||'—':'—'],
-          ['Situação','DSP001'],
-        ].map(([label,valor])=>`<div style="background:rgba(0,230,118,.06);border-radius:6px;padding:8px 10px">
-          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">${label}</div>
-          <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace">${valor}</div>
-        </div>`).join('')}
+        <div style="background:rgba(0,230,118,.06);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">Agência</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;gap:4px;flex-wrap:wrap">${_s3Agencia}${_s3BtnCopy(_s3Agencia,'Agência')}</div>
+        </div>
+        <div style="background:rgba(0,230,118,.06);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">Conta</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;gap:4px;flex-wrap:wrap">${_s3Conta}${_s3BtnCopy(_s3Conta,'Conta')}</div>
+        </div>
+        <div style="background:rgba(0,230,118,.06);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">Processo SUAP</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;gap:4px;flex-wrap:wrap">${_s3Suap}${_s3BtnCopy(_s3Suap,'Processo SUAP')}</div>
+        </div>
+        <div style="background:rgba(0,230,118,.06);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">Último RC</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;gap:4px;flex-wrap:wrap">${_s3UltimoRC}${_s3BtnCopy(_s3UltimoRC,'Último RC')}</div>
+        </div>
+        <div style="background:rgba(0,230,118,.06);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">Número Conta Vinculada</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;gap:4px;flex-wrap:wrap">${_s3ContaVinc}${_s3BtnCopy(_s3ContaVinc,'Número Conta Vinculada')}</div>
+        </div>
+        <div style="background:rgba(0,230,118,.06);border-radius:6px;padding:8px 10px">
+          <div style="font-size:10px;font-weight:700;color:var(--green);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px">Situação</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace;display:flex;align-items:center;gap:4px;flex-wrap:wrap">${_s3Situacao}${_s3BtnCopy(_s3Situacao,'Situação')}</div>
+        </div>
       </div>
     </div>`;
 
@@ -9157,7 +9202,7 @@ function abrirDetalheLiquidacao(id){
     const d4=`RETENÇÃO DE ISS SOBRE PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
     const d5=`DEPÓSITO EM GARANTIA CONTA VINCULADA SOBRE PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs}, NO MÊS DE ${l.mesRef}, CONFORME CONTRATO ${nContrato}, NO - IFPI-CAMPUS SÃO JOÃO/PI`;
     const d6=`RETENÇÃO INSS PAGTO DA NF Nº ${l.nf} DE ${dataEmissaoBR} - REF À ${descObsAbrev} - NO IFPI-CAMPUS SÃO JOÃO/PI - NP ${l.npDh} - PROC SUAP ${l.suap}`;
-    // Valores formatados para exibir nas descrições (item 2.1–2.5)
+    // Valores formatados para exibir nas descrições
     const _vNF=fmtBR(l.valorBruto);
     const _vTribFed=fmtBR(tribFed);
     const _vBcInss=fmtBR(l.bcInss||0);
@@ -9166,18 +9211,75 @@ function abrirDetalheLiquidacao(id){
     const _vCv=fmtBR(cv);
     // Helper: botão copiar valor inline
     const btnCopyVal=(val)=>`<button style="margin-left:8px;padding:2px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border3);background:var(--bg4);color:var(--text3);cursor:pointer;font-family:'IBM Plex Mono',monospace;vertical-align:middle" onclick="navigator.clipboard.writeText('${val.replace(/'/g,"\\'")}').then(()=>toast('Copiado!','success'))">📋</button>`;
-    descricoes=
-      // 2.1 Descrição 1 — valor total NF na frente do título
-      descBlock(`Descrição 1 — SIAFI (Liquidação) <span style="font-size:13px;font-weight:700;color:var(--text);font-family:'IBM Plex Mono',monospace">${_vNF}</span>${btnCopyVal(_vNF)}`,d1)+
-      // 2.2 Descrição 2 — valor tributos federais; 3.1 cores diferenciadas; 3.2 CNPJ abaixo do DARF IR
-      (d2?descBlock(`Descrição 2 — DDF055 Tributos Federais <span style="font-size:13px;font-weight:700;color:var(--amber);font-family:'IBM Plex Mono',monospace">${_vTribFed}</span>${btnCopyVal(_vTribFed)}<div style="margin-top:6px;padding:6px 10px;background:rgba(245,200,66,.1);border-radius:6px;font-size:13px;font-weight:700"><span style="color:var(--text2)">Código DARF IR: <span style="color:var(--amber)">${darfIR}</span></span> &nbsp;·&nbsp; <span style="color:var(--text2)">Natureza de Rendimentos: <span style="color:var(--amber)">${natRend}</span></span><div style="margin-top:5px;font-size:12px;color:var(--cyan);font-family:'IBM Plex Mono',monospace">CNPJ: ${cnpjEmpresa}</div></div>`,d2):'')+
-      // 2.3 Descrição 3 — Base de Cálculo INSS e INSS com cores diferentes; 3.3 CNPJ abaixo de APURAÇÃO
-      descBlock(`Descrição 3 — DDF050 INSS <span style="font-size:12px;font-weight:700;color:var(--green);font-family:'IBM Plex Mono',monospace">BC: ${_vBcInss}</span> <span style="font-size:12px;font-weight:700;color:var(--teal);font-family:'IBM Plex Mono',monospace">INSS: ${_vInss}</span>${btnCopyVal(_vBcInss+' / '+_vInss)}<div style="margin-top:6px;padding:6px 10px;background:rgba(0,230,118,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--green)">Código: 1162 &nbsp;·&nbsp; Data Emissão: ${dataEmissaoBR} &nbsp;·&nbsp; APURAÇÃO: 20 MÊS SEGUINTE<div style="margin-top:5px;font-size:12px;color:var(--cyan);font-family:'IBM Plex Mono',monospace">CNPJ: ${cnpjEmpresa}</div></div>`,d3)+
-      // 2.4 Descrição 4 renomeada para DOB001; valor ISS na frente
-      descBlock(`Descrição 4 DOB001 — ISS <span style="font-size:13px;font-weight:700;color:var(--cyan);font-family:'IBM Plex Mono',monospace">${_vIss}</span>${btnCopyVal(_vIss)}<div style="margin-top:6px;padding:6px 10px;background:rgba(0,207,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--cyan)">FAVORECIDO ISS: 06553655000173</div>`,d4)+
-      // 2.5 Descrição 5 — valor conta vinculada na frente
-      descBlock(`Descrição 5 — DOB039 Conta Vinculada <span style="font-size:13px;font-weight:700;color:var(--purple);font-family:'IBM Plex Mono',monospace">${_vCv}</span>${btnCopyVal(_vCv)}<div style="margin-top:6px;padding:6px 10px;background:rgba(170,102,255,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--purple)">CNPJ BB: 00000000000191 &nbsp;·&nbsp; 154704J</div>`,d5)+
-      descBlock(`Descrição 6 — REINF<br><div style="margin-top:6px;padding:6px 10px;background:rgba(255,68,68,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--red)">Mês de Pagamento: ${l.mesPag||'—'}</div>`,d6);
+    // Helper: bloco de descrição com cabeçalho tabular acima do texto original
+    // A tabela fica no topo (campos + botões de cópia individuais) e o texto da descrição
+    // é mantido exatamente como estava — preservado em seu bloco monospace original.
+    function descBlockComTabela(label, texto, linhasTabela, cabecalhos){
+      const safe=texto.replace(/'/g,"\\'").replace(/\n/g,' ');
+      const th=cabecalhos||['CAMPO','VALOR','COPIAR'];
+      const tabela=`<table style="width:100%;border-collapse:collapse;margin-bottom:8px;border-bottom:1px solid var(--border2)"><thead><tr style="border-bottom:1px solid rgba(255,255,255,.12)">${th.map(h=>`<th style="padding:5px 10px;font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.1em;text-align:left">${h}</th>`).join('')}</tr></thead><tbody>${linhasTabela}</tbody></table>`;
+      return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;overflow:hidden">
+        <div style="padding:8px 12px;background:rgba(245,200,66,.08);border-bottom:1px solid var(--border2)">
+          <div style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.02em">${label}</div>
+        </div>
+        <div style="padding:10px 12px">${tabela}</div>
+        <div style="padding:10px 12px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word;border-top:1px solid var(--border)">${texto}</div>
+        <div style="padding:6px 12px;border-top:1px solid var(--border)">
+          <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('${safe}').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+        </div>
+      </div>`;
+    }
+    // Helper: linha de tabela com botão de cópia individual
+    function _tbLinha(campo, valor, cor){
+      const safeV=(valor||'—').replace(/'/g,"\\'");
+      const btn=valor&&valor!=='—'?`<button style="padding:2px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border3);background:var(--bg4);color:var(--text3);cursor:pointer;font-family:'IBM Plex Mono',monospace;white-space:nowrap" onclick="navigator.clipboard.writeText('${safeV}').then(()=>toast('Copiado!','success'))">📋</button>`:'';
+      return `<tr style="border-bottom:1px solid rgba(255,255,255,.05)"><td style="padding:6px 10px;font-size:12px;color:var(--text3);white-space:nowrap">${campo}</td><td style="padding:6px 10px;font-size:13px;font-weight:700;color:${cor||'var(--text)'};font-family:'IBM Plex Mono',monospace">${valor||'—'}</td><td style="padding:6px 10px;text-align:right">${btn}</td></tr>`;
+    }
+
+    // Descrição 1 — SIAFI: tabela TÍTULO|VALOR|AÇÃO acima do texto original d1
+    const _desc1Tabela=descBlockComTabela(
+      `Descrição 1 — SIAFI (Liquidação)`,
+      d1,
+      _tbLinha('Valor Total NF',_vNF,'var(--text)'),
+      ['TÍTULO','VALOR','AÇÃO']
+    );
+    // Descrição 2 — DDF055: tabela com campos específicos acima do texto original d2
+    const _desc2Tabela=d2?descBlockComTabela(
+      `Descrição 2 — DDF055 Tributos Federais <span style="font-size:13px;font-weight:700;color:var(--amber);font-family:'IBM Plex Mono',monospace">${_vTribFed}</span>${btnCopyVal(_vTribFed)}`,
+      d2,
+      _tbLinha('Código DARF IR',darfIR,'var(--amber)')+
+      _tbLinha('Natureza de Rendimentos',natRend,'var(--amber)')+
+      _tbLinha('CNPJ',cnpjEmpresa,'var(--cyan)')
+    ):'';
+    // Descrição 3 — DDF050 INSS BC: tabela CAMPO|VALOR|COPIAR acima do texto original d3
+    const _desc3Tabela=descBlockComTabela(
+      `Descrição 3 — DDF050 INSS <span style="font-size:12px;font-weight:700;color:var(--green);font-family:'IBM Plex Mono',monospace">BC: ${_vBcInss}</span> <span style="font-size:12px;font-weight:700;color:var(--teal);font-family:'IBM Plex Mono',monospace">INSS: ${_vInss}</span>`,
+      d3,
+      _tbLinha('BC',_vBcInss,'var(--green)')+
+      _tbLinha('Valor INSS',_vInss,'var(--teal)')+
+      _tbLinha('Código','1162','var(--green)')+
+      _tbLinha('Data Emissão',dataEmissaoBR,'var(--text)')+
+      _tbLinha('APURAÇÃO','20 MÊS SEGUINTE','var(--text)')+
+      _tbLinha('CNPJ',cnpjEmpresa,'var(--cyan)')
+    );
+    // Descrição 4 — DOB001 ISS: tabela com Favorecido ISS + botão acima do texto d4
+    const _desc4Tabela=descBlockComTabela(
+      `Descrição 4 DOB001 — ISS <span style="font-size:13px;font-weight:700;color:var(--cyan);font-family:'IBM Plex Mono',monospace">${_vIss}</span>${btnCopyVal(_vIss)}`,
+      d4,
+      _tbLinha('Valor ISS',_vIss,'var(--cyan)')+
+      _tbLinha('Favorecido ISS','06553655000173','var(--cyan)')
+    );
+    // Descrição 5 — DOB039 Conta Vinculada: tabela com CNPJ BB / 154704J acima do texto d5
+    const _desc5Tabela=descBlockComTabela(
+      `Descrição 5 — DOB039 Conta Vinculada <span style="font-size:13px;font-weight:700;color:var(--purple);font-family:'IBM Plex Mono',monospace">${_vCv}</span>${btnCopyVal(_vCv)}`,
+      d5,
+      _tbLinha('Valor Conta Vinculada',_vCv,'var(--purple)')+
+      _tbLinha('CNPJ BB','00000000000191','var(--purple)')+
+      _tbLinha('154704J','154704J','var(--purple)')
+    );
+    // Descrição 6 — REINF: texto original d6 com bloco de mês de pagamento
+    const _desc6Tabela=descBlock(`Descrição 6 — REINF<br><div style="margin-top:6px;padding:6px 10px;background:rgba(255,68,68,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--red)">Mês de Pagamento: ${l.mesPag||'—'}</div>`,d6);
+    descricoes=_desc1Tabela+_desc2Tabela+_desc3Tabela+_desc4Tabela+_desc5Tabela+_desc6Tabela;
     // 4.2 Rodapé: botão de copiar no texto fixo "INCLUSÃO DE PRÉ DOC..."
     rodape=`<div style="margin-top:14px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px;font-size:13px;font-weight:700;color:var(--gold);text-align:center;letter-spacing:.04em;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px">INCLUSÃO DE PRÉ DOC COM OS RESPECTIVOS DADOS BANCÁRIOS <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE PRÉ DOC COM OS RESPECTIVOS DADOS BANCÁRIOS').then(()=>toast('Copiado!','success'))">📋 Copiar</button></div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px"><span style="font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.04em">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</span><button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS').then(()=>toast('Copiado!','success'))">📋 Copiar</button></div>`;
 
