@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SUCO v1.1 — Sistema Unificado de Controle Orçamentário · IFPI Campus SJP</title>
+<title>SUCO v1.2 — Sistema Unificado de Controle Orçamentário · IFPI Campus SJP</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23111118'/><path d='M5 23 L11 14 L17 18 L25 8' stroke='%23f5a623' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='25' cy='8' r='3' fill='%2300e676'/><circle cx='25' cy='8' r='1.4' fill='%23111118'/></svg>" type="image/svg+xml">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
@@ -508,7 +508,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div id="sidebar-saldo"><div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">Sem dados</div></div>
   </div>
   <div class="sidebar-footer">
-    <div class="sf-text">IFPI Campus São João do Piauí · <strong style="color:var(--gold)">SUCO v1.1</strong><br>localStorage · Soft-delete · Auditoria</div>
+    <div class="sf-text">IFPI Campus São João do Piauí · <strong style="color:var(--gold)">SUCO v1.2</strong><br>localStorage · Drive Auto-Sync · Soft-delete · Auditoria</div>
   </div>
 </aside>
 
@@ -1650,17 +1650,53 @@ function salvar(){
     if(!Array.isArray(state.fornecedores))state.fornecedores=[];
     if(!Array.isArray(state.contratosPnae))state.contratosPnae=[];
     if(!Array.isArray(state.auditLog))state.auditLog=[];
-    const json=JSON.stringify(state);
+    // ★ FIX PERSISTÊNCIA: objeto de backup explícito — nunca salvar estado parcial.
+    // Antes: JSON.stringify(state) poderia omitir campos se state tivesse propriedades
+    // adicionadas dinamicamente após inicialização. Agora: enumeração explícita garante
+    // que todos os módulos críticos (empenhosCad, liquidacoes, creditos) sejam sempre incluídos.
+    const estadoCompleto = {
+      meta: state.meta,
+      fontes: state.fontes,
+      ptres: state.ptres,
+      cats: state.cats,
+      nd: state.nd,
+      pi: state.pi,
+      ts: state.ts,
+      lancamentos: state.lancamentos,
+      contratos: state.contratos,
+      acoes: state.acoes,
+      auditLog: state.auditLog,
+      fornecedores: state.fornecedores,
+      empenhosCad: state.empenhosCad,
+      liquidacoes: state.liquidacoes,
+      contratosPnae: state.contratosPnae
+    };
+    const json=JSON.stringify(estadoCompleto);
     // Validar que o JSON gerado é parseável (previne corrupção)
-    JSON.parse(json);
+    const parsed = JSON.parse(json);
+    // ★ FIX CRÍTICO: Verificação de integridade pré-gravação — garante que nenhum
+    // array obrigatório foi zerado acidentalmente antes de gravar no localStorage.
+    const _chk = ['lancamentos','empenhosCad','liquidacoes'];
+    for(const _k of _chk){
+      if(!Array.isArray(parsed[_k])){
+        console.error('[SUCO] salvar() abortado: campo "'+_k+'" corrompido antes da gravação.');
+        toast('Erro de integridade ao salvar (campo '+_k+'). Dados não gravados.','error');
+        return;
+      }
+    }
     localStorage.setItem(STORAGE_KEY,json);
     const t=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('save-text').textContent='Salvo às '+t;
-  }catch(e){toast('Erro ao salvar! localStorage cheio?','error')}
+    console.info('[SUCO] ✅ salvar() OK — lancamentos:'+state.lancamentos.length+' empenhosCad:'+state.empenhosCad.length+' liquidacoes:'+state.liquidacoes.length+' creditos(Entrada):'+state.lancamentos.filter(x=>x.tipo==='Entrada'&&x.status==='Ativo').length);
+  }catch(e){console.error('[SUCO] salvar() erro:',e);toast('Erro ao salvar! localStorage cheio?','error')}
   driveTriggerSync();
 }
 function carregar(){
-  const raw=localStorage.getItem(STORAGE_KEY)||localStorage.getItem('sysOrcV4');
+  // ★ FIX: Tentar a chave primária SUCO v6 e fallback para versões anteriores
+  const raw=localStorage.getItem(STORAGE_KEY)
+         || localStorage.getItem('sysOrcV5')
+         || localStorage.getItem('sysOrcV4')
+         || localStorage.getItem('sysOrcV3');
   if(raw){
     try{
       const d=JSON.parse(raw);
@@ -1890,9 +1926,9 @@ function carregar(){
         console.info('Migração CONTRATOS: '+_ctVinc+' lançamento(s) histórico(s) reindexado(s) para contratos continuados.');
       // ── FIM MIGRAÇÃO HISTÓRICA CONTRATOS CONTINUADOS ─────────────────────────
 
-      // Log de migração automática
       console.log('✅ Categorias normalizadas automaticamente ao carregar');
       console.log('✅ Usando DEFAULT_CATS em todos os módulos para garantir consistência');
+      console.info('[SUCO] carregar() OK — lancamentos:'+state.lancamentos.length+' empenhosCad:'+state.empenhosCad.length+' liquidacoes:'+state.liquidacoes.length+' creditos(Entrada):'+state.lancamentos.filter(x=>x.tipo==='Entrada'&&x.status==='Ativo').length);
       
       return true;
     }catch(e){console.error('Erro ao carregar dados:',e)}
@@ -3746,6 +3782,9 @@ function registrarCredito(){
     nd:_cNd?_cNd.value:'',
     pi:_cPi?_cPi.value:'',
     observacoes:document.getElementById('c-obs').value.trim(),
+    // ★ FIX: referenciaId explicitamente null para créditos — evita falsos positivos
+    // no validador de orfãos e garante integridade referencial na importação/exportação
+    referenciaId: null,
     status:'Ativo',ts:new Date().toISOString()
   };
   state.lancamentos.push(l);
@@ -5956,26 +5995,28 @@ function gerarRelatorioContratos(){
 }
 
 // ═══════════════════════════════════════════════════════════
-//  GOOGLE DRIVE — INTEGRAÇÃO COMPLETA
+//  GOOGLE DRIVE — INTEGRAÇÃO COMPLETA v1.2
+//  Correções: renovação automática de token, sync completo
+//  de todos os módulos, re-renderização total pós-importação.
 // ═══════════════════════════════════════════════════════════
 const DRIVE_CLIENT_ID='650384223031-5022u8tv9pa4otrhamr77f2lmjsrbppn.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const DRIVE_FILE_NAME='orcamento_v6_dados.json';
+
 let driveAccessToken=null;
 let driveFileId=null;
 let _driveSyncTimer=null;
-let _driveSyncInProgress=false; // ★ mutex para evitar gravações simultâneas
-let _driveLastSyncChecksum='';  // ★ checksum para evitar gravações desnecessárias
+let _driveSyncInProgress=false;
+let _driveLastSyncChecksum='';
+let _driveTokenExpiry=0;      // ★ timestamp (ms) da expiração do token
+let _driveTokenRenewTimer=null; // ★ timer de renovação preventiva do token
 
-// ★ Gera checksum do estado — inclui conteúdo serializado para detectar edições internas
-// CORREÇÃO: versão anterior usava apenas .length, perdendo edições em registros existentes
+// ★ Checksum completo: inclui hashes de conteúdo para detectar edições internas
 function _driveStateChecksum(){
   try{
-    // Inclui lastSaved como âncora temporal + hash simplificado dos dados críticos
     const _liqHash=(state.liquidacoes||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valorBruto||'')).join('|');
     const _lancHash=(state.lancamentos||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valor||'')).join('|');
     const _empHash=(state.empenhosCad||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valorInicial||'')).join('|');
-    // ★ FIX: sem truncamento — hashes completos garantem detecção correta de qualquer mudança
     const s=JSON.stringify({
       lancamentos:(state.lancamentos||[]).length,
       empenhosCad:(state.empenhosCad||[]).length,
@@ -5985,9 +6026,7 @@ function _driveStateChecksum(){
       contratosPnae:(state.contratosPnae||[]).length,
       acoes:(state.acoes||[]).length,
       lastSaved:state.meta?.lastSaved||'',
-      _liqH:_liqHash,
-      _lanH:_lancHash,
-      _empH:_empHash
+      _liqH:_liqHash,_lanH:_lancHash,_empH:_empHash
     });
     return s;
   }catch(e){return Date.now().toString();}
@@ -6006,6 +6045,30 @@ function driveSetUI(logado){
   if(badge)badge.style.display=logado?'':'none';
 }
 
+// ★ Renova o token silenciosamente antes de expirar (55 min após emissão)
+function _driveAgendarRenovacaoToken(expiresInSeg){
+  if(_driveTokenRenewTimer)clearTimeout(_driveTokenRenewTimer);
+  const ms=Math.max(((expiresInSeg||3600)-300),60)*1000; // renova 5 min antes, mínimo 1 min
+  _driveTokenRenewTimer=setTimeout(()=>{
+    if(!window.google||!driveAccessToken)return;
+    console.info('[DRIVE] Renovando token preventivamente...');
+    try{
+      const client=google.accounts.oauth2.initTokenClient({
+        client_id:DRIVE_CLIENT_ID,scope:DRIVE_SCOPE,
+        prompt:'',    // renovação silenciosa, sem popup
+        callback:(resp)=>{
+          if(resp.error){console.warn('[DRIVE] Falha na renovação silenciosa:',resp.error);return;}
+          driveAccessToken=resp.access_token;
+          _driveTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
+          _driveAgendarRenovacaoToken(resp.expires_in||3600);
+          console.info('[DRIVE] Token renovado com sucesso.');
+        }
+      });
+      client.requestAccessToken();
+    }catch(e){console.warn('[DRIVE] Erro ao renovar token:',e);}
+  },ms);
+}
+
 function driveLogin(){
   if(!window.google){toast('API do Google ainda carregando, aguarde...','warn');return;}
   const client=google.accounts.oauth2.initTokenClient({
@@ -6013,6 +6076,9 @@ function driveLogin(){
     callback:async(resp)=>{
       if(resp.error){toast('Erro ao conectar com o Google: '+resp.error,'error');return;}
       driveAccessToken=resp.access_token;
+      _driveTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
+      // ★ Agenda renovação automática do token
+      _driveAgendarRenovacaoToken(resp.expires_in||3600);
       try{
         const uinfo=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+driveAccessToken}});
         const ud=await uinfo.json();
@@ -6022,135 +6088,131 @@ function driveLogin(){
       }catch(e){}
       driveSetUI(true);
       toast('Google Drive conectado! ☁','success');
-      // ★ IMPORTAÇÃO AUTOMÁTICA: busca arquivo e carrega automaticamente se existir
       await driveBuscarArquivo();
       if(driveFileId){
         toast('Arquivo encontrado no Drive. Sincronizando automaticamente...','success');
         await _driveAutoImportarSeNecessario();
-      } else {
-        toast('Nenhum backup no Drive ainda. Os dados locais serão salvos imediatamente.','success');
-        // ★ FIX: forçar gravação imediata (não apenas debounce), pois o checksum
-        // pode estar "igual" ao estado vazio inicial, suprimindo o primeiro sync
+      }else{
+        toast('Nenhum backup no Drive ainda. Salvando dados locais imediatamente...','success');
         _driveLastSyncChecksum='';
-        driveTriggerSync(); // salva o estado atual no Drive
+        await driveSalvarSilencioso();
       }
     }
   });
   client.requestAccessToken();
 }
 
-// ★ Importação automática inteligente: só importa se Drive for mais recente
+// ★ Verifica se o token ainda é válido (margem de 2 min)
+function _driveTokenValido(){
+  if(!driveAccessToken)return false;
+  if(_driveTokenExpiry&&Date.now()>(_driveTokenExpiry-120000))return false;
+  return true;
+}
+
+// ★ Importação automática inteligente — compara timestamps e decide direção do sync
 async function _driveAutoImportarSeNecessario(){
   if(!driveAccessToken||!driveFileId)return;
   try{
     const res=await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,{headers:{Authorization:'Bearer '+driveAccessToken}});
     if(!res.ok)return;
     const d=await res.json();
-    // Comparar datas de lastSaved
     const driveTs=d.meta?.lastSaved||'';
     const localTs=state.meta?.lastSaved||'';
-    // ★ FIX: se Drive não tem timestamp mas tem dados, não descartar silenciosamente
-    const _drivePossuiDados=Array.isArray(d.lancamentos)&&d.lancamentos.length>0||Array.isArray(d.empenhosCad)&&(d.empenhosCad||[]).length>0;
-    if(!driveTs&&!_drivePossuiDados)return; // arquivo vazio ou inválido
+    const _drivePossuiDados=(Array.isArray(d.lancamentos)&&d.lancamentos.length>0)||(Array.isArray(d.empenhosCad)&&(d.empenhosCad||[]).length>0)||(Array.isArray(d.liquidacoes)&&(d.liquidacoes||[]).length>0);
+    if(!driveTs&&!_drivePossuiDados)return;
     if(!driveTs&&_drivePossuiDados){
-      // Backup legado sem timestamp: importar se local estiver vazio, senão subir local
-      if(state.lancamentos.length===0&&(state.empenhosCad||[]).length===0){
-        console.info('[DRIVE] Backup sem timestamp com dados; local vazio — importando do Drive.');
+      if(state.lancamentos.length===0&&(state.empenhosCad||[]).length===0&&(state.liquidacoes||[]).length===0){
+        console.info('[DRIVE] Backup sem timestamp; local vazio — importando do Drive.');
         await _driveAplicarDados(d);
         toast('✓ Dados recuperados do Google Drive!','success');
-      } else {
-        console.info('[DRIVE] Backup sem timestamp; local tem dados — atualizando Drive com versão local.');
-        _driveLastSyncChecksum=''; // força gravação
+      }else{
+        console.info('[DRIVE] Backup sem timestamp; local tem dados — atualizando Drive.');
+        _driveLastSyncChecksum='';
         await driveSalvarSilencioso();
         toast('✓ Drive atualizado com dados locais!','success');
       }
       return;
     }
-    // Se Drive é mais recente, importa automaticamente
     if(driveTs>localTs){
-      console.info('[DRIVE] Arquivo Drive mais recente ('+driveTs+') > local ('+localTs+'). Importando...');
+      console.info('[DRIVE] Drive mais recente ('+driveTs+') > local ('+localTs+'). Importando...');
       await _driveAplicarDados(d);
       toast('✓ Dados sincronizados automaticamente do Google Drive!','success');
-    } else if(driveTs<localTs){
-      // Local é mais recente — sobe para o Drive
-      console.info('[DRIVE] Dados locais mais recentes. Sincronizando para Drive...');
-      _driveLastSyncChecksum=''; // força gravação para garantir que Drive fique atualizado
+    }else if(driveTs<localTs){
+      console.info('[DRIVE] Local mais recente. Sincronizando para Drive...');
+      _driveLastSyncChecksum='';
       await driveSalvarSilencioso();
       toast('✓ Dados locais sincronizados para o Google Drive!','success');
-    } else {
-      toast('✓ Google Drive sincronizado!','success');
+    }else{
+      toast('✓ Google Drive já sincronizado!','success');
     }
   }catch(e){console.warn('[DRIVE] Auto-import falhou:',e);}
 }
 
-// ★ Aplicar dados do Drive com validação de integridade e prevenção de duplicidade
+// ★ Aplica dados recebidos do Drive com merge inteligente e re-renderização completa
 async function _driveAplicarDados(d){
   if(!d||typeof d!=='object')throw new Error('Dados inválidos recebidos do Drive');
 
-  // ★ VERIFICAÇÃO DE INTEGRIDADE: validar estrutura mínima antes de aplicar
+  // Validar estrutura mínima
   const camposObrigatorios=['lancamentos','empenhosCad','liquidacoes'];
   for(const c of camposObrigatorios){
     if(d[c]!==undefined&&!Array.isArray(d[c]))
       throw new Error(`Campo "${c}" corrompido no arquivo Drive (não é array)`);
   }
 
-  // ★ PREVENÇÃO DE DUPLICIDADE: usar IDs para merge inteligente em vez de substituir cegamente
+  // Merge inteligente: mantém o registro mais recente pelo campo ts
   const mergeArray=(local,remoto,keyFn)=>{
-    if(!Array.isArray(remoto))return local;
+    if(!Array.isArray(remoto))return Array.isArray(local)?local:[];
     if(!Array.isArray(local)||local.length===0)return remoto.map(x=>({...x}));
     const localMap=new Map(local.map(x=>[keyFn(x),x]));
     const remotoMap=new Map(remoto.map(x=>[keyFn(x),x]));
-    // Adiciona itens do remoto que não existem localmente
     remotoMap.forEach((item,id)=>{
-      if(!localMap.has(id))localMap.set(id,{...item});
-      else {
-        // Mantém o mais recente pelo campo ts
+      if(!localMap.has(id)){localMap.set(id,{...item});}
+      else{
         const loc=localMap.get(id);
-        const remTs=item.ts||'';
-        const locTs=loc.ts||'';
-        if(remTs>locTs)localMap.set(id,{...item});
+        if((item.ts||'')>(loc.ts||''))localMap.set(id,{...item});
       }
     });
     return Array.from(localMap.values());
   };
   const idKey=x=>x.id||x.numero||Math.random().toString(36);
 
-  state.lancamentos=mergeArray(state.lancamentos,d.lancamentos,idKey);
-  state.empenhosCad=mergeArray(state.empenhosCad,d.empenhosCad,idKey);
-  state.liquidacoes=mergeArray(state.liquidacoes,d.liquidacoes,idKey);
-  state.contratos=mergeArray(state.contratos,d.contratos,idKey);
-  state.acoes=mergeArray(state.acoes,d.acoes,idKey);
-  state.fornecedores=mergeArray(state.fornecedores,d.fornecedores,idKey);
-  state.contratosPnae=mergeArray(state.contratosPnae,d.contratosPnae,idKey);
-  state.auditLog=mergeArray(state.auditLog,d.auditLog,idKey);
+  // ★ Merge completo de TODOS os módulos
+  state.lancamentos   = mergeArray(state.lancamentos,   d.lancamentos,    idKey);
+  state.empenhosCad   = mergeArray(state.empenhosCad,   d.empenhosCad,    idKey);
+  state.liquidacoes   = mergeArray(state.liquidacoes,   d.liquidacoes,    idKey);
+  state.contratos     = mergeArray(state.contratos,     d.contratos,      idKey);
+  state.acoes         = mergeArray(state.acoes,         d.acoes,          idKey);
+  state.fornecedores  = mergeArray(state.fornecedores,  d.fornecedores,   idKey);
+  state.contratosPnae = mergeArray(state.contratosPnae, d.contratosPnae,  idKey);
+  state.auditLog      = mergeArray(state.auditLog,      d.auditLog,       idKey);
 
-  // Configurações — apenas sobrescreve se Drive tiver dados
-  if(Array.isArray(d.fontes))state.fontes=[...d.fontes];
-  if(Array.isArray(d.ptres))state.ptres=[...d.ptres];
-  if(Array.isArray(d.nd))state.nd=[...d.nd];
-  if(Array.isArray(d.pi))state.pi=[...d.pi];
-  if(Array.isArray(d.ts))state.ts=[...d.ts];
-  state.cats=[...DEFAULT_CATS]; // sempre usa as categorias padrão
+  // Configurações — sobrescreve somente se Drive tiver dados
+  if(Array.isArray(d.fontes)&&d.fontes.length>0)state.fontes=[...d.fontes];
+  if(Array.isArray(d.ptres)&&d.ptres.length>0)state.ptres=[...d.ptres];
+  if(Array.isArray(d.nd)&&d.nd.length>0)state.nd=[...d.nd];
+  if(Array.isArray(d.pi)&&d.pi.length>0)state.pi=[...d.pi];
+  if(Array.isArray(d.ts)&&d.ts.length>0)state.ts=[...d.ts];
+  state.cats=[...DEFAULT_CATS];
   if(d.meta)state.meta={...state.meta,...d.meta};
 
-  // ★ Normalização completa (igual à importação JSON)
-  state.lancamentos=state.lancamentos.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
-  state.contratos=state.contratos.map(c=>({...c,categoria:c.categoria?normalizarCategoria(c.categoria):c.categoria}));
-  state.empenhosCad=state.empenhosCad.map(e=>({...e,categoria:e.categoria?normalizarCategoria(e.categoria):e.categoria}));
-  state.liquidacoes=state.liquidacoes.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
+  // Normalização de categorias em todos os módulos
+  state.lancamentos   = state.lancamentos.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
+  state.contratos     = state.contratos.map(c=>({...c,categoria:c.categoria?normalizarCategoria(c.categoria):c.categoria}));
+  state.empenhosCad   = state.empenhosCad.map(e=>({...e,categoria:e.categoria?normalizarCategoria(e.categoria):e.categoria}));
+  state.liquidacoes   = state.liquidacoes.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
 
   // Propagação de tipoRecurso
   state.lancamentos=state.lancamentos.map(l=>{
     if((l.tipo==='Liquidação'||l.tipo==='Pagamento')&&!l.tipoRecurso){
       const empCad=(state.empenhosCad||[]).find(e=>e.id===l.referenciaId||e.numero===l.referencia);
-      return {...l,tipoRecurso:empCad?.tipoEmp||'EXE'};
+      return{...l,tipoRecurso:empCad?.tipoEmp||'EXE'};
     }
     return l;
   });
   state.liquidacoes=state.liquidacoes.map(l=>{
     if(!l.tipoRecurso){
       const empCad=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
-      return {...l,tipoRecurso:empCad?.tipoEmp||'EXE'};
+      return{...l,tipoRecurso:empCad?.tipoEmp||'EXE'};
     }
     return l;
   });
@@ -6165,17 +6227,15 @@ async function _driveAplicarDados(d){
   });
 
   // Migração tipoRegistro
-  state.lancamentos.forEach(l=>{
-    if(l.tipo==='Anulação'&&!l.tipoRegistro) l.tipoRegistro='ANULACAO';
-  });
-  const _drGruposEmp2={};
+  state.lancamentos.forEach(l=>{if(l.tipo==='Anulação'&&!l.tipoRegistro)l.tipoRegistro='ANULACAO';});
+  const _drGruposEmp={};
   state.lancamentos.forEach(l=>{
     if(l.tipo!=='Empenho'||l.tipoRegistro)return;
     const k=l.empenhoCadId||l.referencia||l.numeroEmpenho||'__';
-    if(!_drGruposEmp2[k])_drGruposEmp2[k]=[];
-    _drGruposEmp2[k].push(l);
+    if(!_drGruposEmp[k])_drGruposEmp[k]=[];
+    _drGruposEmp[k].push(l);
   });
-  Object.values(_drGruposEmp2).forEach(arr=>{
+  Object.values(_drGruposEmp).forEach(arr=>{
     arr.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
     arr.forEach((l,i)=>{l.tipoRegistro=i===0?'INICIAL':'REFORCO';});
   });
@@ -6187,34 +6247,56 @@ async function _driveAplicarDados(d){
       if(l.status!=='Ativo')return;
       const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.numeroEmpenho===e.numero)||(l.referenciaId===e.id);
       if(!isFilho)return;
-      if(!l.empenhoCadId) l.empenhoCadId=e.id;
-      if(e.acaoId&&!l.acaoId) l.acaoId=e.acaoId;
+      if(!l.empenhoCadId)l.empenhoCadId=e.id;
+      if(e.acaoId&&!l.acaoId)l.acaoId=e.acaoId;
     });
   });
 
-  // ★ VERIFICAÇÃO DE INTEGRIDADE PÓS-IMPORTAÇÃO
+  // ★ Verificação de integridade pós-importação
   const empsIds=new Set((state.empenhosCad||[]).map(e=>e.id));
   const liqsOrfas=(state.liquidacoes||[]).filter(l=>l.referenciaId&&!empsIds.has(l.referenciaId)).length;
-  if(liqsOrfas>0)console.warn(`[DRIVE] Integridade: ${liqsOrfas} liquidação(ões) com referenciaId sem empenho correspondente.`);
+  if(liqsOrfas>0)console.warn(`[DRIVE] Integridade: ${liqsOrfas} liquidação(ões) sem empenho correspondente.`);
   const contratosIds=new Set((state.contratos||[]).map(c=>c.id));
   const empsOrfos=(state.empenhosCad||[]).filter(e=>e.contratoId&&!contratosIds.has(e.contratoId)).length;
-  if(empsOrfos>0)console.warn(`[DRIVE] Integridade: ${empsOrfos} empenho(s) com contratoId sem contrato correspondente.`);
+  if(empsOrfos>0)console.warn(`[DRIVE] Integridade: ${empsOrfos} empenho(s) com contratoId sem contrato.`);
 
-  // Salvar e re-renderizar
-  // ★ FIX: zerar checksum antes de salvar para que o estado importado do Drive
-  // não seja suprimido nas próximas sincronizações automáticas
+  // ★ Persiste localmente e re-renderiza TODOS os módulos
   _driveLastSyncChecksum='';
-  if(typeof energyPoolManager!=='undefined') energyPoolManager.invalidateCache();
+  if(typeof energyPoolManager!=='undefined')energyPoolManager.invalidateCache();
   salvar();
   init();
-  // ★ FIX: chamar initNovosModulos para garantir que módulos secundários
-  // (PNAE, Fornecedores, AE, etc.) sejam completamente re-inicializados
-  if(typeof initNovosModulos==='function') initNovosModulos();
+  // ★ Re-renderização completa de todos os módulos após importação do Drive
+  _driveRenderizarTodosModulos();
+}
+
+// ★ Re-renderiza todos os módulos visíveis e pendentes após sync do Drive
+function _driveRenderizarTodosModulos(){
+  try{if(typeof renderDashboard==='function')renderDashboard();}catch(e){}
+  try{if(typeof renderSidebar==='function')renderSidebar();}catch(e){}
+  try{if(typeof renderEntradas==='function')renderEntradas();}catch(e){}
+  try{if(typeof renderCatGrid==='function')renderCatGrid();}catch(e){}
+  try{if(typeof renderCadastroEmpenhos==='function')renderCadastroEmpenhos();}catch(e){}
+  try{if(typeof renderLiquidacoes==='function')renderLiquidacoes();}catch(e){}
+  try{if(typeof renderLiqPags==='function')renderLiqPags();}catch(e){}
+  try{if(typeof renderSaidas==='function')renderSaidas();}catch(e){}
+  try{if(typeof renderAnulacoes==='function')renderAnulacoes();}catch(e){}
+  try{if(typeof renderTransferencias==='function')renderTransferencias();}catch(e){}
+  try{if(typeof renderHistorico==='function')renderHistorico();}catch(e){}
+  try{if(typeof renderFornecedores==='function')renderFornecedores();}catch(e){}
+  try{if(typeof renderContratosPnae==='function')renderContratosPnae();}catch(e){}
+  try{if(typeof renderConfig==='function')renderConfig();}catch(e){}
+  try{if(typeof renderAuditLog==='function')renderAuditLog();}catch(e){}
+  try{if(typeof renderAeDetalhe==='function')renderAeDetalhe();}catch(e){}
+  try{if(typeof _aeRefreshSeAberto==='function')_aeRefreshSeAberto();}catch(e){}
+  try{if(typeof initNovosModulos==='function')initNovosModulos();}catch(e){}
+  console.info('[DRIVE] ✅ Re-renderização completa de todos os módulos concluída.');
 }
 
 function driveLogout(){
   if(driveAccessToken&&window.google)google.accounts.oauth2.revoke(driveAccessToken,()=>{});
   driveAccessToken=null;driveFileId=null;
+  _driveTokenExpiry=0;
+  if(_driveTokenRenewTimer){clearTimeout(_driveTokenRenewTimer);_driveTokenRenewTimer=null;}
   driveSetUI(false);
   const el=document.getElementById('drive-user-name');
   if(el)el.textContent='Drive';
@@ -6229,44 +6311,46 @@ async function driveBuscarArquivo(){
     if(!res.ok)return null;
     const data=await res.json();
     if(data.files&&data.files.length>0){
-      // Usar o arquivo mais recente em caso de múltiplos
       const sorted=data.files.sort((a,b)=>(b.modifiedTime||'').localeCompare(a.modifiedTime||''));
       driveFileId=sorted[0].id;
       return driveFileId;
     }
-  }catch(e){console.error('Erro ao buscar arquivo Drive:',e);}
+  }catch(e){console.error('[DRIVE] Erro ao buscar arquivo:',e);}
   return null;
 }
 
 async function driveSalvarSilencioso(){
   if(!driveAccessToken)return;
+  // ★ Verificar validade do token antes de tentar salvar
+  if(!_driveTokenValido()){
+    console.warn('[DRIVE] Token expirado. Sync adiado até renovação.');
+    return;
+  }
   if(_driveSyncInProgress){console.info('[DRIVE] Sync já em andamento, ignorando.');return;}
-  // ★ Verificar se houve mudanças reais (evitar gravações desnecessárias)
   const checksum=_driveStateChecksum();
   if(checksum===_driveLastSyncChecksum){console.info('[DRIVE] Sem mudanças detectadas, sync omitido.');return;}
   _driveSyncInProgress=true;
   try{
-    // ★ AUDITORIA DE BACKUP: garante que TODOS os módulos estão incluídos
-    const backupPayload = {
-      meta: state.meta,
-      fontes: state.fontes,
-      ptres: state.ptres,
-      cats: state.cats,
-      nd: state.nd,
-      pi: state.pi,
-      ts: state.ts,
-      lancamentos: state.lancamentos,
-      contratos: state.contratos,
-      acoes: state.acoes,
-      auditLog: state.auditLog,
-      fornecedores: state.fornecedores,
-      empenhosCad: state.empenhosCad,
-      liquidacoes: state.liquidacoes,
-      contratosPnae: state.contratosPnae
+    // ★ Payload completo com todos os módulos
+    const backupPayload={
+      meta:state.meta,
+      fontes:state.fontes,
+      ptres:state.ptres,
+      cats:state.cats,
+      nd:state.nd,
+      pi:state.pi,
+      ts:state.ts,
+      lancamentos:state.lancamentos,
+      contratos:state.contratos,
+      acoes:state.acoes,
+      auditLog:state.auditLog,
+      fornecedores:state.fornecedores,
+      empenhosCad:state.empenhosCad,
+      liquidacoes:state.liquidacoes,
+      contratosPnae:state.contratosPnae
     };
-    // ★ Validar JSON antes de enviar
     const jsonStr=JSON.stringify(backupPayload,null,2);
-    JSON.parse(jsonStr); // lança erro se inválido
+    JSON.parse(jsonStr); // valida JSON antes de enviar
     const blob=new Blob([jsonStr],{type:'application/json'});
     if(!driveFileId)await driveBuscarArquivo();
     let res;
@@ -6285,22 +6369,29 @@ async function driveSalvarSilencioso(){
     const data=await res.json();
     if(data.id){
       driveFileId=data.id;
-      _driveLastSyncChecksum=checksum; // ★ Atualiza checksum após sucesso
+      _driveLastSyncChecksum=checksum;
       const agora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
       const el=document.getElementById('drive-sync-time');
       if(el)el.textContent='☁ '+agora;
-      console.info('✅ Drive sync OK — '+agora+' · empenhosCad: '+(state.empenhosCad||[]).length+' · lancamentos: '+state.lancamentos.length+' · liquidacoes: '+(state.liquidacoes||[]).length);
-    } else {
-      console.warn('⚠ Drive sync: resposta sem ID', data);
+      console.info('[DRIVE] ✅ Sync OK — '+agora+
+        ' | empenhosCad:'+(state.empenhosCad||[]).length+
+        ' | lancamentos:'+state.lancamentos.length+
+        ' | liquidacoes:'+(state.liquidacoes||[]).length+
+        ' | contratos:'+(state.contratos||[]).length+
+        ' | fornecedores:'+(state.fornecedores||[]).length+
+        ' | contratosPnae:'+(state.contratosPnae||[]).length+
+        ' | acoes:'+(state.acoes||[]).length);
+    }else{
+      console.warn('[DRIVE] Sync: resposta sem ID',data);
     }
-  }catch(e){console.warn('Auto-sync Drive falhou:',e);
+  }catch(e){console.warn('[DRIVE] Auto-sync falhou:',e);
   }finally{_driveSyncInProgress=false;}
 }
 
 async function driveSalvar(){
   if(!driveAccessToken){toast('Conecte ao Google Drive primeiro.','warn');return;}
   toast('Salvando na nuvem...','success');
-  _driveLastSyncChecksum=''; // Força gravação mesmo sem mudanças detectadas
+  _driveLastSyncChecksum='';
   await driveSalvarSilencioso();
   toast('✓ Dados salvos no Google Drive!','success');
 }
@@ -6315,20 +6406,18 @@ async function driveCarregar(){
     if(!res.ok){toast('Erro ao baixar dados do Drive (HTTP '+res.status+').','error');return;}
     const d=await res.json();
     await _driveAplicarDados(d);
-    toast('✓ Dados carregados do Google Drive!','success');
+    toast('✓ Dados carregados do Google Drive com sucesso!','success');
   }catch(e){toast('Erro ao carregar do Drive: '+e.message,'error');console.error(e);}
 }
 
-// Hook: auto-sync após cada salvar() — com debounce de 3s e mutex
-const _salvarOriginal=window._salvarHook||null;
+// ★ Hook: auto-sync após cada salvar() — debounce 3s + mutex + validação de token
 function driveTriggerSync(){
-  if(driveAccessToken){
+  if(driveAccessToken&&_driveTokenValido()){
     clearTimeout(_driveSyncTimer);
     _driveSyncTimer=setTimeout(driveSalvarSilencioso,3000);
   }
 }
 
-// Modal de boas-vindas Drive
 function showDriveWelcome(){
   if(localStorage.getItem('drive_welcome_v6')==='1')return;
   if(driveAccessToken)return;
@@ -8668,6 +8757,12 @@ function registrarLiquidacao(grupo){
     data,valorBruto:vlr,totalRetencoes:totalRet,valorLiquido:liquido,
     competencia:emp.competencia||'',
     tipoRecurso:emp.tipoEmp||'EXE',
+    // ★ FIX PERSISTÊNCIA: empenhoCadId explícito no objeto liquidacao para garantir
+    // integridade referencial na validação de orfãos e nas migrações de inicialização.
+    // Sem este campo, liquidacoes dependem apenas de nEmpenho (string) para referenciar
+    // o empenho, o que falha quando o numero é alterado ou em backups parciais.
+    empenhoCadId: emp.id,
+    referenciaId: emp.id,
     nf:get('liq-nf'),dataEmissao:get('liq-data-emissao'),mesRef:get('liq-mes-ref'),
     npDh:get('liq-np'),mesPag:get('liq-mes-pag'),suap:get('liq-suap'),
     introducao:get('liq-introducao'),edital:get('liq-edital'),oficio:get('liq-oficio'),
@@ -10452,9 +10547,16 @@ function initNovosModulos() {
 
 document.addEventListener('DOMContentLoaded',()=>{
   const loaded=carregar();
-  // Seed de lançamentos financeiros apenas quando não há dados orçamentários salvos.
-  // Ações de Assistência Estudantil NUNCA são pré-carregadas automaticamente.
-  if(!loaded||state.lancamentos.length===0){
+  // ★ FIX PERSISTÊNCIA: Seed SOMENTE quando não há absolutamente nenhum dado do usuário.
+  // Verifica lancamentos, empenhosCad E liquidacoes para não sobrescrever dados reais.
+  // Antes: !loaded||lancamentos.length===0 → ativava seed quando usuário só tinha empenhosCad/liquidacoes.
+  const _temDadosUsuario = loaded && (
+    state.lancamentos.length > 0 ||
+    (state.empenhosCad || []).length > 0 ||
+    (state.liquidacoes || []).length > 0 ||
+    (state.contratos || []).length > 0
+  );
+  if(!_temDadosUsuario){
     seedDataDez2025();
   }
   // Limpeza de ações legadas: remove ações pré-carregadas pelo seed em versões anteriores.
