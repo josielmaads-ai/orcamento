@@ -2092,13 +2092,17 @@ function importarJSON(evt){
       const empsOrfos=(state.empenhosCad||[]).filter(e=>e.contratoId&&!contratosIds.has(e.contratoId)).length;
       if(empsOrfos>0)console.warn(`[SUCO] Integridade: ${empsOrfos} empenho(s) cadastrado(s) com contratoId sem contrato correspondente.`);
       auditLog('IMPORT','SISTEMA','JSON','Dados importados de arquivo JSON',{file:file.name,...resumo,integridade:{liqsOrfas,empsOrfos}});
+      // ★ FIX: zerar checksum para garantir que dados importados sejam
+      // sincronizados para o Drive mesmo que o checksum anterior fosse "igual"
+      _driveLastSyncChecksum='';
       salvar();
-      // CORREÇÃO: Re-renderizar todos os módulos críticos após importação
-      // para garantir sincronização completa entre módulos
+      // Re-renderizar todos os módulos após importação
       if(typeof energyPoolManager!=='undefined') energyPoolManager.invalidateCache();
+      // ★ FIX: chamar init() e initNovosModulos() para garantir que TODOS os
+      // módulos sejam completamente re-inicializados com os dados importados
+      init();
+      if(typeof initNovosModulos==='function') initNovosModulos();
       showPage('dashboard');
-      // Re-inicializar formulários que dependem de listas dinâmicas
-      try{ if(typeof renderSidebarSaldo==='function') renderSidebarSaldo(); }catch(e){}
       try{ if(typeof renderConfig==='function') renderConfig(); }catch(e){}
       toast('✓ Backup restaurado! ('+Object.entries(resumo).map(([k,v])=>k+': '+v).join(' · ')+(liqsOrfas||empsOrfos?` ⚠ verifique console`:'')+')','success');
     }catch(err){toast('Erro ao importar: arquivo inválido ou corrompido','error');}
@@ -5971,16 +5975,19 @@ function _driveStateChecksum(){
     const _liqHash=(state.liquidacoes||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valorBruto||'')).join('|');
     const _lancHash=(state.lancamentos||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valor||'')).join('|');
     const _empHash=(state.empenhosCad||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valorInicial||'')).join('|');
+    // ★ FIX: sem truncamento — hashes completos garantem detecção correta de qualquer mudança
     const s=JSON.stringify({
       lancamentos:(state.lancamentos||[]).length,
       empenhosCad:(state.empenhosCad||[]).length,
       liquidacoes:(state.liquidacoes||[]).length,
       contratos:(state.contratos||[]).length,
       fornecedores:(state.fornecedores||[]).length,
+      contratosPnae:(state.contratosPnae||[]).length,
+      acoes:(state.acoes||[]).length,
       lastSaved:state.meta?.lastSaved||'',
-      _liqH:_liqHash.length>200?_liqHash.slice(0,200):_liqHash,
-      _lanH:_lancHash.length>200?_lancHash.slice(0,200):_lancHash,
-      _empH:_empHash.length>200?_empHash.slice(0,200):_empHash
+      _liqH:_liqHash,
+      _lanH:_lancHash,
+      _empH:_empHash
     });
     return s;
   }catch(e){return Date.now().toString();}
@@ -6021,7 +6028,10 @@ function driveLogin(){
         toast('Arquivo encontrado no Drive. Sincronizando automaticamente...','success');
         await _driveAutoImportarSeNecessario();
       } else {
-        toast('Nenhum backup no Drive ainda. Os dados locais serão salvos automaticamente.','success');
+        toast('Nenhum backup no Drive ainda. Os dados locais serão salvos imediatamente.','success');
+        // ★ FIX: forçar gravação imediata (não apenas debounce), pois o checksum
+        // pode estar "igual" ao estado vazio inicial, suprimindo o primeiro sync
+        _driveLastSyncChecksum='';
         driveTriggerSync(); // salva o estado atual no Drive
       }
     }
@@ -6039,7 +6049,23 @@ async function _driveAutoImportarSeNecessario(){
     // Comparar datas de lastSaved
     const driveTs=d.meta?.lastSaved||'';
     const localTs=state.meta?.lastSaved||'';
-    if(!driveTs)return; // arquivo Drive sem timestamp — não importar
+    // ★ FIX: se Drive não tem timestamp mas tem dados, não descartar silenciosamente
+    const _drivePossuiDados=Array.isArray(d.lancamentos)&&d.lancamentos.length>0||Array.isArray(d.empenhosCad)&&(d.empenhosCad||[]).length>0;
+    if(!driveTs&&!_drivePossuiDados)return; // arquivo vazio ou inválido
+    if(!driveTs&&_drivePossuiDados){
+      // Backup legado sem timestamp: importar se local estiver vazio, senão subir local
+      if(state.lancamentos.length===0&&(state.empenhosCad||[]).length===0){
+        console.info('[DRIVE] Backup sem timestamp com dados; local vazio — importando do Drive.');
+        await _driveAplicarDados(d);
+        toast('✓ Dados recuperados do Google Drive!','success');
+      } else {
+        console.info('[DRIVE] Backup sem timestamp; local tem dados — atualizando Drive com versão local.');
+        _driveLastSyncChecksum=''; // força gravação
+        await driveSalvarSilencioso();
+        toast('✓ Drive atualizado com dados locais!','success');
+      }
+      return;
+    }
     // Se Drive é mais recente, importa automaticamente
     if(driveTs>localTs){
       console.info('[DRIVE] Arquivo Drive mais recente ('+driveTs+') > local ('+localTs+'). Importando...');
@@ -6048,6 +6074,7 @@ async function _driveAutoImportarSeNecessario(){
     } else if(driveTs<localTs){
       // Local é mais recente — sobe para o Drive
       console.info('[DRIVE] Dados locais mais recentes. Sincronizando para Drive...');
+      _driveLastSyncChecksum=''; // força gravação para garantir que Drive fique atualizado
       await driveSalvarSilencioso();
       toast('✓ Dados locais sincronizados para o Google Drive!','success');
     } else {
@@ -6174,9 +6201,15 @@ async function _driveAplicarDados(d){
   if(empsOrfos>0)console.warn(`[DRIVE] Integridade: ${empsOrfos} empenho(s) com contratoId sem contrato correspondente.`);
 
   // Salvar e re-renderizar
+  // ★ FIX: zerar checksum antes de salvar para que o estado importado do Drive
+  // não seja suprimido nas próximas sincronizações automáticas
+  _driveLastSyncChecksum='';
   if(typeof energyPoolManager!=='undefined') energyPoolManager.invalidateCache();
   salvar();
   init();
+  // ★ FIX: chamar initNovosModulos para garantir que módulos secundários
+  // (PNAE, Fornecedores, AE, etc.) sejam completamente re-inicializados
+  if(typeof initNovosModulos==='function') initNovosModulos();
 }
 
 function driveLogout(){
@@ -10452,6 +10485,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     console.info('[MIGRAÇÃO] Competência preenchida em '+migCount+' empenho(s) legado(s).');
   }
   // Persiste o estado final (com migrações e limpeza aplicadas) antes de renderizar.
+  // ★ FIX: zerar checksum antes de salvar para garantir que as migrações de inicialização
+  // sejam sempre sincronizadas para o Drive na próxima conexão, sem serem suprimidas
+  // pelo mecanismo de "sem mudanças" que compara com estado pré-migração.
+  _driveLastSyncChecksum='';
   salvar();
   init();
   initNovosModulos();
