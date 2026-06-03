@@ -4477,7 +4477,8 @@ function renderContratoExec(){
     const _execDedup=[..._execLiq,..._execPag].filter(l=>{if(_execDedIds.has(l.id))return false;_execDedIds.add(l.id);return true;});
     const liqC=sum(_execDedup);
     const pagC=sum(_execPag);
-    const saldo=(c.valorTotal||0)-empC;
+    // ★ CORREÇÃO: Saldo p/ Empenhar = Empenhado − Liquidado (regra: quanto do empenhado ainda não foi liquidado)
+    const saldo=empC-liqC;
     const pExec=c.valorTotal>0?Math.round(empC/c.valorTotal*100):0;
     const pLiqEmp=empC>0?Math.round(liqC/empC*100):0;
     return`<tr>
@@ -4572,7 +4573,13 @@ function renderContratoDash(){
     </div>
     <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Situação dos Contratos</div></div><table><thead><tr><th>Empresa</th><th>N° Contrato</th><th class="r">% Execução</th><th class="r">Saldo Disponível</th><th>Situação</th></tr></thead><tbody>${cts.map(c=>{
       const emp=ctEmpenhado(c.id);
-      const saldo=(c.valorTotal||0)-emp;
+      // ★ CORREÇÃO: Saldo Disponível = Empenhado − Liquidado (regra uniforme com aba Execução)
+      const _dLiqArr=sumLancsByContratoEXE('Liquidação',c.id);
+      const _dPagArr=sumLancsByContratoEXE('Pagamento',c.id);
+      const _dDedIds=new Set();
+      const _dDedup=[..._dLiqArr,..._dPagArr].filter(l=>{if(_dDedIds.has(l.id))return false;_dDedIds.add(l.id);return true;});
+      const liqDash=sum(_dDedup);
+      const saldo=emp-liqDash;
       const pct=c.valorTotal>0?Math.round(emp/c.valorTotal*100):0;
       const sit=pct>=80?'<span class="ct-alerta ok">🟢 Normal</span>':pct>=50?'<span class="ct-alerta vencendo">🟡 Atenção</span>':'<span class="ct-alerta vencido" style="background:transparent;border:none">🔴 Crítico</span>';
       return`<tr><td>${c.empresa||'—'}</td><td>${c.nContrato||'—'}</td><td class="r">${semaforo(pct)}</td><td class="r ${saldo<0?'text-red':'text-gold'}">${fmtBR(saldo)}</td><td>${sit}</td></tr>`;
@@ -5916,7 +5923,12 @@ function renderContratoDetalhe(){
             <td style="padding:12px 14px;text-align:right" colspan="2"></td>
             <td style="padding:12px 14px;text-align:right;font-size:12px;font-weight:800;color:var(--blue);font-family:'IBM Plex Mono',monospace;background:rgba(68,138,255,.08)">${fmtBR(emp)}</td>
             <td style="padding:12px 14px;text-align:right;font-size:12px;font-weight:700;color:var(--amber);font-family:'IBM Plex Mono',monospace">${fmtBR(liqPag)}</td>
-            <td style="padding:12px 14px;text-align:right;font-size:12px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:${saldoNEmp<0?'var(--red)':'var(--gold)'}">${fmtBR(saldoNEmp)}</td>
+            ${(()=>{
+              // ★ CORREÇÃO: Saldo Emp. total = Empenhado − Liquidado (regra uniforme).
+              // saldoNEmp (ValorTotal−Empenhado) é exibido no KPI card acima, não aqui.
+              const saldoEmpTotal = emp - liqPag;
+              return `<td style="padding:12px 14px;text-align:right;font-size:12px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:${saldoEmpTotal<0?'var(--red)':'var(--gold)'}">${fmtBR(saldoEmpTotal)}</td>`;
+            })()}
             <td></td>
           </tr>
         </tbody>
@@ -9357,6 +9369,25 @@ function abrirDetalheLiquidacao(id){
         </div>
       </div>`;
     }
+    // Helper: bloco de descrição com tabela e cor de cabeçalho parametrizada
+    function descBlockComTabelaCor(label, texto, linhasTabela, cabecalhos, corLabel, bgHeader, borderColor){
+      const safe=texto.replace(/'/g,"\\'").replace(/\n/g,' ');
+      const th=cabecalhos||['CAMPO','VALOR','COPIAR'];
+      const _corL=corLabel||'var(--gold)';
+      const _bgH=bgHeader||'rgba(245,200,66,.08)';
+      const _bdr=borderColor||'var(--border2)';
+      const tabela=`<table style="width:100%;border-collapse:collapse;margin-bottom:8px;border-bottom:1px solid var(--border2)"><thead><tr style="border-bottom:1px solid rgba(255,255,255,.12)">${th.map(h=>`<th style="padding:5px 10px;font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.1em;text-align:left">${h}</th>`).join('')}</tr></thead><tbody>${linhasTabela}</tbody></table>`;
+      return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid ${_bdr};border-radius:10px;overflow:hidden">
+        <div style="padding:8px 12px;background:${_bgH};border-bottom:1px solid ${_bdr}">
+          <div style="font-size:13px;font-weight:700;color:${_corL};letter-spacing:.02em">${label}</div>
+        </div>
+        <div style="padding:10px 12px">${tabela}</div>
+        <div style="padding:10px 12px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word;border-top:1px solid var(--border)">${texto}</div>
+        <div style="padding:6px 12px;border-top:1px solid var(--border)">
+          <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('${safe}').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+        </div>
+      </div>`;
+    }
     // Helper: linha de tabela com botão de cópia individual
     function _tbLinha(campo, valor, cor){
       const safeV=(valor||'—').replace(/'/g,"\\'");
@@ -9371,39 +9402,51 @@ function abrirDetalheLiquidacao(id){
       _tbLinha('Valor Total NF',_vNF,'var(--text)'),
       ['TÍTULO','VALOR','AÇÃO']
     );
-    // Descrição 2 — DDF055: tabela com campos específicos acima do texto original d2
-    const _desc2Tabela=d2?descBlockComTabela(
-      `Descrição 2 — DDF055 Tributos Federais <span style="font-size:13px;font-weight:700;color:var(--amber);font-family:'IBM Plex Mono',monospace">${_vTribFed}</span>${btnCopyVal(_vTribFed)}`,
+    // Descrição 2 — DDF055: amber — CPF, valor NF, valor Tributos Federais + campos originais
+    const _desc2Tabela=d2?descBlockComTabelaCor(
+      `Descrição 2 — DDF055 Tributos Federais`,
       d2,
+      _tbLinha('CPF/CNPJ',cnpjEmpresa,'var(--cyan)')+
+      _tbLinha('Valor Total NF',_vNF,'var(--text)')+
+      _tbLinha('Tributos Federais (9,45%)',_vTribFed,'var(--amber)')+
       _tbLinha('Código DARF IR',darfIR,'var(--amber)')+
-      _tbLinha('Natureza de Rendimentos',natRend,'var(--amber)')+
-      _tbLinha('CNPJ',cnpjEmpresa,'var(--cyan)')
+      _tbLinha('Natureza de Rendimentos',natRend,'var(--amber)'),
+      ['CAMPO','VALOR','COPIAR'],
+      'var(--amber)','rgba(255,171,64,.08)','rgba(255,171,64,.3)'
     ):'';
-    // Descrição 3 — DDF050 INSS BC: tabela CAMPO|VALOR|COPIAR acima do texto original d3
-    const _desc3Tabela=descBlockComTabela(
-      `Descrição 3 — DDF050 INSS <span style="font-size:12px;font-weight:700;color:var(--green);font-family:'IBM Plex Mono',monospace">BC: ${_vBcInss}</span> <span style="font-size:12px;font-weight:700;color:var(--teal);font-family:'IBM Plex Mono',monospace">INSS: ${_vInss}</span>`,
+    // Descrição 3 — DDF050 INSS: teal — CPF, valor NF, valor INSS + campos originais
+    const _desc3Tabela=descBlockComTabelaCor(
+      `Descrição 3 — DDF050 INSS`,
       d3,
-      _tbLinha('BC',_vBcInss,'var(--green)')+
+      _tbLinha('CPF/CNPJ',cnpjEmpresa,'var(--cyan)')+
+      _tbLinha('Valor Total NF',_vNF,'var(--text)')+
       _tbLinha('Valor INSS',_vInss,'var(--teal)')+
+      _tbLinha('BC',_vBcInss,'var(--green)')+
       _tbLinha('Código','1162','var(--green)')+
       _tbLinha('Data Emissão',dataEmissaoBR,'var(--text)')+
-      _tbLinha('APURAÇÃO','20 MÊS SEGUINTE','var(--text)')+
-      _tbLinha('CNPJ',cnpjEmpresa,'var(--cyan)')
+      _tbLinha('APURAÇÃO','20 MÊS SEGUINTE','var(--text)'),
+      ['CAMPO','VALOR','COPIAR'],
+      'var(--teal)','rgba(0,229,204,.08)','rgba(0,229,204,.3)'
     );
-    // Descrição 4 — DOB001 ISS: tabela com Favorecido ISS + botão acima do texto d4
-    const _desc4Tabela=descBlockComTabela(
-      `Descrição 4 DOB001 — ISS <span style="font-size:13px;font-weight:700;color:var(--cyan);font-family:'IBM Plex Mono',monospace">${_vIss}</span>${btnCopyVal(_vIss)}`,
+    // Descrição 4 — DOB001 ISS: cyan — CPF, valor NF, valor ISS + campos originais
+    const _desc4Tabela=descBlockComTabelaCor(
+      `Descrição 4 DOB001 — ISS`,
       d4,
+      _tbLinha('CPF/CNPJ',cnpjEmpresa,'var(--cyan)')+
+      _tbLinha('Valor Total NF',_vNF,'var(--text)')+
       _tbLinha('Valor ISS',_vIss,'var(--cyan)')+
-      _tbLinha('Favorecido ISS','06553655000173','var(--cyan)')
+      _tbLinha('Favorecido ISS','06553655000173','var(--cyan)'),
+      ['CAMPO','VALOR','COPIAR'],
+      'var(--cyan)','rgba(0,207,255,.08)','rgba(0,207,255,.3)'
     );
     // Descrição 5 — DOB039 Conta Vinculada: tabela com CNPJ BB / 154704J acima do texto d5
     const _desc5Tabela=descBlockComTabela(
-      `Descrição 5 — DOB039 Conta Vinculada <span style="font-size:13px;font-weight:700;color:var(--purple);font-family:'IBM Plex Mono',monospace">${_vCv}</span>${btnCopyVal(_vCv)}`,
+      `Descrição 5 — DOB039 Conta Vinculada`,
       d5,
       _tbLinha('Valor Conta Vinculada',_vCv,'var(--purple)')+
       _tbLinha('CNPJ BB','00000000000191','var(--purple)')+
-      _tbLinha('154704J','154704J','var(--purple)')
+      _tbLinha('154704J','154704J','var(--purple)')+
+      _tbLinha('CNPJ Empresa',cnpjEmpresa,'var(--cyan)')
     );
     // Descrição 6 — REINF: texto original d6 com bloco de mês de pagamento
     const _desc6Tabela=descBlock(`Descrição 6 — REINF<br><div style="margin-top:6px;padding:6px 10px;background:rgba(255,68,68,.1);border-radius:6px;font-size:13px;font-weight:700;color:var(--red)">Mês de Pagamento: ${l.mesPag||'—'}</div>`,d6);
@@ -9427,27 +9470,35 @@ function abrirDetalheLiquidacao(id){
     // BLOCO 4 item 4: número de empenho cadastrado no campo pnaeEmpenho
     const pnaeEmpNumero=emp?emp.pnaeEmpenho||emp.numero||'—':'—';
 
-    // Seção 2 — Valores (BLOCO 4 item 1: 4 casas decimais)
+    // Seção 2 — Valores (BLOCO 4 item 1: 4 casas decimais) — com botão copiar por linha
+    function sec2RowCopy(label,valor,cor){
+      const safe=(valor||'—').replace(/'/g,"\'");
+      const btn=valor&&valor!=='—'?`<button style="margin-left:8px;padding:1px 7px;font-size:11px;border-radius:4px;border:1px solid var(--border3);background:var(--bg4);color:var(--text3);cursor:pointer;font-family:'IBM Plex Mono',monospace;vertical-align:middle;flex-shrink:0;transition:all .1s" onmouseenter="this.style.borderColor='var(--amber)';this.style.color='var(--amber)'" onmouseleave="this.style.borderColor='var(--border3)';this.style.color='var(--text3)'" onclick="navigator.clipboard.writeText('${safe}').then(()=>toast('Copiado!','success'))">📋</button>`:'';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 4px;border-bottom:1px solid rgba(255,171,64,.12)">
+        <span style="color:var(--text3);font-size:13px">${label}</span>
+        <div style="display:flex;align-items:center"><strong style="font-size:14px;color:${cor||'var(--text)'};font-family:'IBM Plex Mono',monospace">${valor}</strong>${btn}</div>
+      </div>`;
+    }
     sec2=secCard('Seção 2 — Valores',
-      sec2Row('Valor Total NF',fmtBR(l.valorBruto))+
-      sec2Row('Contribuição Previdenciária (1,2%)',prev.toFixed(4).replace('.',','),'var(--red)')+
-      sec2Row('GILRAT (0,1%)',gilrat.toFixed(4).replace('.',','),'var(--red)')+
-      sec2Row('SENAR (0,2%)',senar.toFixed(4).replace('.',','),'var(--red)')+
-      sec2Row('Valor Líquido',fmtBR(liquido),'var(--green)')
+      sec2RowCopy('Valor Total NF',fmtBR(l.valorBruto))+
+      sec2RowCopy('Contribuição Previdenciária (1,2%)',prev.toFixed(4).replace('.',','),'var(--red)')+
+      sec2RowCopy('GILRAT (0,1%)',gilrat.toFixed(4).replace('.',','),'var(--red)')+
+      sec2RowCopy('SENAR (0,2%)',senar.toFixed(4).replace('.',','),'var(--red)')+
+      sec2RowCopy('Valor Líquido',fmtBR(liquido),'var(--green)')
     );
 
-    // Seção 3 — Dados Bancários (BLOCO 4 item 2: lidos do módulo Contratos PNAE)
+    // Seção 3 — Dados Bancários (BLOCO 4 item 2: lidos do módulo Contratos PNAE) — com botão copiar
     const pnaeForn=pnaeCt?buscarFornecedorPorDoc(pnaeCt.documento||''):null;
     sec3=secCard('Seção 3 — Dados Bancários',
-      infoRow('Agência',pnaeCt?.agencia||pnaeForn?.agencia||'—')+
-      infoRow('Conta',pnaeCt?.conta||pnaeForn?.conta||'—')+
-      infoRow('Processo SUAP',l.suap||pnaeCt?.processo||'—')+
-      infoRow('Último RC',pnaeCt?pnaeCt.ultimoRC||'—':'—')+
+      infoRow('Agência',pnaeCt?.agencia||pnaeForn?.agencia||'—',true)+
+      infoRow('Conta',pnaeCt?.conta||pnaeForn?.conta||'—',true)+
+      infoRow('Processo SUAP',l.suap||pnaeCt?.processo||'—',true)+
+      infoRow('Último RC',pnaeCt?pnaeCt.ultimoRC||'—':'—',true)+
       `<div style="padding:8px 0;margin-top:6px;border-top:1px solid var(--border2)">
-        ${infoRow('Situação','DSP002')}
-        ${infoRow('VPD','3.3.1.1.1.04.00')}
-        ${infoRow('CONTAS A PAGAR','2.1.3.1.1.04.00')}
-        ${infoRow('CONTA ESTOQUE','1.1.5.1.1.02.04')}
+        ${infoRow('Situação','DSP002',true)}
+        ${infoRow('VPD','3.3.1.1.1.04.00',true)}
+        ${infoRow('CONTAS A PAGAR','2.1.3.1.1.04.00',true)}
+        ${infoRow('CONTA ESTOQUE','1.1.5.1.1.02.04',true)}
       </div>`
     );
 
@@ -9456,11 +9507,38 @@ function abrirDetalheLiquidacao(id){
     const d2=`RETENÇÃO DE CONTRIBUIÇÃO PREVIDENCIÁRIA SOBRE PAGTO Nº ${l.nf} - EMIT EM ${dataEmissaoBR} - REF À AQUISIÇÃO DE GÊN ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADO A ASSIST SOCIAL, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     const d3=`RETENÇÃO DE CONTRIBUIÇÃO PREVIDENCIÁRIA (GILRAT) SOBRE PAGTO Nº ${l.nf} - EMIT EM ${dataEmissaoBR} - REF À AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADOS À ASSISTÊNCIA SOCIAL, NO IFPI - CAMPUS SÃO JOÃO/PI`;
     const d4=`RETENÇÃO DE CONTRIBUIÇÃO PREVIDENCIÁRIA (SENAR) SOBRE PAGTO Nº ${l.nf} - EMIT EM ${dataEmissaoBR} - REF À AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADOS À ASSISTÊNCIA SOCIAL, NO IFPI - CAMPUS SÃO JOÃO/PI`;
-    // BLOCO 4 item 3: DDF050 - 158146 como sub-cabeçalho em cada descrição
+    // BLOCO 4 item 3: DDF050 - 158146 com tabela e cores distintas por descrição
+    const _pnaeDocForn=emp?(emp.pnaeDocumento||emp.cnpj||''):'';const _pnaeCpfForn=(()=>{if(!_pnaeDocForn)return'—';const _pf=buscarFornecedorPorDoc(_pnaeDocForn);return _pf?_pf.documento||_pnaeDocForn:_pnaeDocForn;})();
+    const _pnaeVnf=fmtBR(l.valorBruto);
+    const _pnaePrev=prev.toFixed(4).replace('.',',');
+    const _pnaeGilrat=gilrat.toFixed(4).replace('.',',');
+    const _pnaeSenar=senar.toFixed(4).replace('.',',');
+    function _pnaeTbLinha(campo,valor,cor){
+      const safeV=(valor||'—').replace(/'/g,"\\'");
+      const btn=valor&&valor!=='—'?`<button style="padding:2px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border3);background:var(--bg4);color:var(--text3);cursor:pointer;font-family:'IBM Plex Mono',monospace;white-space:nowrap" onclick="navigator.clipboard.writeText('${safeV}').then(()=>toast('Copiado!','success'))">📋</button>`:'';
+      return `<tr style="border-bottom:1px solid rgba(255,255,255,.05)"><td style="padding:6px 10px;font-size:12px;color:var(--text3);white-space:nowrap">${campo}</td><td style="padding:6px 10px;font-size:13px;font-weight:700;color:${cor||'var(--text)'};font-family:'IBM Plex Mono',monospace">${valor||'—'}</td><td style="padding:6px 10px;text-align:right">${btn}</td></tr>`;
+    }
+    function _pnaeTbTabela(linhas){
+      return `<table style="width:100%;border-collapse:collapse;margin-bottom:8px;border-bottom:1px solid var(--border2)"><thead><tr style="border-bottom:1px solid rgba(255,255,255,.12)"><th style="padding:5px 10px;font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.1em;text-align:left">CAMPO</th><th style="padding:5px 10px;font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.1em;text-align:left">VALOR</th><th style="padding:5px 10px;font-size:10px;font-weight:700;color:var(--text4);text-transform:uppercase;letter-spacing:.1em;text-align:left">COPIAR</th></tr></thead><tbody>${linhas}</tbody></table>`;
+    }
+    function descBlockPnaeTabela(label,texto,tabela,corTitulo,bgColor,borderColor){
+      const safeText=texto.replace(/'/g,"\\'").replace(/\n/g,' ');
+      return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid ${borderColor};border-radius:10px;overflow:hidden">
+        <div style="padding:8px 12px;background:${bgColor};border-bottom:1px solid ${borderColor}">
+          <div style="font-size:13px;font-weight:700;color:${corTitulo};letter-spacing:.02em">${label}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:2px">DDF050 - 158146</div>
+        </div>
+        <div style="padding:10px 12px">${tabela}</div>
+        <div style="padding:10px 12px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word;border-top:1px solid var(--border)">${texto}</div>
+        <div style="padding:6px 12px;border-top:1px solid var(--border)">
+          <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('${safeText}').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+        </div>
+      </div>`;
+    }
     function descBlockPnae(label,texto){
       const safeText=texto.replace(/'/g,"\\'").replace(/\n/g,' ');
-      return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;overflow:hidden">
-        <div style="padding:8px 12px;background:rgba(0,230,118,.08);border-bottom:1px solid var(--border2)">
+      return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--green-border);border-radius:10px;overflow:hidden">
+        <div style="padding:8px 12px;background:rgba(0,230,118,.08);border-bottom:1px solid var(--green-border)">
           <div style="font-size:13px;font-weight:700;color:var(--green);letter-spacing:.02em">${label}</div>
           <div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:2px">DDF050 - 158146</div>
         </div>
@@ -9472,9 +9550,33 @@ function abrirDetalheLiquidacao(id){
     }
     descricoes=
       descBlockPnae('Descrição 1 — SIAFI',d1)+
-      descBlockPnae('Descrição 2 — Contrib. Previdenciária (1,2%) · Código 1656 · Vinc 499',d2)+
-      descBlockPnae('Descrição 3 — DDF050 GILRAT (0,1%) · Código 1646 · Vinc 499',d3)+
-      descBlockPnae('Descrição 4 — DDF050 SENAR (0,2%) · Código 1213 · Vinc 499',d4);
+      descBlockPnaeTabela(
+        'Descrição 2 — Contrib. Previdenciária (1,2%) · Código 1656 · Vinc 499',d2,
+        _pnaeTbTabela(
+          _pnaeTbLinha('CPF Fornecedor',_pnaeCpfForn,'var(--cyan)')+
+          _pnaeTbLinha('Valor Total NF',_pnaeVnf,'var(--text)')+
+          _pnaeTbLinha('Contribuição Previdenciária (1,2%)',_pnaePrev,'var(--amber)')
+        ),
+        'var(--amber)','rgba(255,171,64,.08)','rgba(255,171,64,.3)'
+      )+
+      descBlockPnaeTabela(
+        'Descrição 3 — DDF050 GILRAT (0,1%) · Código 1646 · Vinc 499',d3,
+        _pnaeTbTabela(
+          _pnaeTbLinha('CPF Fornecedor',_pnaeCpfForn,'var(--cyan)')+
+          _pnaeTbLinha('Valor Total NF',_pnaeVnf,'var(--text)')+
+          _pnaeTbLinha('GILRAT (0,1%)',_pnaeGilrat,'var(--purple)')
+        ),
+        'var(--purple)','rgba(170,102,255,.08)','rgba(170,102,255,.3)'
+      )+
+      descBlockPnaeTabela(
+        'Descrição 4 — DDF050 SENAR (0,2%) · Código 1213 · Vinc 499',d4,
+        _pnaeTbTabela(
+          _pnaeTbLinha('CPF Fornecedor',_pnaeCpfForn,'var(--cyan)')+
+          _pnaeTbLinha('Valor Total NF',_pnaeVnf,'var(--text)')+
+          _pnaeTbLinha('SENAR (0,2%)',_pnaeSenar,'var(--teal)')
+        ),
+        'var(--teal)','rgba(0,229,204,.08)','rgba(0,229,204,.3)'
+      );
     // BLOCO 4 item 5: rodapé com botão de copiar
     rodape=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding:8px 12px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:6px"><span style="font-size:12px;font-weight:600;color:var(--gold)">INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS</span><button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('INCLUSÃO DE DEDUÇÕES LEGAIS, DADOS BANCÁRIOS COM OS RESPECTIVOS PRÉ DOCS').then(()=>toast('Copiado!','success'))">📋 Copiar</button></div>`;
 
@@ -9735,6 +9837,7 @@ function abrirDetalheLiquidacao(id){
       <div><span style="color:var(--text3)">Categoria:</span> ${catIcon(l.categoria)} ${l.categoria}</div>
       <div><span style="color:var(--text3)">CNPJ:</span> ${l.cnpj||'—'}</div>
       <div><span style="color:var(--text3)">Fornecedor:</span> ${l.fornNome||'—'}</div>
+      ${l.grupo==='pnae'?`<div style="grid-column:1/-1"><span style="color:var(--text3)">CPF Fornecedor:</span> <strong style="color:var(--cyan)">${(()=>{const _hDoc=emp?(emp.pnaeDocumento||emp.cnpj||''):'';if(!_hDoc)return'—';const _hf=buscarFornecedorPorDoc(_hDoc);return _hf?_hf.documento||_hDoc:_hDoc;})()}</strong></div>`:''}
       <div><span style="color:var(--text3)">NF/Fatura:</span> ${l.nf||'—'}</div>
       <div><span style="color:var(--text3)">Data Emissão:</span> ${dataEmissaoBR}</div>
       <div><span style="color:var(--text3)">Mês Ref.:</span> ${l.mesRef||'—'}</div>
@@ -11639,14 +11742,23 @@ document.getElementById('modal-edit-empenho').addEventListener('click',function(
     <div class="pdf-modal-sub">IFPI Campus São João do Piauí · Coordenação de Orçamento, Contabilidade e Finanças</div>
 
     <div class="pdf-opt-group">
-      <div class="pdf-opt-label">Seções a incluir</div>
+      <div class="pdf-opt-label">Resumo Executivo</div>
       <div class="pdf-opts">
         <label class="pdf-opt"><input type="checkbox" id="pdf-inc-kpis" checked> Indicadores (KPIs)</label>
         <label class="pdf-opt"><input type="checkbox" id="pdf-inc-fluxo" checked> Fluxo de Execução</label>
         <label class="pdf-opt"><input type="checkbox" id="pdf-inc-cats" checked> Execução por Categoria</label>
         <label class="pdf-opt"><input type="checkbox" id="pdf-inc-fontes" checked> Saldo por Fonte / PTRES</label>
-        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-empenhos"> Empenhos Cadastrados</label>
-        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-recentes"> Últimos Lançamentos</label>
+      </div>
+    </div>
+    <div class="pdf-opt-group">
+      <div class="pdf-opt-label">Módulos Detalhados</div>
+      <div class="pdf-opts">
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-credito" checked> Registrar Credito</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-empenhos" checked> Empenhos</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-liquidacao" checked> Liquidacao</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-contratos" checked> Contratos Continuados</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-ae" checked> Assistencia Estudantil</label>
+        <label class="pdf-opt"><input type="checkbox" id="pdf-inc-recentes"> Ultimos Lancamentos</label>
       </div>
     </div>
 
@@ -11735,31 +11847,28 @@ function pdfDataHoje(){
 }
 
 // ── Coleta todos os dados para o relatório ──────────────────────────────────
+// ── Coleta todos os dados para o relatório (5 módulos detalhados) ─────────────
 function coletarDadosRelatorio(){
-  // KPIs principais
-  const totCred  = totalCreditosOriginais();
-  const totEmp   = totalEmpenhosEXE();
-  const totAnul  = sum(state.lancamentos.filter(l=>{
+  // ── KPIs principais ─────────────────────────────────────────────────────────
+  const totCred = totalCreditosOriginais();
+  const totEmp  = totalEmpenhosEXE();
+  const totAnul = sum(state.lancamentos.filter(l=>{
     if(l.status!=='Ativo'||l.tipo!=='Anulação') return false;
     if(l.tipoRecurso) return l.tipoRecurso==='EXE';
     const emp = (state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId||e.id===l.referenciaId||e.numero===l.referencia);
     return !emp || (emp.tipoEmp||'EXE')==='EXE';
   }));
-  // CORREÇÃO: totalLiquidacoesEXE já inclui pagamentos-de-liquidação (quando tipo muda para Pagamento+liquidacaoId)
-  const totLiq   = totalLiquidacoesEXE();
-  const totPag   = totalPagamentosEXE();
-  const totRap   = totalEmpenhosRAP();
-  const saldoD   = totCred - totEmp + totAnul;
-  // CORREÇÃO: empLiq = saldo empenhado líquido (empenhado bruto - anulações)
-  const empLiq   = totEmp - totAnul;
-  // CORREÇÃO: txExec = % do empenhado líquido sobre o crédito total (taxa de execução orçamentária correta)
-  const txExec   = totCred > 0 ? Math.min(100, Math.round(empLiq/totCred*100)) : 0;
+  const totLiq  = totalLiquidacoesEXE();
+  const totPag  = totalPagamentosEXE();
+  const totRap  = totalEmpenhosRAP();
+  const saldoD  = totCred - totEmp + totAnul;
+  const empLiq  = totEmp - totAnul;
+  const txExec  = totCred > 0 ? Math.min(100, Math.round(empLiq/totCred*100)) : 0;
 
-  // Execução por categoria
+  // ── Execução por categoria ───────────────────────────────────────────────────
   const catRows = DEFAULT_CATS.map(c => {
     const cred = totalCreditosOriginais(c);
     const emp  = totalEmpenhosEXE(c);
-    // CORREÇÃO: liq inclui pagamentos-de-liquidação via totalLiquidacoesEXE
     const liq  = totalLiquidacoesEXE(c);
     const pag  = totalPagamentosEXE(c);
     const sal  = saldoCat(c);
@@ -11768,7 +11877,7 @@ function coletarDadosRelatorio(){
     return { cat: c, cred, emp, liq, pag, sal, pct: txC };
   }).filter(Boolean);
 
-  // Saldo por fonte
+  // ── Saldo por fonte e PTRES ──────────────────────────────────────────────────
   const fonteRows = state.fontes.map(f => {
     const e    = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.fonte===f));
     const emp  = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.fonte===f&&(l.tipoRecurso||'EXE')==='EXE'));
@@ -11777,7 +11886,6 @@ function coletarDadosRelatorio(){
     return { fonte: f, cred: e, emp: emp-anul, sal: e-(emp-anul) };
   }).filter(Boolean);
 
-  // Saldo por PTRES
   const ptresRows = state.ptres.map(p => {
     const e    = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Entrada'&&l.ptres===p));
     const emp  = sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&l.ptres===p&&(l.tipoRecurso||'EXE')==='EXE'));
@@ -11786,22 +11894,126 @@ function coletarDadosRelatorio(){
     return { ptres: p, cred: e, emp: emp-anul, sal: e-(emp-anul) };
   }).filter(Boolean);
 
-  // Empenhos cadastrados (top 30, ordenados por data descendente)
-  const empenhos = (state.empenhosCad||[])
+  // ── MÓDULO 1: Registrar Crédito ─────────────────────────────────────────────
+  const creditoRows = state.lancamentos
+    .filter(l => l.status==='Ativo' && l.tipo==='Entrada')
+    .sort((a,b)=>(b.data||'').localeCompare(a.data||''))
+    .map(l => ({
+      data      : l.data   || '—',
+      descricao : (l.descricao||'Crédito').substring(0,40),
+      valor     : l.valor  || 0,
+      fonte     : l.fonte  || '—',
+      ptres     : l.ptres  || '—',
+      nd        : l.nd     || '—',
+      categoria : l.categoria || '—'
+    }));
+
+  // ── MÓDULO 2: Empenhos Cadastrados ──────────────────────────────────────────
+  const empenhoRows = (state.empenhosCad||[])
     .filter(e => e.status !== 'Excluído')
     .sort((a,b)=>(b.data||'').localeCompare(a.data||''))
-    .slice(0, 30);
+    .map(e => {
+      // Saldo do empenho: valorInicial − liquidações vinculadas
+      const liqEmp = sum((state.liquidacoes||[]).filter(l=>l.status!=='Excluído'&&(l.nEmpenho===e.numero||l.nEmpenhoCosip===e.numero)));
+      const saldoEmp = (e.valorInicial||0) - liqEmp;
+      return {
+        numero    : e.numero      || '—',
+        tipo      : e.tipoEmp     || 'EXE',
+        data      : e.data        || '—',
+        categoria : (e.categoria  || '—').substring(0,22),
+        fornecedor: (e.fornecedorNome||e.fornNome||'—').substring(0,26),
+        fonte     : e.fonte       || '—',
+        ptres     : e.ptres       || '—',
+        nd        : e.nd          || '—',
+        competencia: e.competencia|| '—',
+        valorInicial: e.valorInicial || 0,
+        liqFeito  : liqEmp,
+        saldo     : saldoEmp
+      };
+    });
 
-  // Últimos 15 lançamentos ativos
+  // ── MÓDULO 3: Liquidações ────────────────────────────────────────────────────
+  const liquidacaoRows = (state.liquidacoes||[])
+    .filter(l => l.status !== 'Excluído')
+    .sort((a,b)=>(b.data||'').localeCompare(a.data||''))
+    .map(l => {
+      const empCad = (state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
+      return {
+        data      : l.data        || '—',
+        mesRef    : l.mesRef      || '—',
+        nEmpenho  : l.nEmpenho    || '—',
+        nf        : l.nf          || '—',
+        fornecedor: (empCad ? (empCad.fornecedorNome||empCad.fornNome||'—') : '—').substring(0,26),
+        valorBruto: l.valorBruto  || 0,
+        valorLiq  : l.valorLiquido|| l.valorBruto || 0,
+        pago      : l.pago        === 'Sim' ? 'Pago' : 'Pendente',
+        categoria : (l.categoria  || empCad?.categoria || '—').substring(0,18)
+      };
+    });
+
+  // ── MÓDULO 4: Contratos Continuados ─────────────────────────────────────────
+  const contratoRows = state.contratos
+    .filter(c => c.status !== 'Excluído')
+    .map(c => {
+      const emp  = ctEmpenhado(c.id);
+      const _la  = sumLancsByContratoEXE('Liquidação', c.id);
+      const _pa  = sumLancsByContratoEXE('Pagamento',  c.id);
+      const _ids = new Set();
+      const liq  = sum([..._la,..._pa].filter(l=>{if(_ids.has(l.id))return false;_ids.add(l.id);return true;}));
+      const saldo = emp - liq;
+      const hoje = new Date();
+      const dataFimDt = c.dataFim ? new Date(c.dataFim+'T12:00:00') : null;
+      const diasRestantes = dataFimDt ? Math.round((dataFimDt - hoje)/86400000) : null;
+      const vigencia = (c.dataInicio||'—') + ' a ' + (c.dataFim||'—');
+      return {
+        nContrato  : c.nContrato   || '—',
+        empresa    : (c.empresa    || '—').substring(0,28),
+        objeto     : (c.nome       || '—').substring(0,34),
+        cnpj       : c.cnpj        || '—',
+        vigencia   : vigencia,
+        diasRestantes: diasRestantes,
+        valorTotal : c.valorTotal  || 0,
+        empenhado  : emp,
+        liquidado  : liq,
+        saldo      : saldo,
+        tipoServico: (c.tipoServico|| '—').substring(0,18),
+        nd         : c.nd          || '—',
+        ptres      : c.ptres       || '—'
+      };
+    });
+
+  // ── MÓDULO 5: Assistência Estudantil ────────────────────────────────────────
+  const aeRows = (state.acoes||[])
+    .filter(a => a.status !== 'Excluído')
+    .map(a => {
+      const totals = aeTotaisAcao(a.id);
+      return {
+        nome      : (a.nome     || '—').substring(0,30),
+        tipo      : a.tipo      || '—',
+        descricao : (a.descricao|| '—').substring(0,36),
+        previsto  : (a.previstoMensalArr||[]).reduce((s,v)=>s+v, 0) || a.previsto || 0,
+        empenhado : totals.empenhado,
+        liquidado : totals.liquidado,
+        pago      : totals.pago,
+        saldo     : ((a.previstoMensalArr||[]).reduce((s,v)=>s+v,0)||a.previsto||0) - totals.empenhado
+      };
+    });
+
+  // Lançamentos recentes (fallback)
   const recentes = state.lancamentos
-    .filter(l => l.status === 'Ativo')
-    .sort((a,b) => (b.data||'').localeCompare(a.data||''))
-    .slice(0, 15);
+    .filter(l => l.status==='Ativo')
+    .sort((a,b)=>(b.data||'').localeCompare(a.data||''))
+    .slice(0, 20);
 
-  return { totCred, totEmp, totAnul, totLiq, totPag, totRap, saldoD, empLiq, txExec, catRows, fonteRows, ptresRows, empenhos, recentes };
+  return {
+    totCred, totEmp, totAnul, totLiq, totPag, totRap, saldoD, empLiq, txExec,
+    catRows, fonteRows, ptresRows,
+    creditoRows, empenhoRows, liquidacaoRows, contratoRows, aeRows,
+    recentes
+  };
 }
 
-// ── Função principal de geração do PDF ────────────────────────────────────
+// ── Função principal de geração do PDF ─────────────────────────────────────────
 async function gerarPDF(){
   const btnGerar = document.getElementById('btn-pdf-gerar');
   btnGerar.disabled = true;
@@ -11810,87 +12022,84 @@ async function gerarPDF(){
     setPdfProgress(5, 'Carregando biblioteca PDF...');
     const jsPDF = await carregarJsPDF();
 
-    setPdfProgress(15, 'Coletando dados do sistema...');
+    setPdfProgress(12, 'Coletando dados do sistema...');
     const d = coletarDadosRelatorio();
 
-    const periodo = document.getElementById('pdf-periodo').value || 'Exercício ' + new Date().getFullYear();
-    const autor   = document.getElementById('pdf-autor').value   || 'COCF — IFPI Campus SJP';
+    const periodo   = document.getElementById('pdf-periodo').value || 'Exercício ' + new Date().getFullYear();
+    const autor     = document.getElementById('pdf-autor').value   || 'COCF — IFPI Campus SJP';
     const incKPIs     = document.getElementById('pdf-inc-kpis').checked;
     const incFluxo    = document.getElementById('pdf-inc-fluxo').checked;
     const incCats     = document.getElementById('pdf-inc-cats').checked;
     const incFontes   = document.getElementById('pdf-inc-fontes').checked;
+    const incCredito  = document.getElementById('pdf-inc-credito').checked;
     const incEmpenhos = document.getElementById('pdf-inc-empenhos').checked;
+    const incLiquidac = document.getElementById('pdf-inc-liquidacao').checked;
+    const incContratos= document.getElementById('pdf-inc-contratos').checked;
+    const incAE       = document.getElementById('pdf-inc-ae').checked;
     const incRecentes = document.getElementById('pdf-inc-recentes').checked;
 
-    setPdfProgress(25, 'Montando documento...');
+    setPdfProgress(22, 'Montando documento...');
 
-    // ── Configuração do documento ─────────────────────────────────────────
+    // ── Configuração do documento ───────────────────────────────────────────
     const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
     const PW = 210, PH = 297;
-    const ML = 14, MR = 14, MT = 14;
-    const CW = PW - ML - MR; // 182mm de largura útil
-    let y = MT;
+    const ML = 14, MR = 14;
+    const CW = PW - ML - MR; // 182mm
+    let y = 14;
     let paginaAtual = 1;
 
     // Paleta de cores institucional
     const C = {
-      darkBg:    [10, 10, 15],
-      gold:      [245, 200, 66],
-      goldDark:  [184, 140, 20],
-      green:     [0, 166, 81],
-      blue:      [68, 138, 255],
-      amber:     [255, 171, 64],
-      red:       [255, 68, 68],
-      purple:    [170, 102, 255],
-      white:     [255, 255, 255],
-      lightGray: [240, 240, 245],
-      midGray:   [180, 180, 195],
-      darkGray:  [80, 80, 100],
-      rowAlt:    [245, 245, 250],
-      rowHead:   [30, 30, 40],
+      darkBg:   [10,  10,  15],
+      gold:     [245, 200, 66],
+      goldDark: [184, 140, 20],
+      green:    [0,   166, 81],
+      blue:     [68,  138, 255],
+      amber:    [255, 171, 64],
+      red:      [255, 68,  68],
+      purple:   [170, 102, 255],
+      teal:     [0,   200, 160],
+      white:    [255, 255, 255],
+      lightGray:[240, 240, 245],
+      midGray:  [180, 180, 195],
+      darkGray: [80,  80,  100],
+      rowAlt:   [245, 245, 250],
+      rowHead:  [28,  28,  42],
+      rowTotal: [20,  20,  35]
     };
 
-    // ── Helpers de desenho ──────────────────────────────────────────────
+    // ── Helpers de desenho ─────────────────────────────────────────────────
     function novaPageSeNecessario(alturaNeeded){
-      if(y + alturaNeeded > PH - 20){
+      if(y + alturaNeeded > PH - 18){
         doc.addPage();
         paginaAtual++;
-        desenharRodape();
-        y = 24;
+        y = 18;
         return true;
       }
       return false;
     }
 
-    function desenharRodape(){
-      const ry = PH - 10;
-      doc.setFillColor(...C.darkBg);
-      doc.rect(0, PH-14, PW, 14, 'F');
-      doc.setFontSize(7);
-      doc.setTextColor(...C.midGray);
-      doc.setFont('helvetica','normal');
-      doc.text(`SUCO v1.1 · IFPI Campus São João do Piauí · COCF · ${autor}`, ML, ry);
-      doc.text(`Emitido em ${pdfDataHoje()} · Página ${paginaAtual}`, PW - MR, ry, {align:'right'});
-      // Linha dourada no rodapé
-      doc.setDrawColor(...C.goldDark);
-      doc.setLineWidth(0.3);
-      doc.line(ML, PH-14, PW-MR, PH-14);
-    }
-
-    function secaoTitulo(titulo, cor){
-      novaPageSeNecessario(14);
+    function secaoTitulo(titulo, cor, icone){
+      novaPageSeNecessario(16);
       const cc = cor || C.blue;
+      // Faixa colorida lateral
       doc.setFillColor(...cc);
-      doc.rect(ML, y, 3, 8, 'F');
-      doc.setFontSize(9);
+      doc.rect(ML, y, 3, 9, 'F');
+      // Fundo sutil
+      doc.setFillColor(cc[0], cc[1], cc[2], 0.08);
+      const r = [cc[0]*0.05+240, cc[1]*0.05+240, cc[2]*0.05+240];
+      doc.setFillColor(...r.map(v=>Math.min(255,Math.round(v))));
+      doc.rect(ML+3, y, CW-3, 9, 'F');
+      // Texto
+      doc.setFontSize(8.5);
       doc.setFont('helvetica','bold');
       doc.setTextColor(...cc);
-      doc.text(titulo.toUpperCase(), ML+6, y+5.5);
-      // Linha separadora
+      doc.text((icone||'') + ' ' + titulo.toUpperCase(), ML+7, y+6);
+      // Linha inferior
       doc.setDrawColor(...cc);
-      doc.setLineWidth(0.2);
-      doc.line(ML+6, y+8, PW-MR, y+8);
-      y += 13;
+      doc.setLineWidth(0.25);
+      doc.line(ML, y+9, PW-MR, y+9);
+      y += 14;
     }
 
     function kpiBox(x, bW, label, valor, corValor, badge){
@@ -11900,17 +12109,14 @@ async function gerarPDF(){
       doc.setDrawColor(...C.midGray);
       doc.setLineWidth(0.2);
       doc.roundedRect(x, y, bW-2, bH, 2, 2, 'S');
-      // Label
       doc.setFontSize(6.5);
       doc.setFont('helvetica','normal');
       doc.setTextColor(...C.darkGray);
       doc.text(label, x+3, y+5);
-      // Valor
       doc.setFontSize(10);
       doc.setFont('helvetica','bold');
-      doc.setTextColor(...(corValor || C.darkBg));
+      doc.setTextColor(...(corValor||C.darkBg));
       doc.text(valor, x+3, y+13);
-      // Badge opcional
       if(badge){
         doc.setFontSize(5.5);
         doc.setFont('helvetica','bold');
@@ -11921,19 +12127,19 @@ async function gerarPDF(){
 
     function barraProgresso(x, bY, largura, pct, cor){
       const barH = 2.5;
-      // Fundo
       doc.setFillColor(220, 220, 228);
       doc.roundedRect(x, bY, largura, barH, 1, 1, 'F');
-      // Preenchimento
       if(pct > 0){
-        doc.setFillColor(...(cor || C.green));
-        doc.roundedRect(x, bY, Math.max(2, largura * Math.min(pct,100) / 100), barH, 1, 1, 'F');
+        doc.setFillColor(...(cor||C.green));
+        doc.roundedRect(x, bY, Math.max(2, largura*Math.min(pct,100)/100), barH, 1, 1, 'F');
       }
     }
 
+    // Cabeçalho de tabela com fundo escuro
     function tabelaHeader(cols, larguras, xStart){
+      novaPageSeNecessario(8);
       doc.setFillColor(...C.rowHead);
-      doc.rect(xStart, y, CW, 6, 'F');
+      doc.rect(xStart, y, CW, 6.5, 'F');
       let cx = xStart + 2;
       doc.setFontSize(6.5);
       doc.setFont('helvetica','bold');
@@ -11941,13 +12147,14 @@ async function gerarPDF(){
       cols.forEach((col, i) => {
         const align = larguras[i] < 0 ? 'right' : 'left';
         const lw = Math.abs(larguras[i]);
-        if(align === 'right') doc.text(col, cx + lw - 2, y+4.2, {align:'right'});
-        else doc.text(col, cx, y+4.2);
+        if(align==='right') doc.text(col, cx+lw-2, y+4.4, {align:'right'});
+        else doc.text(col, cx, y+4.4);
         cx += lw;
       });
-      y += 6;
+      y += 6.5;
     }
 
+    // Linha de tabela com altura 5.5mm
     function tabelaLinha(vals, larguras, xStart, isAlt, coresVals){
       novaPageSeNecessario(6);
       if(isAlt){
@@ -11962,44 +12169,62 @@ async function gerarPDF(){
         const lw = Math.abs(larguras[i]);
         const cor = coresVals && coresVals[i] ? coresVals[i] : C.darkBg;
         doc.setTextColor(...cor);
-        if(align === 'right') doc.text(String(val||'—'), cx + lw - 2, y+3.8, {align:'right'});
+        if(align==='right') doc.text(String(val||'—'), cx+lw-2, y+3.8, {align:'right'});
         else doc.text(String(val||'—'), cx, y+3.8);
         cx += lw;
       });
       y += 5.5;
     }
 
-    function linhaTabela(){
-      doc.setDrawColor(220, 220, 228);
-      doc.setLineWidth(0.1);
-      doc.line(ML, y, PW-MR, y);
+    // Linha totalizadora com fundo escuro
+    function tabelaTotal(vals, larguras, xStart, cor){
+      novaPageSeNecessario(7);
+      doc.setFillColor(...C.rowTotal);
+      doc.rect(xStart, y, CW, 6.5, 'F');
+      let cx = xStart + 2;
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...(cor||C.gold));
+      vals.forEach((val, i) => {
+        const align = larguras[i] < 0 ? 'right' : 'left';
+        const lw = Math.abs(larguras[i]);
+        if(align==='right') doc.text(String(val||''), cx+lw-2, y+4.4, {align:'right'});
+        else doc.text(String(val||''), cx, y+4.4);
+        cx += lw;
+      });
+      y += 8;
+    }
+
+    // Badge de status colorido (texto inline)
+    function badgeStatus(texto, cor){
+      doc.setFontSize(5.5);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...(cor||C.blue));
+      return texto;
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // PÁGINA 1 — CAPA EXECUTIVA
+    // CAPA
     // ══════════════════════════════════════════════════════════════════════
-    setPdfProgress(35, 'Desenhando capa...');
+    setPdfProgress(28, 'Desenhando capa...');
 
-    // Faixa preta superior (cabeçalho)
+    // Faixa preta superior
     doc.setFillColor(...C.darkBg);
     doc.rect(0, 0, PW, 52, 'F');
-
-    // Linha dourada decorativa
+    // Linha dourada
     doc.setFillColor(...C.gold);
     doc.rect(0, 52, PW, 1.2, 'F');
 
-    // Brasão / símbolo SUCO (forma geométrica)
+    // Ícone gráfico SUCO
     doc.setFillColor(...C.gold);
-    doc.circle(ML + 9, 26, 9, 'F');
+    doc.circle(ML+9, 26, 9, 'F');
     doc.setFillColor(...C.darkBg);
-    doc.circle(ML + 9, 26, 6.5, 'F');
-    // Gráfico estilizado dentro do círculo
+    doc.circle(ML+9, 26, 6.5, 'F');
     doc.setFillColor(...C.gold);
     doc.rect(ML+4, 28, 2.5, 4, 'F');
     doc.rect(ML+7.5, 25, 2.5, 7, 'F');
     doc.rect(ML+11, 22, 2.5, 10, 'F');
 
-    // Título
     doc.setTextColor(...C.gold);
     doc.setFontSize(18);
     doc.setFont('helvetica','bold');
@@ -12008,25 +12233,24 @@ async function gerarPDF(){
     doc.setFontSize(9);
     doc.setFont('helvetica','normal');
     doc.setTextColor(...C.midGray);
-    doc.text('Sistema Unificado de Controle Orçamentário', ML+22, 28);
-
+    doc.text('Sistema Unificado de Controle Orcamentario', ML+22, 28);
     doc.setFontSize(8);
     doc.setTextColor(150, 155, 180);
-    doc.text('IFPI · Campus São João do Piauí', ML+22, 35);
-    doc.text('Coordenação de Orçamento, Contabilidade e Finanças — COCF', ML+22, 41);
+    doc.text('IFPI - Campus Sao Joao do Piaui', ML+22, 35);
+    doc.text('Coordenacao de Orcamento, Contabilidade e Financas - COCF', ML+22, 41);
 
-    // Badge "RELATÓRIO EXECUTIVO"
+    // Badge "RELATÓRIO DETALHADO"
     doc.setFillColor(...C.goldDark);
-    doc.roundedRect(PW-MR-52, 16, 52, 8, 2, 2, 'F');
+    doc.roundedRect(PW-MR-58, 14, 58, 10, 2, 2, 'F');
     doc.setFontSize(6.5);
     doc.setFont('helvetica','bold');
     doc.setTextColor(...C.darkBg);
-    doc.text('RELATÓRIO EXECUTIVO', PW-MR-26, 21.2, {align:'center'});
+    doc.text('RELATORIO DETALHADO COMPLETO', PW-MR-29, 20.5, {align:'center'});
 
     y = 62;
 
-    // Período e metadados
-    doc.setFontSize(13);
+    // Metadados
+    doc.setFontSize(14);
     doc.setFont('helvetica','bold');
     doc.setTextColor(...C.darkBg);
     doc.text(periodo, ML, y);
@@ -12035,259 +12259,491 @@ async function gerarPDF(){
     doc.setFontSize(8);
     doc.setFont('helvetica','normal');
     doc.setTextColor(...C.darkGray);
-    doc.text(`Elaborado por: ${autor}`, ML, y);
-    doc.text(`Data de emissão: ${pdfDataHoje()}`, PW-MR, y, {align:'right'});
-    y += 4;
+    doc.text('Elaborado por: ' + autor, ML, y);
+    doc.text('Data de emissao: ' + pdfDataHoje(), PW-MR, y, {align:'right'});
+    y += 5;
     doc.setDrawColor(...C.midGray);
-    doc.setLineWidth(0.2);
+    doc.setLineWidth(0.25);
     doc.line(ML, y, PW-MR, y);
     y += 8;
 
-    // ── Indicadores resumidos na capa ────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // SEÇÃO 1 — KPIs EXECUTIVOS
+    // ══════════════════════════════════════════════════════════════════════
     if(incKPIs){
       const colW = CW / 3;
-      // Linha 1
-      kpiBox(ML,              colW, 'Total de Créditos (EXE)', pdfFmt(d.totCred),  C.green,    'ENTRADAS');
-      kpiBox(ML + colW,       colW, 'Saldo Disponível',        pdfFmt(d.saldoD),   d.saldoD < 0 ? C.red : C.goldDark, d.saldoD < 0 ? '⚠ NEGATIVO' : 'OK');
-      kpiBox(ML + colW*2,     colW, 'Empenhado Líquido (EXE)', pdfFmt(d.empLiq),   C.blue,     'EXE');
+      kpiBox(ML,         colW, 'Total de Creditos (EXE)', pdfFmt(d.totCred), C.green,  'ENTRADAS');
+      kpiBox(ML+colW,    colW, 'Saldo Disponivel',        pdfFmt(d.saldoD),  d.saldoD<0?C.red:C.goldDark, d.saldoD<0?'NEGATIVO':'OK');
+      kpiBox(ML+colW*2,  colW, 'Empenhado Liquido (EXE)', pdfFmt(d.empLiq),  C.blue,   'EXE');
       y += 23;
-      // Linha 2
-      kpiBox(ML,              colW, 'Total Liquidado (EXE)',   pdfFmt(d.totLiq),   C.amber,    pdfPct(d.totLiq, d.empLiq)+' emp.');
-      kpiBox(ML + colW,       colW, 'Total Pago (EXE)',        pdfFmt(d.totPag),   C.green,    pdfPct(d.totPag, d.totLiq)+' liq.');
-      kpiBox(ML + colW*2,     colW, 'Taxa de Execução',        d.txExec + '%',     d.txExec >= 80 ? C.green : d.txExec >= 50 ? C.amber : C.red, d.txExec >= 80 ? 'BOA EXECUÇÃO' : d.txExec >= 50 ? 'REGULAR' : '⚠ BAIXA');
+      kpiBox(ML,         colW, 'Total Liquidado (EXE)',   pdfFmt(d.totLiq),  C.amber,  pdfPct(d.totLiq,d.empLiq)+' emp.');
+      kpiBox(ML+colW,    colW, 'Total Pago (EXE)',        pdfFmt(d.totPag),  C.green,  pdfPct(d.totPag,d.totLiq)+' liq.');
+      kpiBox(ML+colW*2,  colW, 'Taxa de Execucao',        d.txExec+'%',      d.txExec>=80?C.green:d.txExec>=50?C.amber:C.red, d.txExec>=80?'BOA EXECUCAO':d.txExec>=50?'REGULAR':'BAIXA');
       y += 23;
 
-      // Barra de progresso de execução
       doc.setFontSize(7);
       doc.setFont('helvetica','bold');
       doc.setTextColor(...C.darkGray);
-      doc.text('Execução orçamentária geral:', ML, y);
-      doc.text(d.txExec + '%', PW-MR, y, {align:'right'});
+      doc.text('Execucao orcamentaria geral:', ML, y);
+      doc.text(d.txExec+'%', PW-MR, y, {align:'right'});
       y += 3;
-      barraProgresso(ML, y, CW, d.txExec, d.txExec >= 80 ? C.green : d.txExec >= 50 ? C.amber : C.red);
+      barraProgresso(ML, y, CW, d.txExec, d.txExec>=80?C.green:d.txExec>=50?C.amber:C.red);
       y += 7;
 
       if(d.totRap > 0){
-        doc.setFillColor(170, 102, 255, 0.1);
         doc.setFillColor(240, 235, 255);
         doc.roundedRect(ML, y, CW, 7, 1.5, 1.5, 'F');
         doc.setFontSize(7);
         doc.setFont('helvetica','bold');
         doc.setTextColor(...C.purple);
-        doc.text('RAP — Restos a Pagar (segregado):', ML+3, y+4.5);
+        doc.text('RAP - Restos a Pagar (segregado):', ML+3, y+4.5);
         doc.setFont('helvetica','normal');
-        doc.text(pdfFmt(d.totRap) + ' · Não incluso nos indicadores acima', ML+72, y+4.5);
+        doc.text(pdfFmt(d.totRap)+' - Nao incluso nos indicadores acima', ML+72, y+4.5);
         y += 11;
       }
     }
 
-    // ── Fluxo de execução (diagrama simplificado) ─────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // SEÇÃO 2 — FLUXO DE EXECUÇÃO
+    // ══════════════════════════════════════════════════════════════════════
     if(incFluxo){
-      novaPageSeNecessario(30);
+      novaPageSeNecessario(38);
       y += 4;
-      secaoTitulo('Fluxo de Execução Orçamentária', C.blue);
-
-      const fW = (CW - 16) / 3;
-      const fH = 22;
+      secaoTitulo('Fluxo de Execucao Orcamentaria', C.blue);
+      const fW = (CW-16)/3, fH = 22;
       const fases = [
-        { label:'EMPENHADO', sub:'EXE + RAP', val:pdfFmt(totalEmpenhos()), pct:pdfPct(totalEmpenhos(), d.totCred)+' do crédito', cor:C.blue },
-        { label:'LIQUIDADO',  sub:'EXE + RAP', val:pdfFmt(d.totLiq),         pct:pdfPct(d.totLiq, totalEmpenhos())+' do emp.',    cor:C.amber },
-        { label:'PAGO',       sub:'EXE + RAP', val:pdfFmt(d.totPag),         pct:pdfPct(d.totPag, d.totLiq)+' do liq.',          cor:C.green },
+        { label:'EMPENHADO', sub:'EXE + RAP', val:pdfFmt(totalEmpenhos()), pct:pdfPct(totalEmpenhos(),d.totCred)+' do credito', cor:C.blue },
+        { label:'LIQUIDADO', sub:'EXE + RAP', val:pdfFmt(d.totLiq),        pct:pdfPct(d.totLiq,totalEmpenhos())+' do emp.',    cor:C.amber },
+        { label:'PAGO',      sub:'EXE + RAP', val:pdfFmt(d.totPag),        pct:pdfPct(d.totPag,d.totLiq)+' do liq.',          cor:C.green }
       ];
-      fases.forEach((f, i) => {
+      fases.forEach((f,i) => {
         const fx = ML + i*(fW+8);
-        // Box
-        doc.setFillColor(...f.cor.map(c => Math.round(c * 0.12 + 240)));
+        doc.setFillColor(...f.cor.map(c=>Math.min(255,Math.round(c*0.12+235))));
         doc.roundedRect(fx, y, fW, fH, 2, 2, 'F');
         doc.setDrawColor(...f.cor);
         doc.setLineWidth(0.5);
         doc.roundedRect(fx, y, fW, fH, 2, 2, 'S');
-        // Label
         doc.setFontSize(6.5);
         doc.setFont('helvetica','bold');
         doc.setTextColor(...f.cor);
-        doc.text(f.label, fx + fW/2, y+5, {align:'center'});
+        doc.text(f.label, fx+fW/2, y+5, {align:'center'});
         doc.setFontSize(5.5);
         doc.setFont('helvetica','normal');
         doc.setTextColor(...C.darkGray);
-        doc.text(f.sub, fx + fW/2, y+8.5, {align:'center'});
-        // Valor
+        doc.text(f.sub, fx+fW/2, y+8.5, {align:'center'});
         doc.setFontSize(9);
         doc.setFont('helvetica','bold');
         doc.setTextColor(...f.cor);
-        doc.text(f.val, fx + fW/2, y+15, {align:'center'});
-        // Percentual
+        doc.text(f.val, fx+fW/2, y+15, {align:'center'});
         doc.setFontSize(6);
         doc.setFont('helvetica','normal');
         doc.setTextColor(...C.darkGray);
-        doc.text(f.pct, fx + fW/2, y+20, {align:'center'});
-        // Seta
-        if(i < 2){
-          const ax = fx + fW + 4;
+        doc.text(f.pct, fx+fW/2, y+20, {align:'center'});
+        if(i<2){
+          const ax = fx+fW+4;
           doc.setDrawColor(...C.midGray);
           doc.setLineWidth(0.4);
           doc.line(ax-2, y+fH/2, ax+2, y+fH/2);
-          // ponta da seta
           doc.line(ax, y+fH/2-1.5, ax+2, y+fH/2);
           doc.line(ax, y+fH/2+1.5, ax+2, y+fH/2);
         }
       });
-      y += fH + 8;
+      y += fH+8;
     }
 
-    // ── Página 2 (se necessário): Execução por categoria ─────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // SEÇÃO 3 — EXECUÇÃO POR CATEGORIA
+    // ══════════════════════════════════════════════════════════════════════
     if(incCats && d.catRows.length > 0){
-      setPdfProgress(55, 'Tabela de categorias...');
-      novaPageSeNecessario(20);
-      secaoTitulo('Execução por Categoria (EXE)', C.green);
-
-      const cols  = ['Categoria', 'Crédito', 'Empenhado', 'Liquidado', 'Saldo', '% Exec.', 'Status'];
-      const largs = [52, -26, -26, -26, -26, -14, -12];
+      setPdfProgress(34, 'Tabela de categorias...');
+      novaPageSeNecessario(24);
+      secaoTitulo('Execucao por Categoria (EXE)', C.green);
+      const cols  = ['Categoria', 'Credito', 'Empenhado', 'Liquidado', 'Saldo', '% Exec.', 'Status'];
+      const largs = [50, -26, -26, -26, -26, -14, -14];
       tabelaHeader(cols, largs, ML);
-
-      d.catRows.forEach((r, i) => {
-        novaPageSeNecessario(12);
-        const corSaldo = r.sal < 0 ? C.red : r.sal < r.cred*0.1 ? C.amber : C.green;
-        const corPct   = r.pct >= 80 ? C.green : r.pct >= 50 ? C.amber : C.red;
-        const status   = r.pct >= 80 ? 'OK' : r.pct >= 50 ? 'Regular' : 'Baixo';
+      d.catRows.forEach((r,i) => {
+        novaPageSeNecessario(9);
+        const corS = r.sal<0?C.red:r.sal<r.cred*0.1?C.amber:C.green;
+        const corP = r.pct>=80?C.green:r.pct>=50?C.amber:C.red;
         tabelaLinha(
-          [r.cat, pdfFmt(r.cred), pdfFmt(r.emp), pdfFmt(r.liq), pdfFmt(r.sal), r.pct+'%', status],
+          [r.cat, pdfFmt(r.cred), pdfFmt(r.emp), pdfFmt(r.liq), pdfFmt(r.sal), r.pct+'%', r.pct>=80?'OK':r.pct>=50?'Regular':'Baixo'],
           largs, ML, i%2===1,
-          [C.darkBg, C.green, C.blue, C.amber, corSaldo, corPct, corPct]
+          [C.darkBg, C.green, C.blue, C.amber, corS, corP, corP]
         );
-        // Mini barra de progresso por categoria
-        barraProgresso(ML+2, y-1.5, 30, r.pct, corPct);
+        barraProgresso(ML+2, y-1.5, 28, r.pct, corP);
         y += 1.5;
       });
-
-      // Total
-      const totCat = d.catRows.reduce((s,r)=>({
-        cred: s.cred+r.cred, emp: s.emp+r.emp, liq: s.liq+r.liq, sal: s.sal+r.sal
-      }), {cred:0, emp:0, liq:0, sal:0});
-      doc.setFillColor(...C.rowHead);
-      doc.rect(ML, y, CW, 6, 'F');
-      doc.setFontSize(6.5);
-      doc.setFont('helvetica','bold');
-      doc.setTextColor(...C.gold);
-      let cx2 = ML+2;
-      ['TOTAL', pdfFmt(totCat.cred), pdfFmt(totCat.emp), pdfFmt(totCat.liq), pdfFmt(totCat.sal), d.txExec+'%', ''].forEach((v,i)=>{
-        const lw = Math.abs(largs[i]);
-        if(largs[i] < 0) doc.text(v, cx2+lw-2, y+4.2, {align:'right'});
-        else doc.text(v, cx2, y+4.2);
-        cx2 += lw;
-      });
-      y += 10;
+      const tot = d.catRows.reduce((s,r)=>({cred:s.cred+r.cred,emp:s.emp+r.emp,liq:s.liq+r.liq,sal:s.sal+r.sal}),{cred:0,emp:0,liq:0,sal:0});
+      tabelaTotal(['TOTAL', pdfFmt(tot.cred), pdfFmt(tot.emp), pdfFmt(tot.liq), pdfFmt(tot.sal), d.txExec+'%', ''], largs, ML);
     }
 
-    // ── Saldo por Fonte e PTRES ─────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // SEÇÃO 4 — SALDO POR FONTE / PTRES
+    // ══════════════════════════════════════════════════════════════════════
     if(incFontes){
-      setPdfProgress(68, 'Tabela de fontes e PTRES...');
+      setPdfProgress(40, 'Tabela de fontes e PTRES...');
       if(d.fonteRows.length > 0){
         novaPageSeNecessario(24);
         secaoTitulo('Saldo por Fonte de Recurso', C.amber);
-        const cols2  = ['Fonte de Recurso', 'Crédito (Entrada)', 'Empenhado Líq.', 'Saldo Disponível'];
-        const largs2 = [60, -40, -40, -42];
-        tabelaHeader(cols2, largs2, ML);
+        const c2 = ['Fonte de Recurso', 'Credito (Entrada)', 'Empenhado Liq.', 'Saldo Disponivel'];
+        const l2 = [62, -40, -40, -40];
+        tabelaHeader(c2, l2, ML);
         d.fonteRows.forEach((r,i) => {
-          tabelaLinha(
-            [r.fonte||'—', pdfFmt(r.cred), pdfFmt(r.emp), pdfFmt(r.sal)],
-            largs2, ML, i%2===1,
-            [C.darkBg, C.green, C.blue, r.sal < 0 ? C.red : C.goldDark]
-          );
+          tabelaLinha([r.fonte||'—', pdfFmt(r.cred), pdfFmt(r.emp), pdfFmt(r.sal)], l2, ML, i%2===1,
+            [C.darkBg, C.green, C.blue, r.sal<0?C.red:C.goldDark]);
         });
-        y += 6;
+        y += 5;
       }
-
       if(d.ptresRows.length > 0){
         novaPageSeNecessario(24);
         secaoTitulo('Saldo por PTRES', C.amber);
-        const cols3  = ['PTRES', 'Crédito (Entrada)', 'Empenhado Líq.', 'Saldo Disponível'];
-        const largs3 = [60, -40, -40, -42];
-        tabelaHeader(cols3, largs3, ML);
+        const c3 = ['PTRES', 'Credito (Entrada)', 'Empenhado Liq.', 'Saldo Disponivel'];
+        const l3 = [62, -40, -40, -40];
+        tabelaHeader(c3, l3, ML);
         d.ptresRows.forEach((r,i) => {
-          tabelaLinha(
-            [r.ptres||'—', pdfFmt(r.cred), pdfFmt(r.emp), pdfFmt(r.sal)],
-            largs3, ML, i%2===1,
-            [C.darkBg, C.green, C.blue, r.sal < 0 ? C.red : C.goldDark]
-          );
+          tabelaLinha([r.ptres||'—', pdfFmt(r.cred), pdfFmt(r.emp), pdfFmt(r.sal)], l3, ML, i%2===1,
+            [C.darkBg, C.green, C.blue, r.sal<0?C.red:C.goldDark]);
         });
-        y += 6;
+        y += 5;
       }
     }
 
-    // ── Empenhos Cadastrados ────────────────────────────────────────────
-    if(incEmpenhos && d.empenhos.length > 0){
-      setPdfProgress(78, 'Tabela de empenhos...');
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO 1 — REGISTRAR CRÉDITO
+    // ══════════════════════════════════════════════════════════════════════
+    if(incCredito && d.creditoRows.length > 0){
+      setPdfProgress(47, 'Modulo Registrar Credito...');
+      doc.addPage(); paginaAtual++; y = 18;
+      secaoTitulo('Modulo 1 — Registrar Credito', C.green);
+
+      // KPIs resumo do módulo
+      const totCredito = d.creditoRows.reduce((s,r)=>s+r.valor, 0);
+      const catCredMap = {};
+      d.creditoRows.forEach(r=>{ catCredMap[r.categoria]=(catCredMap[r.categoria]||0)+r.valor; });
+      const cW2 = CW/2;
+      kpiBox(ML,      cW2, 'Total de Creditos Registrados', pdfFmt(totCredito), C.green, d.creditoRows.length+' lancamentos');
+      kpiBox(ML+cW2,  cW2, 'Saldo Disponivel Geral', pdfFmt(d.saldoD), d.saldoD<0?C.red:C.goldDark, 'Apos empenhos EXE');
+      y += 24;
+
+      // Resumo por categoria
+      if(Object.keys(catCredMap).length > 1){
+        novaPageSeNecessario(16);
+        doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...C.darkGray);
+        doc.text('Distribuicao por categoria:', ML, y); y += 5;
+        Object.entries(catCredMap).sort((a,b)=>b[1]-a[1]).forEach(([cat,val],i)=>{
+          const pct = totCredito>0 ? Math.round(val/totCredito*100) : 0;
+          novaPageSeNecessario(6);
+          if(i%2===1){ doc.setFillColor(...C.rowAlt); doc.rect(ML, y, CW, 5.5, 'F'); }
+          doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(...C.darkBg);
+          doc.text(cat||'—', ML+2, y+3.8);
+          doc.setTextColor(...C.green);
+          doc.text(pdfFmt(val), ML+CW-2, y+3.8, {align:'right'});
+          doc.setTextColor(...C.darkGray);
+          doc.text(pct+'%', ML+CW-28, y+3.8, {align:'right'});
+          barraProgresso(ML+70, y+1.5, 80, pct, C.green);
+          y += 5.5;
+        });
+        y += 5;
+      }
+
+      // Tabela detalhada
       novaPageSeNecessario(20);
-      secaoTitulo('Empenhos Cadastrados' + (d.empenhos.length >= 30 ? ' (primeiros 30)' : ''), C.purple);
-
-      const cols4  = ['Nº Empenho', 'Tipo', 'Categoria', 'Fornecedor', 'Fonte', 'Valor Inicial'];
-      const largs4 = [30, 12, 46, 46, 16, -32];
-      tabelaHeader(cols4, largs4, ML);
-
-      d.empenhos.forEach((e, i) => {
-        const corTipo = (e.tipoEmp||'EXE') === 'RAP' ? C.purple : C.blue;
-        const fornTrunc = (e.fornecedorNome||e.fornNome||'—').substring(0, 24);
-        const catTrunc  = (e.categoria||'—').substring(0, 20);
+      secaoTitulo('Lancamentos de Credito — Detalhe', C.green);
+      const cc1 = ['Data', 'Descricao / Origem', 'Categoria', 'Fonte', 'PTRES', 'Valor'];
+      const lc1 = [18, 52, 32, 18, 18, -44];
+      tabelaHeader(cc1, lc1, ML);
+      let totC1 = 0;
+      d.creditoRows.forEach((r,i) => {
+        totC1 += r.valor;
         tabelaLinha(
-          [e.numero||'—', e.tipoEmp||'EXE', catTrunc, fornTrunc, e.fonte||'—', pdfFmt(e.valorInicial||0)],
-          largs4, ML, i%2===1,
-          [C.darkBg, corTipo, C.darkBg, C.darkGray, C.darkGray, C.blue]
+          [fmtData(r.data), r.descricao, r.categoria, r.fonte, r.ptres, pdfFmt(r.valor)],
+          lc1, ML, i%2===1,
+          [C.darkGray, C.darkBg, C.blue, C.darkGray, C.darkGray, C.green]
         );
       });
-      y += 6;
+      tabelaTotal(['TOTAL', '', '', '', '', pdfFmt(totC1)], lc1, ML, C.green);
     }
 
-    // ── Últimos Lançamentos ─────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO 2 — EMPENHOS
+    // ══════════════════════════════════════════════════════════════════════
+    if(incEmpenhos && d.empenhoRows.length > 0){
+      setPdfProgress(55, 'Modulo Empenhos...');
+      doc.addPage(); paginaAtual++; y = 18;
+      secaoTitulo('Modulo 2 — Empenhos Cadastrados', C.blue);
+
+      // KPIs do módulo
+      const totEmpValor = d.empenhoRows.reduce((s,r)=>s+r.valorInicial, 0);
+      const totLiqFeito = d.empenhoRows.reduce((s,r)=>s+r.liqFeito, 0);
+      const totSaldoEmp = d.empenhoRows.reduce((s,r)=>s+r.saldo, 0);
+      const qtdEXE = d.empenhoRows.filter(r=>r.tipo==='EXE').length;
+      const qtdRAP = d.empenhoRows.filter(r=>r.tipo==='RAP').length;
+      const cW3 = CW/3;
+      kpiBox(ML,       cW3, 'Total Empenhado',     pdfFmt(totEmpValor), C.blue,  d.empenhoRows.length+' empenhos');
+      kpiBox(ML+cW3,   cW3, 'Total Liquidado',     pdfFmt(totLiqFeito), C.amber, pdfPct(totLiqFeito,totEmpValor));
+      kpiBox(ML+cW3*2, cW3, 'Saldo Emp.>Liq.',     pdfFmt(totSaldoEmp), totSaldoEmp<0?C.red:C.goldDark, 'EXE:'+qtdEXE+' RAP:'+qtdRAP);
+      y += 24;
+
+      // Tabela detalhada
+      novaPageSeNecessario(20);
+      const ce = ['N. Empenho', 'Tipo', 'Data', 'Categoria', 'Fornecedor', 'Fonte', 'Comp.', 'Val.Inicial', 'Liq.Feito', 'Saldo'];
+      const le = [22, 9, 16, 28, 30, 12, 12, -19, -19, -15];
+      tabelaHeader(ce, le, ML);
+      d.empenhoRows.forEach((r,i) => {
+        const corTipo = r.tipo==='RAP' ? C.purple : C.blue;
+        tabelaLinha(
+          [r.numero, r.tipo, fmtData(r.data), r.categoria, r.fornecedor, r.fonte, r.competencia, pdfFmt(r.valorInicial), pdfFmt(r.liqFeito), pdfFmt(r.saldo)],
+          le, ML, i%2===1,
+          [C.darkBg, corTipo, C.darkGray, C.darkBg, C.darkGray, C.darkGray, C.darkGray, C.blue, C.amber, r.saldo<0?C.red:C.goldDark]
+        );
+      });
+      tabelaTotal(['TOTAL ('+d.empenhoRows.length+')', '', '', '', '', '', '', pdfFmt(totEmpValor), pdfFmt(totLiqFeito), pdfFmt(totSaldoEmp)], le, ML, C.blue);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO 3 — LIQUIDAÇÃO
+    // ══════════════════════════════════════════════════════════════════════
+    if(incLiquidac && d.liquidacaoRows.length > 0){
+      setPdfProgress(63, 'Modulo Liquidacao...');
+      doc.addPage(); paginaAtual++; y = 18;
+      secaoTitulo('Modulo 3 — Liquidacao', C.amber);
+
+      // KPIs do módulo
+      const totBruto  = d.liquidacaoRows.reduce((s,r)=>s+r.valorBruto, 0);
+      const totLiqLiq = d.liquidacaoRows.reduce((s,r)=>s+r.valorLiq, 0);
+      const qtdPago   = d.liquidacaoRows.filter(r=>r.pago==='Pago').length;
+      const qtdPend   = d.liquidacaoRows.filter(r=>r.pago==='Pendente').length;
+      const totPagoVal= d.liquidacaoRows.filter(r=>r.pago==='Pago').reduce((s,r)=>s+r.valorLiq, 0);
+      const cW4 = CW/3;
+      kpiBox(ML,       cW4, 'Total Bruto Liquidado', pdfFmt(totBruto),   C.amber, d.liquidacaoRows.length+' liquidacoes');
+      kpiBox(ML+cW4,   cW4, 'Pagas',                 pdfFmt(totPagoVal), C.green, qtdPago+' liquidacoes');
+      kpiBox(ML+cW4*2, cW4, 'Pendentes',             pdfFmt(totBruto-totPagoVal), qtdPend>0?C.amber:C.green, qtdPend+' pendentes');
+      y += 24;
+
+      // Barra pago vs pendente
+      const pctPago = totBruto>0 ? Math.round(totPagoVal/totBruto*100) : 0;
+      doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...C.darkGray);
+      doc.text('Percentual liquidado e pago:', ML, y);
+      doc.text(pctPago+'%', PW-MR, y, {align:'right'});
+      y += 3;
+      barraProgresso(ML, y, CW, pctPago, C.green);
+      y += 8;
+
+      // Tabela detalhada
+      novaPageSeNecessario(20);
+      const cl = ['Data', 'Mes Ref.', 'N. Empenho', 'NF/Doc.', 'Fornecedor', 'Categoria', 'Val.Bruto', 'Val.Liq.', 'Status'];
+      const ll = [16, 12, 18, 16, 30, 20, -18, -18, -14];
+      tabelaHeader(cl, ll, ML);
+      d.liquidacaoRows.forEach((r,i) => {
+        const corStatus = r.pago==='Pago' ? C.green : C.amber;
+        tabelaLinha(
+          [fmtData(r.data), r.mesRef, r.nEmpenho, r.nf, r.fornecedor, r.categoria, pdfFmt(r.valorBruto), pdfFmt(r.valorLiq), r.pago],
+          ll, ML, i%2===1,
+          [C.darkGray, C.darkGray, C.blue, C.darkBg, C.darkGray, C.darkBg, C.amber, C.amber, corStatus]
+        );
+      });
+      tabelaTotal(['TOTAL ('+d.liquidacaoRows.length+')', '', '', '', '', '', pdfFmt(totBruto), pdfFmt(totLiqLiq), ''], ll, ML, C.amber);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO 4 — CONTRATOS CONTINUADOS
+    // ══════════════════════════════════════════════════════════════════════
+    if(incContratos && d.contratoRows.length > 0){
+      setPdfProgress(73, 'Modulo Contratos Continuados...');
+      doc.addPage(); paginaAtual++; y = 18;
+      secaoTitulo('Modulo 4 — Contratos Continuados', C.gold);
+
+      // KPIs do módulo
+      const totContratado = d.contratoRows.reduce((s,r)=>s+r.valorTotal, 0);
+      const totEmpCT      = d.contratoRows.reduce((s,r)=>s+r.empenhado, 0);
+      const totLiqCT      = d.contratoRows.reduce((s,r)=>s+r.liquidado, 0);
+      const totSaldoCT    = d.contratoRows.reduce((s,r)=>s+r.saldo, 0);
+      const qtdVencidos   = d.contratoRows.filter(r=>r.diasRestantes!==null&&r.diasRestantes<0).length;
+      const qtdVencendo   = d.contratoRows.filter(r=>r.diasRestantes!==null&&r.diasRestantes>=0&&r.diasRestantes<=30).length;
+      const cW5 = CW/4;
+      kpiBox(ML,         cW5, 'Total Contratado',  pdfFmt(totContratado), C.gold,  d.contratoRows.length+' contratos');
+      kpiBox(ML+cW5,     cW5, 'Total Empenhado',   pdfFmt(totEmpCT),      C.blue,  pdfPct(totEmpCT,totContratado));
+      kpiBox(ML+cW5*2,   cW5, 'Total Liquidado',   pdfFmt(totLiqCT),      C.amber, pdfPct(totLiqCT,totEmpCT)+' emp.');
+      kpiBox(ML+cW5*3,   cW5, 'Saldo Emp.>Liq.',   pdfFmt(totSaldoCT),    totSaldoCT<0?C.red:C.goldDark, qtdVencidos>0?qtdVencidos+' vencido(s)':qtdVencendo>0?qtdVencendo+' vencendo':'Vigente');
+      y += 24;
+
+      if(qtdVencidos > 0 || qtdVencendo > 0){
+        novaPageSeNecessario(8);
+        const corAviso = qtdVencidos>0 ? C.red : C.amber;
+        doc.setFillColor(...corAviso.map(v=>Math.min(255,v+185)));
+        doc.roundedRect(ML, y, CW, 7, 1.5, 1.5, 'F');
+        doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...corAviso);
+        const avisoTxt = (qtdVencidos>0?'ATENCAO: '+qtdVencidos+' contrato(s) VENCIDO(S). ':'') +
+                         (qtdVencendo>0?qtdVencendo+' contrato(s) vencendo em ate 30 dias.':'');
+        doc.text(avisoTxt, ML+3, y+4.5);
+        y += 11;
+      }
+
+      // Tabela resumo com dados essenciais
+      novaPageSeNecessario(20);
+      const cct = ['N.Contrato', 'Empresa', 'Objeto', 'Vigencia', 'Val.Total', 'Empenhado', 'Liquidado', 'Saldo', 'Sit.'];
+      const lct = [18, 30, 34, 26, -18, -18, -18, -18, -12];
+      tabelaHeader(cct, lct, ML);
+      d.contratoRows.forEach((r,i) => {
+        const sit = r.diasRestantes===null ? '—' :
+                    r.diasRestantes<0      ? 'VENC.' :
+                    r.diasRestantes<=30    ? r.diasRestantes+'d' : 'OK';
+        const corSit = r.diasRestantes===null ? C.darkGray :
+                       r.diasRestantes<0      ? C.red :
+                       r.diasRestantes<=30    ? C.amber : C.green;
+        const corSaldo = r.saldo < 0 ? C.red : r.saldo === 0 ? C.amber : C.goldDark;
+        tabelaLinha(
+          [r.nContrato, r.empresa, r.objeto, r.vigencia, pdfFmt(r.valorTotal), pdfFmt(r.empenhado), pdfFmt(r.liquidado), pdfFmt(r.saldo), sit],
+          lct, ML, i%2===1,
+          [C.darkBg, C.darkGray, C.darkBg, C.darkGray, C.gold, C.blue, C.amber, corSaldo, corSit]
+        );
+      });
+      tabelaTotal(['TOTAL ('+d.contratoRows.length+')', '', '', '', pdfFmt(totContratado), pdfFmt(totEmpCT), pdfFmt(totLiqCT), pdfFmt(totSaldoCT), ''], lct, ML, C.gold);
+
+      // Detalhe complementar por contrato (ND, PTRES, tipo serviço)
+      novaPageSeNecessario(20);
+      y += 4;
+      secaoTitulo('Contratos — Informacoes Complementares', C.gold);
+      const cct2 = ['N.Contrato', 'CNPJ', 'ND', 'PTRES', 'Tipo Servico'];
+      const lct2 = [22, 36, 18, 18, -88];
+      tabelaHeader(cct2, lct2, ML);
+      d.contratoRows.forEach((r,i) => {
+        tabelaLinha(
+          [r.nContrato, r.cnpj, r.nd, r.ptres, r.tipoServico],
+          lct2, ML, i%2===1,
+          [C.darkBg, C.darkGray, C.blue, C.blue, C.darkGray]
+        );
+      });
+      y += 5;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MÓDULO 5 — ASSISTÊNCIA ESTUDANTIL
+    // ══════════════════════════════════════════════════════════════════════
+    if(incAE && d.aeRows.length > 0){
+      setPdfProgress(83, 'Modulo Assistencia Estudantil...');
+      doc.addPage(); paginaAtual++; y = 18;
+      secaoTitulo('Modulo 5 — Assistencia Estudantil', C.teal);
+
+      // KPIs do módulo
+      const totPrevAE = d.aeRows.reduce((s,r)=>s+r.previsto, 0);
+      const totEmpAE  = d.aeRows.reduce((s,r)=>s+r.empenhado, 0);
+      const totLiqAE  = d.aeRows.reduce((s,r)=>s+r.liquidado, 0);
+      const totPagAE  = d.aeRows.reduce((s,r)=>s+r.pago, 0);
+      const totSaldAE = d.aeRows.reduce((s,r)=>s+r.saldo, 0);
+      const txAE      = totPrevAE>0 ? Math.round(totEmpAE/totPrevAE*100) : 0;
+      const cW6 = CW/3;
+      kpiBox(ML,       cW6, 'Total Previsto AE',  pdfFmt(totPrevAE), C.teal,  d.aeRows.length+' acoes');
+      kpiBox(ML+cW6,   cW6, 'Total Empenhado AE', pdfFmt(totEmpAE),  C.blue,  pdfPct(totEmpAE,totPrevAE));
+      kpiBox(ML+cW6*2, cW6, 'Total Pago AE',      pdfFmt(totPagAE),  C.green, pdfPct(totPagAE,totLiqAE)+' liq.');
+      y += 24;
+
+      doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...C.darkGray);
+      doc.text('Execucao Assistencia Estudantil:', ML, y);
+      doc.text(txAE+'%', PW-MR, y, {align:'right'});
+      y += 3;
+      barraProgresso(ML, y, CW, txAE, txAE>=80?C.green:txAE>=50?C.amber:C.red);
+      y += 8;
+
+      // Tabela de ações
+      novaPageSeNecessario(20);
+      const cae = ['Acao / Beneficio', 'Tipo / Modalidade', 'Descricao', 'Previsto', 'Empenhado', 'Liquidado', 'Pago', 'Saldo'];
+      const lae = [30, 22, 36, -18, -18, -18, -16, -24];
+      tabelaHeader(cae, lae, ML);
+      d.aeRows.forEach((r,i) => {
+        const corSaldo = r.saldo<0?C.red:r.saldo===0?C.amber:C.teal;
+        tabelaLinha(
+          [r.nome, r.tipo, r.descricao, pdfFmt(r.previsto), pdfFmt(r.empenhado), pdfFmt(r.liquidado), pdfFmt(r.pago), pdfFmt(r.saldo)],
+          lae, ML, i%2===1,
+          [C.darkBg, C.teal, C.darkGray, C.gold, C.blue, C.amber, C.green, corSaldo]
+        );
+      });
+      tabelaTotal(['TOTAL ('+d.aeRows.length+' acoes)', '', '', pdfFmt(totPrevAE), pdfFmt(totEmpAE), pdfFmt(totLiqAE), pdfFmt(totPagAE), pdfFmt(totSaldAE)], lae, ML, C.teal);
+
+      // Distribuição por tipo de auxílio
+      novaPageSeNecessario(20);
+      y += 5;
+      const tiposAE = {};
+      d.aeRows.forEach(r => {
+        const t = r.tipo||'Outros';
+        if(!tiposAE[t]) tiposAE[t] = {emp:0, pag:0, qtd:0};
+        tiposAE[t].emp += r.empenhado;
+        tiposAE[t].pag += r.pago;
+        tiposAE[t].qtd++;
+      });
+      if(Object.keys(tiposAE).length > 1){
+        secaoTitulo('Assistencia Estudantil — Distribuicao por Tipo', C.teal);
+        const cat = ['Tipo / Modalidade', 'Qtd. Acoes', 'Empenhado', 'Pago', '% do Total Empenhado'];
+        const lat = [50, -16, -32, -32, -52];
+        tabelaHeader(cat, lat, ML);
+        Object.entries(tiposAE).sort((a,b)=>b[1].emp-a[1].emp).forEach(([tipo,vals],i) => {
+          const pct = totEmpAE>0?Math.round(vals.emp/totEmpAE*100):0;
+          tabelaLinha(
+            [tipo, vals.qtd+'', pdfFmt(vals.emp), pdfFmt(vals.pag), pct+'%'],
+            lat, ML, i%2===1,
+            [C.darkBg, C.darkGray, C.blue, C.green, C.teal]
+          );
+          barraProgresso(ML+130, y-1.5, 36, pct, C.teal);
+          y += 1.5;
+        });
+        y += 5;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // SEÇÃO EXTRA — ÚLTIMOS LANÇAMENTOS
+    // ══════════════════════════════════════════════════════════════════════
     if(incRecentes && d.recentes.length > 0){
-      setPdfProgress(87, 'Tabela de lançamentos...');
-      novaPageSeNecessario(20);
-      secaoTitulo('Últimos Lançamentos', C.darkGray);
-
-      const cols5  = ['ID', 'Data', 'Tipo', 'Categoria', 'Descrição', 'Valor'];
-      const largs5 = [16, 18, 22, 36, 58, -32];
-      tabelaHeader(cols5, largs5, ML);
-
-      d.recentes.forEach((l, i) => {
-        const corTipo = l.tipo === 'Entrada' ? C.green : l.tipo === 'Empenho' ? C.blue : l.tipo === 'Liquidação' ? C.amber : l.tipo === 'Pagamento' ? C.green : l.tipo === 'Anulação' ? C.red : C.darkGray;
-        const desc = (l.descricao||'—').substring(0,30);
+      setPdfProgress(90, 'Ultimos lancamentos...');
+      novaPageSeNecessario(24);
+      secaoTitulo('Ultimos Lancamentos ('+d.recentes.length+')', C.darkGray);
+      const cr = ['ID', 'Data', 'Tipo', 'Categoria', 'Descricao', 'Valor'];
+      const lr = [16, 18, 22, 36, 56, -34];
+      tabelaHeader(cr, lr, ML);
+      d.recentes.forEach((l,i) => {
+        const corT = l.tipo==='Entrada'?C.green:l.tipo==='Empenho'?C.blue:l.tipo==='Liquidacao'||l.tipo==='Liquidação'?C.amber:l.tipo==='Pagamento'?C.green:l.tipo==='Anulacao'||l.tipo==='Anulação'?C.red:C.darkGray;
         tabelaLinha(
-          [l.id||'—', fmtData(l.data), l.tipo||'—', (l.categoria||'—').substring(0,16), desc, pdfFmt(l.valor)],
-          largs5, ML, i%2===1,
-          [C.darkGray, C.darkBg, corTipo, C.darkBg, C.darkGray, C.darkBg]
+          [l.id||'—', fmtData(l.data), l.tipo||'—', (l.categoria||'—').substring(0,16), (l.descricao||'—').substring(0,28), pdfFmt(l.valor)],
+          lr, ML, i%2===1,
+          [C.darkGray, C.darkBg, corT, C.darkBg, C.darkGray, C.darkBg]
         );
       });
-      y += 6;
+      y += 5;
     }
 
-    // ── Rodapé em todas as páginas ──────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    // RODAPÉ EM TODAS AS PÁGINAS
+    // ══════════════════════════════════════════════════════════════════════
     const totalPaginas = doc.internal.getNumberOfPages();
     for(let pg = 1; pg <= totalPaginas; pg++){
       doc.setPage(pg);
-      paginaAtual = pg;
-      // Corrigir referência de página no rodapé
-      const ryy = PH - 10;
       doc.setFillColor(...C.darkBg);
-      doc.rect(0, PH-14, PW, 14, 'F');
+      doc.rect(0, PH-13, PW, 13, 'F');
+      doc.setDrawColor(...C.goldDark);
+      doc.setLineWidth(0.3);
+      doc.line(ML, PH-13, PW-MR, PH-13);
       doc.setFontSize(7);
       doc.setTextColor(...C.midGray);
       doc.setFont('helvetica','normal');
-      doc.text(`SUCO v1.1 · IFPI Campus São João do Piauí · COCF · ${autor}`, ML, ryy);
-      doc.text(`Emitido em ${pdfDataHoje()} · Página ${pg} de ${totalPaginas}`, PW-MR, ryy, {align:'right'});
-      doc.setDrawColor(...C.goldDark);
-      doc.setLineWidth(0.3);
-      doc.line(ML, PH-14, PW-MR, PH-14);
+      doc.text('SUCO v1.1 - IFPI Campus Sao Joao do Piaui - COCF - ' + autor, ML, PH-5);
+      doc.text('Emitido em ' + pdfDataHoje() + ' - Pagina ' + pg + ' de ' + totalPaginas, PW-MR, PH-5, {align:'right'});
+      // Marca d'água de página 1 = capa
+      if(pg === 1){
+        doc.setFontSize(6);
+        doc.setTextColor(200, 200, 210);
+        doc.text('Documento gerado automaticamente pelo SUCO. Nao substitui documentos oficiais do SIAFI.', PW/2, PH-8.5, {align:'center'});
+      }
     }
 
-    // ── Download ─────────────────────────────────────────────────────────
-    setPdfProgress(95, 'Salvando arquivo...');
-    const nomeArquivo = `SUCO_Relatorio_${periodo.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}_${new Date().toISOString().slice(0,10)}.pdf`;
+    // ── Download ────────────────────────────────────────────────────────
+    setPdfProgress(97, 'Salvando arquivo...');
+    const nomeArquivo = 'SUCO_Relatorio_Completo_' + periodo.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'') + '_' + new Date().toISOString().slice(0,10) + '.pdf';
     doc.save(nomeArquivo);
 
-    setPdfProgress(100, `✓ Relatório gerado com sucesso! (${doc.internal.getNumberOfPages()} página(s))`);
-    setTimeout(()=>{
+    setPdfProgress(100, 'Relatorio gerado com sucesso! (' + doc.internal.getNumberOfPages() + ' paginas)');
+    setTimeout(() => {
       fecharModalPDF();
-      toast('Relatório PDF exportado com sucesso!','success');
+      toast('Relatorio PDF exportado com sucesso!', 'success');
     }, 1800);
 
   } catch(err) {
