@@ -450,17 +450,13 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   </div>
   <div class="topbar-right">
     <div class="badge-save" id="save-badge"><span class="badge-dot"></span><span id="save-text">Dados salvos</span></div>
-    <!-- GOOGLE DRIVE -->
-    <button class="btn-top btn-drive-login" id="btn-drive-login" onclick="driveLogin()">☁ Conectar Drive</button>
-    <button class="btn-top btn-drive-action" id="btn-drive-save" onclick="driveSalvar()" style="display:none">☁↑ Salvar</button>
-    <button class="btn-top btn-drive-action" id="btn-drive-load" onclick="driveCarregar()" style="display:none">☁↓ Carregar</button>
-    <button class="btn-top btn-drive-logout" id="btn-drive-logout" onclick="driveLogout()" style="display:none">☁ Sair</button>
-    <div class="badge-drive-status" id="badge-drive">
-      <span style="width:6px;height:6px;border-radius:50%;background:var(--blue);display:inline-block"></span>
-      <span id="drive-user-name">Drive</span>
-      <span id="drive-sync-time" style="font-size:9px;opacity:.7"></span>
+    <!-- SUPABASE STATUS -->
+    <div id="badge-supabase" style="display:flex;align-items:center;gap:6px;font-size:10.5px;padding:3px 10px;border-radius:20px;border:1px solid var(--border2);color:var(--text3)">
+      <span id="sb-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text4);display:inline-block;transition:background .3s"></span>
+      <span id="sb-status-text">Supabase</span>
+      <span id="sb-sync-time" style="font-size:9px;opacity:.7"></span>
     </div>
-    <!-- FIM DRIVE -->
+    <!-- FIM SUPABASE -->
     <button class="btn-top" onclick="exportarJSON()">↓ Backup JSON</button>
     <button class="btn-top" onclick="exportarCSV()">↓ CSV</button>
     <button class="btn-top" id="btn-pdf-export" onclick="exportarRelatorioPDF()" style="color:var(--gold);border-color:var(--gold-border);background:var(--gold-bg);font-weight:600">⬇ Relatório PDF</button>
@@ -508,7 +504,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div id="sidebar-saldo"><div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">Sem dados</div></div>
   </div>
   <div class="sidebar-footer">
-    <div class="sf-text">IFPI Campus São João do Piauí · <strong style="color:var(--gold)">SUCO v1.2</strong><br>localStorage · Drive Auto-Sync · Soft-delete · Auditoria</div>
+    <div class="sf-text">IFPI Campus São João do Piauí · <strong style="color:var(--gold)">SUCO v1.2</strong><br>Supabase Cloud · Auto-Sync · Soft-delete · Auditoria</div>
   </div>
 </aside>
 
@@ -1404,7 +1400,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   </div>
   <div class="info-box success">
     <span class="info-icon">ℹ</span>
-    <div>Dados persistidos em <strong>localStorage</strong>. Use <strong>↓ Backup JSON</strong> regularmente. O sistema usa <strong>soft-delete</strong> — nenhum registro é removido permanentemente.</div>
+    <div>Dados persistidos no <strong>Supabase (nuvem)</strong>. Use <strong>↓ Backup JSON</strong> regularmente como cópia de segurança extra. O sistema usa <strong>soft-delete</strong> — nenhum registro é removido permanentemente.</div>
   </div>
 </div>
 
@@ -1636,302 +1632,242 @@ function renderPagination(modulo,totalPgs,pg,total,fnRender){
 }
 
 // ═══════════════════════════════════════════════════════════
-//  PERSISTÊNCIA
+//  CONFIGURAÇÃO SUPABASE
+//  ⚠ SUBSTITUA os valores abaixo pelas suas credenciais
+// ═══════════════════════════════════════════════════════════
+const SUPABASE_URL    = 'https://vndeavittlkrposmznhb.supabase.co/rest/v1/';       // ex: https://xyzxyz.supabase.co
+const SUPABASE_KEY    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZGVhdml0dGxrcnBvc216bmhiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExOTk0ODcsImV4cCI6MjA5Njc3NTQ4N30.Dj8e2-y1JjX-s2dkZLt3fBDNjvQp5RrpijkT76Rcaqc';  // chave anon/public do projeto
+const SUPABASE_ROW_ID = 1; // ID fixo da linha que guarda todos os dados do SUCO
+
+// ─── UI helpers ───────────────────────────────────────────
+function _sbSetStatus(cor, texto, tempo){
+  const dot  = document.getElementById('sb-dot');
+  const msg  = document.getElementById('sb-status-text');
+  const time = document.getElementById('sb-sync-time');
+  const cores = { green:'var(--green)', blue:'var(--blue)', red:'var(--red)', gray:'var(--text4)', amber:'var(--amber)' };
+  if(dot)  dot.style.background  = cores[cor] || cores.gray;
+  if(msg)  msg.textContent       = texto;
+  if(time) time.textContent      = tempo || '';
+}
+
+// ─── Salvar no Supabase (upsert) ──────────────────────────
+let _sbSyncTimer    = null;
+let _sbSyncBusy     = false;
+let _sbLastChecksum = '';
+
+function _sbChecksum(){
+  try{
+    return JSON.stringify({
+      n_lanc : state.lancamentos.length,
+      n_emp  : (state.empenhosCad||[]).length,
+      n_liq  : (state.liquidacoes||[]).length,
+      n_cont : (state.contratos||[]).length,
+      saved  : state.meta && state.meta.lastSaved || ''
+    });
+  }catch(e){ return Date.now().toString(); }
+}
+
+async function _sbSalvarSilencioso(){
+  if(_sbSyncBusy){ return; }
+  const ck = _sbChecksum();
+  if(ck === _sbLastChecksum){ return; }
+  _sbSyncBusy = true;
+  _sbSetStatus('amber','Sincronizando…','');
+  try{
+    const payload = {
+      id: SUPABASE_ROW_ID,
+      dados: {
+        meta          : state.meta,
+        fontes        : state.fontes,
+        ptres         : state.ptres,
+        cats          : state.cats,
+        nd            : state.nd,
+        pi            : state.pi,
+        ts            : state.ts,
+        lancamentos   : state.lancamentos,
+        contratos     : state.contratos,
+        acoes         : state.acoes,
+        auditLog      : state.auditLog,
+        fornecedores  : state.fornecedores,
+        empenhosCad   : state.empenhosCad,
+        liquidacoes   : state.liquidacoes,
+        contratosPnae : state.contratosPnae
+      },
+      updated_at: new Date().toISOString()
+    };
+    const res = await fetch(SUPABASE_URL + '/rest/v1/suco_dados', {
+      method : 'POST',
+      headers: {
+        'Content-Type' : 'application/json',
+        'apikey'       : SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Prefer'       : 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok){
+      const err = await res.text();
+      throw new Error('HTTP ' + res.status + ': ' + err);
+    }
+    _sbLastChecksum = ck;
+    const agora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    _sbSetStatus('green','☁ Salvo', agora);
+    console.info('[SUPABASE] ✅ Sync OK — ' + agora);
+  }catch(e){
+    _sbSetStatus('red','Erro sync','');
+    console.error('[SUPABASE] Erro ao salvar:', e);
+    toast('Erro ao sincronizar com Supabase: ' + e.message, 'error');
+  }finally{
+    _sbSyncBusy = false;
+  }
+}
+
+function _sbTriggerSync(){
+  clearTimeout(_sbSyncTimer);
+  _sbSyncTimer = setTimeout(_sbSalvarSilencioso, 2000);
+}
+
+// ─── Carregar do Supabase ──────────────────────────────────
+async function _sbCarregarDaNuvem(){
+  _sbSetStatus('blue','Conectando…','');
+  try{
+    const res = await fetch(
+      SUPABASE_URL + '/rest/v1/suco_dados?id=eq.' + SUPABASE_ROW_ID + '&select=dados,updated_at',
+      {
+        headers:{
+          'apikey'       : SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY
+        }
+      }
+    );
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    if(!rows || rows.length === 0){
+      console.info('[SUPABASE] Nenhum dado na nuvem ainda — usando dados locais.');
+      _sbSetStatus('amber','Novo','');
+      return false;
+    }
+    const d = rows[0].dados;
+    if(!d || typeof d !== 'object') throw new Error('Dados corrompidos na nuvem');
+    _sbAplicarDados(d);
+    const agora = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    _sbSetStatus('green','☁ Sincronizado', agora);
+    console.info('[SUPABASE] ✅ Dados carregados da nuvem. updated_at=' + rows[0].updated_at);
+    return true;
+  }catch(e){
+    _sbSetStatus('red','Offline','');
+    console.warn('[SUPABASE] Falha ao carregar — operando com dados locais:', e);
+    toast('Supabase offline — dados locais em uso. Verifique a conexão.', 'warn');
+    return false;
+  }
+}
+
+function _sbAplicarDados(d){
+  if(!d || typeof d !== 'object') return;
+  const arr = (v, fb) => Array.isArray(v) ? v : fb;
+  state.meta          = d.meta          || state.meta;
+  state.fontes        = arr(d.fontes,        [...DEFAULT_FONTES]);
+  state.ptres         = arr(d.ptres,         [...DEFAULT_PTRES]);
+  state.cats          = [...DEFAULT_CATS];
+  state.nd            = arr(d.nd,            [...DEFAULT_ND]);
+  state.pi            = arr(d.pi,            [...DEFAULT_PI]);
+  state.ts            = arr(d.ts,            [...DEFAULT_TS]);
+  state.lancamentos   = arr(d.lancamentos,   []).map(l=>({...l, categoria: l.categoria ? normalizarCategoria(l.categoria) : l.categoria}));
+  state.contratos     = arr(d.contratos,     []).map(c=>({...c, categoria: c.categoria ? normalizarCategoria(c.categoria) : c.categoria}));
+  state.acoes         = arr(d.acoes,         []).map(a=>{
+    if(!Array.isArray(a.previstoMensalArr)){
+      const pm = a.previstoMensal || ((a.previsto||0)/12);
+      a.previstoMensalArr = Array(12).fill(+Number(pm).toFixed(2));
+    }
+    return {...a};
+  });
+  state.auditLog      = arr(d.auditLog,      []);
+  state.fornecedores  = arr(d.fornecedores,  []).map(f=>({...f}));
+  state.empenhosCad   = arr(d.empenhosCad,   []).map(e=>({...e, categoria: e.categoria ? normalizarCategoria(e.categoria) : e.categoria}));
+  state.liquidacoes   = arr(d.liquidacoes,   []).map(l=>({...l, categoria: l.categoria ? normalizarCategoria(l.categoria) : l.categoria}));
+  state.contratosPnae = arr(d.contratosPnae, []).map(c=>({...c}));
+}
+
+// ─── Stubs de compatibilidade (Drive removido) ─────────────
+function driveTriggerSync(){}
+function driveLogin(){}
+function driveLogout(){}
+function driveSalvar(){}
+function driveCarregar(){}
+function showDriveWelcome(){}
+function closeDriveWelcome(){}
+
+// ═══════════════════════════════════════════════════════════
+//  PERSISTÊNCIA  (localStorage = cache offline; Supabase = fonte principal)
 // ═══════════════════════════════════════════════════════════
 function salvar(){
-  state.meta.lastSaved=new Date().toISOString();
+  state.meta.lastSaved = new Date().toISOString();
   try{
-    // ★ VALIDAÇÃO DE INTEGRIDADE: garantir que todos os módulos estão presentes antes de salvar
-    if(!Array.isArray(state.lancamentos))state.lancamentos=[];
-    if(!Array.isArray(state.empenhosCad))state.empenhosCad=[];
-    if(!Array.isArray(state.liquidacoes))state.liquidacoes=[];
-    if(!Array.isArray(state.contratos))state.contratos=[];
-    if(!Array.isArray(state.acoes))state.acoes=[];
-    if(!Array.isArray(state.fornecedores))state.fornecedores=[];
-    if(!Array.isArray(state.contratosPnae))state.contratosPnae=[];
-    if(!Array.isArray(state.auditLog))state.auditLog=[];
-    // ★ FIX PERSISTÊNCIA: objeto de backup explícito — nunca salvar estado parcial.
-    // Antes: JSON.stringify(state) poderia omitir campos se state tivesse propriedades
-    // adicionadas dinamicamente após inicialização. Agora: enumeração explícita garante
-    // que todos os módulos críticos (empenhosCad, liquidacoes, creditos) sejam sempre incluídos.
+    if(!Array.isArray(state.lancamentos))   state.lancamentos   = [];
+    if(!Array.isArray(state.empenhosCad))   state.empenhosCad   = [];
+    if(!Array.isArray(state.liquidacoes))   state.liquidacoes   = [];
+    if(!Array.isArray(state.contratos))     state.contratos     = [];
+    if(!Array.isArray(state.acoes))         state.acoes         = [];
+    if(!Array.isArray(state.fornecedores))  state.fornecedores  = [];
+    if(!Array.isArray(state.contratosPnae)) state.contratosPnae = [];
+    if(!Array.isArray(state.auditLog))      state.auditLog      = [];
     const estadoCompleto = {
-      meta: state.meta,
-      fontes: state.fontes,
-      ptres: state.ptres,
-      cats: state.cats,
-      nd: state.nd,
-      pi: state.pi,
-      ts: state.ts,
-      lancamentos: state.lancamentos,
-      contratos: state.contratos,
-      acoes: state.acoes,
-      auditLog: state.auditLog,
-      fornecedores: state.fornecedores,
-      empenhosCad: state.empenhosCad,
-      liquidacoes: state.liquidacoes,
-      contratosPnae: state.contratosPnae
+      meta: state.meta, fontes: state.fontes, ptres: state.ptres,
+      cats: state.cats, nd: state.nd, pi: state.pi, ts: state.ts,
+      lancamentos: state.lancamentos, contratos: state.contratos,
+      acoes: state.acoes, auditLog: state.auditLog,
+      fornecedores: state.fornecedores, empenhosCad: state.empenhosCad,
+      liquidacoes: state.liquidacoes, contratosPnae: state.contratosPnae
     };
-    const json=JSON.stringify(estadoCompleto);
-    // Validar que o JSON gerado é parseável (previne corrupção)
+    const json   = JSON.stringify(estadoCompleto);
     const parsed = JSON.parse(json);
-    // ★ FIX CRÍTICO: Verificação de integridade pré-gravação — garante que nenhum
-    // array obrigatório foi zerado acidentalmente antes de gravar no localStorage.
-    const _chk = ['lancamentos','empenhosCad','liquidacoes'];
+    const _chk   = ['lancamentos','empenhosCad','liquidacoes'];
     for(const _k of _chk){
       if(!Array.isArray(parsed[_k])){
-        console.error('[SUCO] salvar() abortado: campo "'+_k+'" corrompido antes da gravação.');
+        console.error('[SUCO] salvar() abortado: campo "'+_k+'" corrompido.');
         toast('Erro de integridade ao salvar (campo '+_k+'). Dados não gravados.','error');
         return;
       }
     }
-    localStorage.setItem(STORAGE_KEY,json);
-    const t=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-    document.getElementById('save-text').textContent='Salvo às '+t;
-    console.info('[SUCO] ✅ salvar() OK — lancamentos:'+state.lancamentos.length+' empenhosCad:'+state.empenhosCad.length+' liquidacoes:'+state.liquidacoes.length+' creditos(Entrada):'+state.lancamentos.filter(x=>x.tipo==='Entrada'&&x.status==='Ativo').length);
-  }catch(e){console.error('[SUCO] salvar() erro:',e);toast('Erro ao salvar! localStorage cheio?','error')}
-  driveTriggerSync();
+    localStorage.setItem(STORAGE_KEY, json);
+    const t = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('save-text').textContent = 'Salvo às ' + t;
+    console.info('[SUCO] ✅ salvar() OK — lancamentos:'+state.lancamentos.length+' empenhosCad:'+state.empenhosCad.length+' liquidacoes:'+state.liquidacoes.length);
+  }catch(e){ console.error('[SUCO] salvar() erro:',e); toast('Erro ao salvar: ' + e.message,'error'); }
+  _sbTriggerSync();
 }
+
 function carregar(){
-  // ★ FIX: Tentar a chave primária SUCO v6 e fallback para versões anteriores
-  const raw=localStorage.getItem(STORAGE_KEY)
-         || localStorage.getItem('sysOrcV5')
-         || localStorage.getItem('sysOrcV4')
-         || localStorage.getItem('sysOrcV3');
+  const raw = localStorage.getItem(STORAGE_KEY)
+           || localStorage.getItem('sysOrcV5')
+           || localStorage.getItem('sysOrcV4')
+           || localStorage.getItem('sysOrcV3');
   if(raw){
     try{
-      const d=JSON.parse(raw);
-      state.meta=d.meta||state.meta;
-      state.fontes=Array.isArray(d.fontes)?[...d.fontes]:[...DEFAULT_FONTES];
-      state.ptres=Array.isArray(d.ptres)?[...d.ptres]:[...DEFAULT_PTRES];
-      // SEMPRE usar DEFAULT_CATS para garantir consistência entre módulos
-      state.cats=[...DEFAULT_CATS];
-      state.nd=Array.isArray(d.nd)?[...d.nd]:[...DEFAULT_ND];
-      state.pi=Array.isArray(d.pi)?[...d.pi]:[...DEFAULT_PI];
-      state.ts=Array.isArray(d.ts)?[...d.ts]:[...DEFAULT_TS];
-      
-      // Normalizar categorias em TODOS os lançamentos
-      state.lancamentos=Array.isArray(d.lancamentos)?d.lancamentos.map(l=>({
-        ...l,
-        categoria: l.categoria ? normalizarCategoria(l.categoria) : l.categoria
-      })):[];
-      
-      // Normalizar categorias em contratos
-      state.contratos=Array.isArray(d.contratos)?d.contratos.map(c=>({
-        ...c,
-        categoria: c.categoria ? normalizarCategoria(c.categoria) : c.categoria
-      })):[];
-      
-      state.acoes=Array.isArray(d.acoes)?d.acoes.map(a=>{
-        // Migração: se não tem previstoMensalArr, cria a partir de previstoMensal ou previsto
+      const d = JSON.parse(raw);
+      state.meta        = d.meta        || state.meta;
+      state.fontes      = Array.isArray(d.fontes) ? [...d.fontes]  : [...DEFAULT_FONTES];
+      state.ptres       = Array.isArray(d.ptres)  ? [...d.ptres]   : [...DEFAULT_PTRES];
+      state.cats        = [...DEFAULT_CATS];
+      state.nd          = Array.isArray(d.nd)     ? [...d.nd]      : [...DEFAULT_ND];
+      state.pi          = Array.isArray(d.pi)     ? [...d.pi]      : [...DEFAULT_PI];
+      state.ts          = Array.isArray(d.ts)     ? [...d.ts]      : [...DEFAULT_TS];
+      state.lancamentos = Array.isArray(d.lancamentos) ? d.lancamentos.map(l=>({...l, categoria: l.categoria ? normalizarCategoria(l.categoria) : l.categoria})) : [];
+      state.contratos   = Array.isArray(d.contratos)   ? d.contratos.map(c=>({...c, categoria: c.categoria ? normalizarCategoria(c.categoria) : c.categoria}))   : [];
+      state.acoes       = Array.isArray(d.acoes) ? d.acoes.map(a=>{
         if(!Array.isArray(a.previstoMensalArr)){
-          const pm=a.previstoMensal||((a.previsto||0)/12);
-          a.previstoMensalArr=Array(12).fill(+pm.toFixed(2));
+          const pm = a.previstoMensal || ((a.previsto||0)/12);
+          a.previstoMensalArr = Array(12).fill(+pm.toFixed(2));
         }
         return {...a};
-      }):[];
-      state.auditLog=Array.isArray(d.auditLog)?[...d.auditLog]:[];
-      state.fornecedores=Array.isArray(d.fornecedores)?d.fornecedores.map(f=>({...f})):[];
-      
-      // Normalizar categorias em empenhos cadastrados
-      state.empenhosCad=Array.isArray(d.empenhosCad)?d.empenhosCad.map(e=>({
-        ...e,
-        categoria: e.categoria ? normalizarCategoria(e.categoria) : e.categoria
-      })):[];
-      
-      // Normalizar categorias em liquidações
-      state.liquidacoes=Array.isArray(d.liquidacoes)?d.liquidacoes.map(l=>({
-        ...l,
-        categoria: l.categoria ? normalizarCategoria(l.categoria) : l.categoria
-      })):[];
-      
-      state.contratosPnae=Array.isArray(d.contratosPnae)?d.contratosPnae.map(c=>({...c})):[];
-      
-      // ── Migração v6→v7: corrige referenciaId de lançamentos que apontam para
-      // ações do seed legado (AE001/AE002/AE003) que foram removidas.
-      // Essas referências eram inválidas e causavam dados fantasma no módulo AE.
-      const _legacyAeIds = new Set(['AE001','AE002','AE003']);
-      let _migCount = 0;
-      state.lancamentos.forEach(l=>{
-        if(l.referenciaId && _legacyAeIds.has(l.referenciaId)){
-          l.referenciaId = null;
-          _migCount++;
-        }
-      });
-      if(_migCount > 0)
-        console.info('Migração: '+_migCount+' lançamento(s) com referenciaId legado (AE001/2/3) corrigido(s) para null.');
-
-      // ── Migração de datas: atualiza lançamentos do seed com datas de ano
-      // diferente do atual para o mês/ano corrente, garantindo que o dashboard
-      // mensal exiba os dados corretamente.
-      const _anoAtual = new Date().getFullYear();
-      const _mesAtual = String(new Date().getMonth()+1).padStart(2,'0');
-      const _prefAtual = _anoAtual+'-'+_mesAtual;
-      let _dateCount = 0;
-      state.lancamentos.forEach(l=>{
-        if(l.data && l.observacoes && l.observacoes.includes('IFPI Campus SJP')){
-          const _lAno = parseInt((l.data||'').slice(0,4));
-          if(_lAno < _anoAtual){
-            const _dia = (l.data||'').slice(8,10) || '15';
-            l.data = _prefAtual+'-'+_dia;
-            l.competencia = _prefAtual;
-            _dateCount++;
-          }
-        }
-      });
-      if(_dateCount > 0)
-        console.info('Migração: '+_dateCount+' lançamento(s) com data de ano anterior atualizados para '+_prefAtual+'.');
-
-      // ── Migração: propagar tipoRecurso para lançamentos de Liquidação/Pagamento legados
-      // Lançamentos do seed e registros antigos não possuem tipoRecurso. Sem ele,
-      // totalLiquidacoesEXE/totalPagamentosEXE os tratam como EXE (pelo fallback ||'EXE'),
-      // mas é necessário ter o campo explícito para futuras segregações e para o seed RAP.
-      let _tipoRecursoCount = 0;
-      state.lancamentos.forEach(l=>{
-        if((l.tipo==='Liquidação'||l.tipo==='Pagamento')&&!l.tipoRecurso){
-          // [CORRIGIDO] Busca primeiro em empenhosCad (fonte autoritativa de EXE/RAP),
-          // depois no lançamento de empenho referenciado, por último fallback EXE.
-          const empCad=(state.empenhosCad||[]).find(e=>
-            empenhoCadAtivo(e)&&(e.id===l.empenhoCadId||e.id===l.referenciaId||e.numero===l.referencia)
-          );
-          if(empCad?.tipoEmp){
-            l.tipoRecurso=empCad.tipoEmp;_tipoRecursoCount++;
-          } else {
-            const empRef=state.lancamentos.find(e=>e.id===l.referenciaId&&e.tipo==='Empenho');
-            l.tipoRecurso=empRef?.tipoRecurso||'EXE';_tipoRecursoCount++;
-          }
-        }
-      });
-      if(_tipoRecursoCount>0)
-        console.info('Migração: tipoRecurso propagado para '+_tipoRecursoCount+' lançamento(s) de Liquidação/Pagamento.');
-
-      let _tipoRecursoLiqCount = 0;
-      state.liquidacoes.forEach(l=>{
-        if(!l.tipoRecurso){
-          const empCad=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
-          l.tipoRecurso=empCad?.tipoEmp||'EXE';
-          _tipoRecursoLiqCount++;
-        }
-      });
-      if(_tipoRecursoLiqCount>0)
-        console.info('Migração: tipoRecurso propagado para '+_tipoRecursoLiqCount+' liquidação(ões).');
-
-      // ─────────────────────────────────────────────────────────────────
-      // ★ MIGRAÇÃO: tipoRegistro discriminador (INICIAL / REFORCO / ANULACAO)
-      // Para lançamentos antigos sem tipoRegistro, classifica:
-      //   - Anulação → ANULACAO
-      //   - Empenho: o primeiro lançamento por empenhoCadId (ordem ts) → INICIAL
-      //              os demais → REFORCO
-      // ─────────────────────────────────────────────────────────────────
-      let _migTipoReg=0, _migAnul=0;
-      // 1) Anulações
-      state.lancamentos.forEach(l=>{
-        if(l.tipo==='Anulação'&&!l.tipoRegistro){
-          l.tipoRegistro='ANULACAO';
-          _migAnul++;
-        }
-      });
-      // 2) Empenhos: agrupa por empenhoCadId (ou número), o primeiro vira INICIAL
-      const _gruposEmp={};
-      state.lancamentos.forEach(l=>{
-        if(l.tipo!=='Empenho'||l.tipoRegistro)return;
-        const k=l.empenhoCadId||l.referencia||l.numeroEmpenho||'__';
-        if(!_gruposEmp[k])_gruposEmp[k]=[];
-        _gruposEmp[k].push(l);
-      });
-      Object.values(_gruposEmp).forEach(arr=>{
-        arr.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
-        arr.forEach((l,i)=>{
-          // Se o empenho já tem valorInicial cadastrado, esse primeiro lançamento é o INICIAL
-          l.tipoRegistro=i===0?'INICIAL':'REFORCO';
-          _migTipoReg++;
-        });
-      });
-      // 3) Para empenhos com valorInicial mas sem lançamento INICIAL, garantir compatibilidade
-      // (já implementado no cálculo via fallback em calcEmpenhoTotais)
-      if(_migTipoReg>0||_migAnul>0)
-        console.info('Migração: tipoRegistro atribuído a '+_migTipoReg+' empenho(s) e '+_migAnul+' anulação(ões).');
-
-      // 4) Para empenhos cadastrados sem valorInicial mas com lançamento INICIAL, sincroniza
-      let _syncVI=0;
-      (state.empenhosCad||[]).forEach(e=>{
-        if(e.valorInicial==null||e.valorInicial===0){
-          const lInicial=state.lancamentos.find(l=>
-            l.status==='Ativo'&&l.tipo==='Empenho'&&
-            l.tipoRegistro==='INICIAL'&&
-            (l.empenhoCadId===e.id||l.referencia===e.numero)
-          );
-          if(lInicial){
-            e.valorInicial=lInicial.valor||0;
-            // herda competência se ainda não tiver
-            if(!e.competencia&&lInicial.competencia)e.competencia=lInicial.competencia;
-            _syncVI++;
-          }
-        }
-      });
-      if(_syncVI>0)
-        console.info('Migração: valorInicial sincronizado para '+_syncVI+' empenho(s) cadastrados.');
-
-      // ── Migração AE: propagar acaoId e empenhoCadId de empenhosCad para lançamentos filhos
-      // ★ FIX AE: a versão anterior propagava apenas empenhoCadId mas não acaoId, deixando
-      //   aeAcaoIdFromLanc dependente de busca indireta que pode falhar em dados legados.
-      //   Agora propagamos ambos para garantir integridade do vínculo ação↔lançamento.
-      let _aeVinc=0;
-      (state.empenhosCad||[]).forEach(e=>{
-        if(!e.acaoId||e.status==='Excluído') return;
-        state.lancamentos.forEach(l=>{
-          if(l.status!=='Ativo') return;
-          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.numeroEmpenho===e.numero)||(l.referenciaId===e.id);
-          if(!isFilho) return;
-          let mudou=false;
-          // Garante empenhoCadId sempre presente para consultas via empenhosCad
-          if(!l.empenhoCadId){ l.empenhoCadId=e.id; mudou=true; }
-          // ★ Propaga acaoId diretamente — caminho mais robusto e sem ambiguidade
-          if(e.acaoId&&!l.acaoId){ l.acaoId=e.acaoId; mudou=true; }
-          if(mudou) _aeVinc++;
-        });
-      });
-      if(_aeVinc>0)
-        console.info('Migração AE: '+_aeVinc+' lançamento(s) com acaoId/empenhoCadId restaurado/atualizado.');
-
-      // ── ★ MIGRAÇÃO HISTÓRICA CONTRATOS CONTINUADOS ────────────────────────────
-      // Espelha a lógica da migração AE para empenhos vinculados a contratos.
-      // Garante que lançamentos históricos (INICIAL, REFORCO, Liquidação, Pagamento)
-      // de empenhos com contratoId recebam empenhoCadId e referenciaId corretos,
-      // tornando-os visíveis em sumLancsByContratoEXE (Método 1 e Método 2).
-      // NÃO altera lançamentos que já possuem os campos corretamente preenchidos.
-      let _ctVinc=0;
-      const _CATS_CT=new Set(['CONTRATOS','APOIO AO ENSINO']);
-      (state.empenhosCad||[]).forEach(e=>{
-        if(!e.contratoId||e.status==='Excluído') return;
-        if(!_CATS_CT.has((e.categoria||'').toUpperCase())) return;
-        state.lancamentos.forEach(l=>{
-          if(l.status!=='Ativo') return;
-          // Identificar lançamentos filhos do empenho (mesmo critério da migração AE)
-          const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.numeroEmpenho===e.numero)||(l.referenciaId===e.id);
-          if(!isFilho) return;
-          let mudou=false;
-          // 1) Garantir empenhoCadId sempre presente (habilita Método 2 em sumLancsByContratoEXE)
-          if(!l.empenhoCadId){ l.empenhoCadId=e.id; mudou=true; }
-          // 2) Para Empenho (INICIAL/REFORCO): se referenciaId não aponta para o contrato, corrigir
-          //    Isso habilita Método 1 em sumLancsByContratoEXE para lançamentos históricos
-          if((l.tipo==='Empenho')&&l.referenciaId!==e.contratoId){
-            l.referenciaId=e.contratoId; mudou=true;
-          }
-          // 3) Herdar tipoRecurso do empenho cadastrado se ausente
-          if(!l.tipoRecurso){ l.tipoRecurso=e.tipoEmp||'EXE'; mudou=true; }
-          if(mudou) _ctVinc++;
-        });
-      });
-      if(_ctVinc>0)
-        console.info('Migração CONTRATOS: '+_ctVinc+' lançamento(s) histórico(s) reindexado(s) para contratos continuados.');
-      // ── FIM MIGRAÇÃO HISTÓRICA CONTRATOS CONTINUADOS ─────────────────────────
-
-      console.log('✅ Categorias normalizadas automaticamente ao carregar');
-      console.log('✅ Usando DEFAULT_CATS em todos os módulos para garantir consistência');
-      console.info('[SUCO] carregar() OK — lancamentos:'+state.lancamentos.length+' empenhosCad:'+state.empenhosCad.length+' liquidacoes:'+state.liquidacoes.length+' creditos(Entrada):'+state.lancamentos.filter(x=>x.tipo==='Entrada'&&x.status==='Ativo').length);
-      
+      }) : [];
+      state.auditLog      = Array.isArray(d.auditLog)      ? [...d.auditLog]      : [];
+      state.fornecedores  = Array.isArray(d.fornecedores)  ? d.fornecedores.map(f=>({...f}))  : [];
+      state.empenhosCad   = Array.isArray(d.empenhosCad)   ? d.empenhosCad.map(e=>({...e, categoria: e.categoria ? normalizarCategoria(e.categoria) : e.categoria})) : [];
+      state.liquidacoes   = Array.isArray(d.liquidacoes)   ? d.liquidacoes.map(l=>({...l, categoria: l.categoria ? normalizarCategoria(l.categoria) : l.categoria})) : [];
+      state.contratosPnae = Array.isArray(d.contratosPnae) ? d.contratosPnae.map(c=>({...c})) : [];
       return true;
-    }catch(e){console.error('Erro ao carregar dados:',e)}
+    }catch(e){ console.error('[SUCO] Erro ao carregar cache local:',e); return false; }
   }
   return false;
 }
@@ -2130,7 +2066,7 @@ function importarJSON(evt){
       auditLog('IMPORT','SISTEMA','JSON','Dados importados de arquivo JSON',{file:file.name,...resumo,integridade:{liqsOrfas,empsOrfos}});
       // ★ FIX: zerar checksum para garantir que dados importados sejam
       // sincronizados para o Drive mesmo que o checksum anterior fosse "igual"
-      _driveLastSyncChecksum='';
+      _sbLastChecksum='';
       salvar();
       // Re-renderizar todos os módulos após importação
       if(typeof energyPoolManager!=='undefined') energyPoolManager.invalidateCache();
@@ -6004,443 +5940,6 @@ function gerarRelatorioContratos(){
     </div>`;
   });
   el.innerHTML=html;
-}
-
-// ═══════════════════════════════════════════════════════════
-//  GOOGLE DRIVE — INTEGRAÇÃO COMPLETA v1.2
-//  Correções: renovação automática de token, sync completo
-//  de todos os módulos, re-renderização total pós-importação.
-// ═══════════════════════════════════════════════════════════
-const DRIVE_CLIENT_ID='650384223031-5022u8tv9pa4otrhamr77f2lmjsrbppn.apps.googleusercontent.com';
-const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
-const DRIVE_FILE_NAME='orcamento_v6_dados.json';
-
-let driveAccessToken=null;
-let driveFileId=null;
-let _driveSyncTimer=null;
-let _driveSyncInProgress=false;
-let _driveLastSyncChecksum='';
-let _driveTokenExpiry=0;      // ★ timestamp (ms) da expiração do token
-let _driveTokenRenewTimer=null; // ★ timer de renovação preventiva do token
-
-// ★ Checksum completo: inclui hashes de conteúdo para detectar edições internas
-function _driveStateChecksum(){
-  try{
-    const _liqHash=(state.liquidacoes||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valorBruto||'')).join('|');
-    const _lancHash=(state.lancamentos||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valor||'')).join('|');
-    const _empHash=(state.empenhosCad||[]).map(x=>x.id+':'+(x.tsModif||x.ts||x.valorInicial||'')).join('|');
-    const s=JSON.stringify({
-      lancamentos:(state.lancamentos||[]).length,
-      empenhosCad:(state.empenhosCad||[]).length,
-      liquidacoes:(state.liquidacoes||[]).length,
-      contratos:(state.contratos||[]).length,
-      fornecedores:(state.fornecedores||[]).length,
-      contratosPnae:(state.contratosPnae||[]).length,
-      acoes:(state.acoes||[]).length,
-      lastSaved:state.meta?.lastSaved||'',
-      _liqH:_liqHash,_lanH:_lancHash,_empH:_empHash
-    });
-    return s;
-  }catch(e){return Date.now().toString();}
-}
-
-function driveSetUI(logado){
-  const btnLogin=document.getElementById('btn-drive-login');
-  const btnSave=document.getElementById('btn-drive-save');
-  const btnLoad=document.getElementById('btn-drive-load');
-  const btnLogout=document.getElementById('btn-drive-logout');
-  const badge=document.getElementById('badge-drive');
-  if(btnLogin)btnLogin.style.display=logado?'none':'';
-  if(btnSave)btnSave.style.display=logado?'':'none';
-  if(btnLoad)btnLoad.style.display=logado?'':'none';
-  if(btnLogout)btnLogout.style.display=logado?'':'none';
-  if(badge)badge.style.display=logado?'':'none';
-}
-
-// ★ Renova o token silenciosamente antes de expirar (55 min após emissão)
-function _driveAgendarRenovacaoToken(expiresInSeg){
-  if(_driveTokenRenewTimer)clearTimeout(_driveTokenRenewTimer);
-  const ms=Math.max(((expiresInSeg||3600)-300),60)*1000; // renova 5 min antes, mínimo 1 min
-  _driveTokenRenewTimer=setTimeout(()=>{
-    if(!window.google||!driveAccessToken)return;
-    console.info('[DRIVE] Renovando token preventivamente...');
-    try{
-      const client=google.accounts.oauth2.initTokenClient({
-        client_id:DRIVE_CLIENT_ID,scope:DRIVE_SCOPE,
-        prompt:'',    // renovação silenciosa, sem popup
-        callback:(resp)=>{
-          if(resp.error){console.warn('[DRIVE] Falha na renovação silenciosa:',resp.error);return;}
-          driveAccessToken=resp.access_token;
-          _driveTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
-          _driveAgendarRenovacaoToken(resp.expires_in||3600);
-          console.info('[DRIVE] Token renovado com sucesso.');
-        }
-      });
-      client.requestAccessToken();
-    }catch(e){console.warn('[DRIVE] Erro ao renovar token:',e);}
-  },ms);
-}
-
-function driveLogin(){
-  if(!window.google){toast('API do Google ainda carregando, aguarde...','warn');return;}
-  const client=google.accounts.oauth2.initTokenClient({
-    client_id:DRIVE_CLIENT_ID,scope:DRIVE_SCOPE,
-    callback:async(resp)=>{
-      if(resp.error){toast('Erro ao conectar com o Google: '+resp.error,'error');return;}
-      driveAccessToken=resp.access_token;
-      _driveTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
-      // ★ Agenda renovação automática do token
-      _driveAgendarRenovacaoToken(resp.expires_in||3600);
-      try{
-        const uinfo=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+driveAccessToken}});
-        const ud=await uinfo.json();
-        const nome=(ud.name||ud.email||'Google').split(' ')[0];
-        const el=document.getElementById('drive-user-name');
-        if(el)el.textContent=nome;
-      }catch(e){}
-      driveSetUI(true);
-      toast('Google Drive conectado! ☁','success');
-      await driveBuscarArquivo();
-      if(driveFileId){
-        toast('Arquivo encontrado no Drive. Sincronizando automaticamente...','success');
-        await _driveAutoImportarSeNecessario();
-      }else{
-        toast('Nenhum backup no Drive ainda. Salvando dados locais imediatamente...','success');
-        _driveLastSyncChecksum='';
-        await driveSalvarSilencioso();
-      }
-    }
-  });
-  client.requestAccessToken();
-}
-
-// ★ Verifica se o token ainda é válido (margem de 2 min)
-function _driveTokenValido(){
-  if(!driveAccessToken)return false;
-  if(_driveTokenExpiry&&Date.now()>(_driveTokenExpiry-120000))return false;
-  return true;
-}
-
-// ★ Importação automática inteligente — compara timestamps e decide direção do sync
-async function _driveAutoImportarSeNecessario(){
-  if(!driveAccessToken||!driveFileId)return;
-  try{
-    const res=await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,{headers:{Authorization:'Bearer '+driveAccessToken}});
-    if(!res.ok)return;
-    const d=await res.json();
-    const driveTs=d.meta?.lastSaved||'';
-    const localTs=state.meta?.lastSaved||'';
-    const _drivePossuiDados=(Array.isArray(d.lancamentos)&&d.lancamentos.length>0)||(Array.isArray(d.empenhosCad)&&(d.empenhosCad||[]).length>0)||(Array.isArray(d.liquidacoes)&&(d.liquidacoes||[]).length>0);
-    if(!driveTs&&!_drivePossuiDados)return;
-    if(!driveTs&&_drivePossuiDados){
-      if(state.lancamentos.length===0&&(state.empenhosCad||[]).length===0&&(state.liquidacoes||[]).length===0){
-        console.info('[DRIVE] Backup sem timestamp; local vazio — importando do Drive.');
-        await _driveAplicarDados(d);
-        toast('✓ Dados recuperados do Google Drive!','success');
-      }else{
-        console.info('[DRIVE] Backup sem timestamp; local tem dados — atualizando Drive.');
-        _driveLastSyncChecksum='';
-        await driveSalvarSilencioso();
-        toast('✓ Drive atualizado com dados locais!','success');
-      }
-      return;
-    }
-    if(driveTs>localTs){
-      console.info('[DRIVE] Drive mais recente ('+driveTs+') > local ('+localTs+'). Importando...');
-      await _driveAplicarDados(d);
-      toast('✓ Dados sincronizados automaticamente do Google Drive!','success');
-    }else if(driveTs<localTs){
-      console.info('[DRIVE] Local mais recente. Sincronizando para Drive...');
-      _driveLastSyncChecksum='';
-      await driveSalvarSilencioso();
-      toast('✓ Dados locais sincronizados para o Google Drive!','success');
-    }else{
-      toast('✓ Google Drive já sincronizado!','success');
-    }
-  }catch(e){console.warn('[DRIVE] Auto-import falhou:',e);}
-}
-
-// ★ Aplica dados recebidos do Drive com merge inteligente e re-renderização completa
-async function _driveAplicarDados(d){
-  if(!d||typeof d!=='object')throw new Error('Dados inválidos recebidos do Drive');
-
-  // Validar estrutura mínima
-  const camposObrigatorios=['lancamentos','empenhosCad','liquidacoes'];
-  for(const c of camposObrigatorios){
-    if(d[c]!==undefined&&!Array.isArray(d[c]))
-      throw new Error(`Campo "${c}" corrompido no arquivo Drive (não é array)`);
-  }
-
-  // Merge inteligente: mantém o registro mais recente pelo campo ts
-  const mergeArray=(local,remoto,keyFn)=>{
-    if(!Array.isArray(remoto))return Array.isArray(local)?local:[];
-    if(!Array.isArray(local)||local.length===0)return remoto.map(x=>({...x}));
-    const localMap=new Map(local.map(x=>[keyFn(x),x]));
-    const remotoMap=new Map(remoto.map(x=>[keyFn(x),x]));
-    remotoMap.forEach((item,id)=>{
-      if(!localMap.has(id)){localMap.set(id,{...item});}
-      else{
-        const loc=localMap.get(id);
-        if((item.ts||'')>(loc.ts||''))localMap.set(id,{...item});
-      }
-    });
-    return Array.from(localMap.values());
-  };
-  const idKey=x=>x.id||x.numero||Math.random().toString(36);
-
-  // ★ Merge completo de TODOS os módulos
-  state.lancamentos   = mergeArray(state.lancamentos,   d.lancamentos,    idKey);
-  state.empenhosCad   = mergeArray(state.empenhosCad,   d.empenhosCad,    idKey);
-  state.liquidacoes   = mergeArray(state.liquidacoes,   d.liquidacoes,    idKey);
-  state.contratos     = mergeArray(state.contratos,     d.contratos,      idKey);
-  state.acoes         = mergeArray(state.acoes,         d.acoes,          idKey);
-  state.fornecedores  = mergeArray(state.fornecedores,  d.fornecedores,   idKey);
-  state.contratosPnae = mergeArray(state.contratosPnae, d.contratosPnae,  idKey);
-  state.auditLog      = mergeArray(state.auditLog,      d.auditLog,       idKey);
-
-  // Configurações — sobrescreve somente se Drive tiver dados
-  if(Array.isArray(d.fontes)&&d.fontes.length>0)state.fontes=[...d.fontes];
-  if(Array.isArray(d.ptres)&&d.ptres.length>0)state.ptres=[...d.ptres];
-  if(Array.isArray(d.nd)&&d.nd.length>0)state.nd=[...d.nd];
-  if(Array.isArray(d.pi)&&d.pi.length>0)state.pi=[...d.pi];
-  if(Array.isArray(d.ts)&&d.ts.length>0)state.ts=[...d.ts];
-  state.cats=[...DEFAULT_CATS];
-  if(d.meta)state.meta={...state.meta,...d.meta};
-
-  // Normalização de categorias em todos os módulos
-  state.lancamentos   = state.lancamentos.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
-  state.contratos     = state.contratos.map(c=>({...c,categoria:c.categoria?normalizarCategoria(c.categoria):c.categoria}));
-  state.empenhosCad   = state.empenhosCad.map(e=>({...e,categoria:e.categoria?normalizarCategoria(e.categoria):e.categoria}));
-  state.liquidacoes   = state.liquidacoes.map(l=>({...l,categoria:l.categoria?normalizarCategoria(l.categoria):l.categoria}));
-
-  // Propagação de tipoRecurso
-  state.lancamentos=state.lancamentos.map(l=>{
-    if((l.tipo==='Liquidação'||l.tipo==='Pagamento')&&!l.tipoRecurso){
-      const empCad=(state.empenhosCad||[]).find(e=>e.id===l.referenciaId||e.numero===l.referencia);
-      return{...l,tipoRecurso:empCad?.tipoEmp||'EXE'};
-    }
-    return l;
-  });
-  state.liquidacoes=state.liquidacoes.map(l=>{
-    if(!l.tipoRecurso){
-      const empCad=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
-      return{...l,tipoRecurso:empCad?.tipoEmp||'EXE'};
-    }
-    return l;
-  });
-
-  // Migração de previstoMensalArr em ações
-  state.acoes=state.acoes.map(a=>{
-    if(!Array.isArray(a.previstoMensalArr)){
-      const pm=a.previstoMensal||((a.previsto||0)/12);
-      a.previstoMensalArr=Array(12).fill(+Number(pm).toFixed(2));
-    }
-    return a;
-  });
-
-  // Migração tipoRegistro
-  state.lancamentos.forEach(l=>{if(l.tipo==='Anulação'&&!l.tipoRegistro)l.tipoRegistro='ANULACAO';});
-  const _drGruposEmp={};
-  state.lancamentos.forEach(l=>{
-    if(l.tipo!=='Empenho'||l.tipoRegistro)return;
-    const k=l.empenhoCadId||l.referencia||l.numeroEmpenho||'__';
-    if(!_drGruposEmp[k])_drGruposEmp[k]=[];
-    _drGruposEmp[k].push(l);
-  });
-  Object.values(_drGruposEmp).forEach(arr=>{
-    arr.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
-    arr.forEach((l,i)=>{l.tipoRegistro=i===0?'INICIAL':'REFORCO';});
-  });
-
-  // Migração AE: propagar acaoId e empenhoCadId
-  (state.empenhosCad||[]).forEach(e=>{
-    if(!e.acaoId||e.status==='Excluído')return;
-    state.lancamentos.forEach(l=>{
-      if(l.status!=='Ativo')return;
-      const isFilho=(l.empenhoCadId===e.id)||(l.referencia===e.numero)||(l.numeroEmpenho===e.numero)||(l.referenciaId===e.id);
-      if(!isFilho)return;
-      if(!l.empenhoCadId)l.empenhoCadId=e.id;
-      if(e.acaoId&&!l.acaoId)l.acaoId=e.acaoId;
-    });
-  });
-
-  // ★ Verificação de integridade pós-importação
-  const empsIds=new Set((state.empenhosCad||[]).map(e=>e.id));
-  const liqsOrfas=(state.liquidacoes||[]).filter(l=>l.referenciaId&&!empsIds.has(l.referenciaId)).length;
-  if(liqsOrfas>0)console.warn(`[DRIVE] Integridade: ${liqsOrfas} liquidação(ões) sem empenho correspondente.`);
-  const contratosIds=new Set((state.contratos||[]).map(c=>c.id));
-  const empsOrfos=(state.empenhosCad||[]).filter(e=>e.contratoId&&!contratosIds.has(e.contratoId)).length;
-  if(empsOrfos>0)console.warn(`[DRIVE] Integridade: ${empsOrfos} empenho(s) com contratoId sem contrato.`);
-
-  // ★ Persiste localmente e re-renderiza TODOS os módulos
-  _driveLastSyncChecksum='';
-  if(typeof energyPoolManager!=='undefined')energyPoolManager.invalidateCache();
-  salvar();
-  init();
-  // ★ Re-renderização completa de todos os módulos após importação do Drive
-  _driveRenderizarTodosModulos();
-}
-
-// ★ Re-renderiza todos os módulos visíveis e pendentes após sync do Drive
-function _driveRenderizarTodosModulos(){
-  try{if(typeof renderDashboard==='function')renderDashboard();}catch(e){}
-  try{if(typeof renderSidebar==='function')renderSidebar();}catch(e){}
-  try{if(typeof renderEntradas==='function')renderEntradas();}catch(e){}
-  try{if(typeof renderCatGrid==='function')renderCatGrid();}catch(e){}
-  try{if(typeof renderCadastroEmpenhos==='function')renderCadastroEmpenhos();}catch(e){}
-  try{if(typeof renderLiquidacoes==='function')renderLiquidacoes();}catch(e){}
-  try{if(typeof renderLiqPags==='function')renderLiqPags();}catch(e){}
-  try{if(typeof renderSaidas==='function')renderSaidas();}catch(e){}
-  try{if(typeof renderAnulacoes==='function')renderAnulacoes();}catch(e){}
-  try{if(typeof renderTransferencias==='function')renderTransferencias();}catch(e){}
-  try{if(typeof renderHistorico==='function')renderHistorico();}catch(e){}
-  try{if(typeof renderFornecedores==='function')renderFornecedores();}catch(e){}
-  try{if(typeof renderContratosPnae==='function')renderContratosPnae();}catch(e){}
-  try{if(typeof renderConfig==='function')renderConfig();}catch(e){}
-  try{if(typeof renderAuditLog==='function')renderAuditLog();}catch(e){}
-  try{if(typeof renderAeDetalhe==='function')renderAeDetalhe();}catch(e){}
-  try{if(typeof _aeRefreshSeAberto==='function')_aeRefreshSeAberto();}catch(e){}
-  try{if(typeof initNovosModulos==='function')initNovosModulos();}catch(e){}
-  console.info('[DRIVE] ✅ Re-renderização completa de todos os módulos concluída.');
-}
-
-function driveLogout(){
-  if(driveAccessToken&&window.google)google.accounts.oauth2.revoke(driveAccessToken,()=>{});
-  driveAccessToken=null;driveFileId=null;
-  _driveTokenExpiry=0;
-  if(_driveTokenRenewTimer){clearTimeout(_driveTokenRenewTimer);_driveTokenRenewTimer=null;}
-  driveSetUI(false);
-  const el=document.getElementById('drive-user-name');
-  if(el)el.textContent='Drive';
-  toast('Desconectado do Google Drive.','warn');
-}
-
-async function driveBuscarArquivo(){
-  if(!driveAccessToken)return null;
-  try{
-    const q=encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
-    const res=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)`,{headers:{Authorization:'Bearer '+driveAccessToken}});
-    if(!res.ok)return null;
-    const data=await res.json();
-    if(data.files&&data.files.length>0){
-      const sorted=data.files.sort((a,b)=>(b.modifiedTime||'').localeCompare(a.modifiedTime||''));
-      driveFileId=sorted[0].id;
-      return driveFileId;
-    }
-  }catch(e){console.error('[DRIVE] Erro ao buscar arquivo:',e);}
-  return null;
-}
-
-async function driveSalvarSilencioso(){
-  if(!driveAccessToken)return;
-  // ★ Verificar validade do token antes de tentar salvar
-  if(!_driveTokenValido()){
-    console.warn('[DRIVE] Token expirado. Sync adiado até renovação.');
-    return;
-  }
-  if(_driveSyncInProgress){console.info('[DRIVE] Sync já em andamento, ignorando.');return;}
-  const checksum=_driveStateChecksum();
-  if(checksum===_driveLastSyncChecksum){console.info('[DRIVE] Sem mudanças detectadas, sync omitido.');return;}
-  _driveSyncInProgress=true;
-  try{
-    // ★ Payload completo com todos os módulos
-    const backupPayload={
-      meta:state.meta,
-      fontes:state.fontes,
-      ptres:state.ptres,
-      cats:state.cats,
-      nd:state.nd,
-      pi:state.pi,
-      ts:state.ts,
-      lancamentos:state.lancamentos,
-      contratos:state.contratos,
-      acoes:state.acoes,
-      auditLog:state.auditLog,
-      fornecedores:state.fornecedores,
-      empenhosCad:state.empenhosCad,
-      liquidacoes:state.liquidacoes,
-      contratosPnae:state.contratosPnae
-    };
-    const jsonStr=JSON.stringify(backupPayload,null,2);
-    JSON.parse(jsonStr); // valida JSON antes de enviar
-    const blob=new Blob([jsonStr],{type:'application/json'});
-    if(!driveFileId)await driveBuscarArquivo();
-    let res;
-    if(driveFileId){
-      const form=new FormData();
-      form.append('metadata',new Blob([JSON.stringify({name:DRIVE_FILE_NAME})],{type:'application/json'}));
-      form.append('file',blob);
-      res=await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`,{method:'PATCH',headers:{Authorization:'Bearer '+driveAccessToken},body:form});
-    }else{
-      const form=new FormData();
-      form.append('metadata',new Blob([JSON.stringify({name:DRIVE_FILE_NAME,mimeType:'application/json'})],{type:'application/json'}));
-      form.append('file',blob);
-      res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+driveAccessToken},body:form});
-    }
-    if(!res.ok){const err=await res.text();console.warn('[DRIVE] Erro HTTP '+res.status+':',err);return;}
-    const data=await res.json();
-    if(data.id){
-      driveFileId=data.id;
-      _driveLastSyncChecksum=checksum;
-      const agora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-      const el=document.getElementById('drive-sync-time');
-      if(el)el.textContent='☁ '+agora;
-      console.info('[DRIVE] ✅ Sync OK — '+agora+
-        ' | empenhosCad:'+(state.empenhosCad||[]).length+
-        ' | lancamentos:'+state.lancamentos.length+
-        ' | liquidacoes:'+(state.liquidacoes||[]).length+
-        ' | contratos:'+(state.contratos||[]).length+
-        ' | fornecedores:'+(state.fornecedores||[]).length+
-        ' | contratosPnae:'+(state.contratosPnae||[]).length+
-        ' | acoes:'+(state.acoes||[]).length);
-    }else{
-      console.warn('[DRIVE] Sync: resposta sem ID',data);
-    }
-  }catch(e){console.warn('[DRIVE] Auto-sync falhou:',e);
-  }finally{_driveSyncInProgress=false;}
-}
-
-async function driveSalvar(){
-  if(!driveAccessToken){toast('Conecte ao Google Drive primeiro.','warn');return;}
-  toast('Salvando na nuvem...','success');
-  _driveLastSyncChecksum='';
-  await driveSalvarSilencioso();
-  toast('✓ Dados salvos no Google Drive!','success');
-}
-
-async function driveCarregar(){
-  if(!driveAccessToken){toast('Conecte ao Google Drive primeiro.','warn');return;}
-  if(!driveFileId)await driveBuscarArquivo();
-  if(!driveFileId){toast('Nenhum arquivo encontrado no Drive. Salve primeiro.','warn');return;}
-  try{
-    toast('Carregando do Drive...','success');
-    const res=await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,{headers:{Authorization:'Bearer '+driveAccessToken}});
-    if(!res.ok){toast('Erro ao baixar dados do Drive (HTTP '+res.status+').','error');return;}
-    const d=await res.json();
-    await _driveAplicarDados(d);
-    toast('✓ Dados carregados do Google Drive com sucesso!','success');
-  }catch(e){toast('Erro ao carregar do Drive: '+e.message,'error');console.error(e);}
-}
-
-// ★ Hook: auto-sync após cada salvar() — debounce 3s + mutex + validação de token
-function driveTriggerSync(){
-  if(driveAccessToken&&_driveTokenValido()){
-    clearTimeout(_driveSyncTimer);
-    _driveSyncTimer=setTimeout(driveSalvarSilencioso,3000);
-  }
-}
-
-function showDriveWelcome(){
-  if(localStorage.getItem('drive_welcome_v6')==='1')return;
-  if(driveAccessToken)return;
-  const el=document.getElementById('modal-drive-welcome');
-  if(el)el.classList.add('show');
-}
-function closeDriveWelcome(){
-  const el=document.getElementById('modal-drive-welcome');
-  if(el)el.classList.remove('show');
-  if(document.getElementById('drive-noshow')?.checked)
-    localStorage.setItem('drive_welcome_v6','1');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -10648,11 +10147,21 @@ function initNovosModulos() {
 //  INIT ATUALIZADO
 // ═══════════════════════════════════════════════════════════
 
-document.addEventListener('DOMContentLoaded',()=>{
-  const loaded=carregar();
-  // ★ FIX PERSISTÊNCIA: Seed SOMENTE quando não há absolutamente nenhum dado do usuário.
-  // Verifica lancamentos, empenhosCad E liquidacoes para não sobrescrever dados reais.
-  // Antes: !loaded||lancamentos.length===0 → ativava seed quando usuário só tinha empenhosCad/liquidacoes.
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // 1) Tenta carregar do cache local (offline-first)
+  const loadedLocal = carregar();
+
+  // 2) Tenta carregar da nuvem Supabase (sobrescreve cache se nuvem for mais recente)
+  let loadedNuvem = false;
+  try {
+    loadedNuvem = await _sbCarregarDaNuvem();
+  } catch(e) {
+    console.warn('[SUPABASE] Falha ao carregar na inicialização:', e);
+  }
+
+  const loaded = loadedLocal || loadedNuvem;
+
+  // 3) Seed somente quando não há nenhum dado do usuário
   const _temDadosUsuario = loaded && (
     state.lancamentos.length > 0 ||
     (state.empenhosCad || []).length > 0 ||
@@ -10662,42 +10171,35 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(!_temDadosUsuario){
     seedDataDez2025();
   }
-  // Limpeza de ações legadas: remove ações pré-carregadas pelo seed em versões anteriores.
-  // IDs fixos AE001/AE002/AE003 nunca devem existir como ações automáticas.
-  const LEGACY_SEED_IDS=['AE001','AE002','AE003'];
+
+  // 4) Limpeza de ações legadas
+  const LEGACY_SEED_IDS = ['AE001','AE002','AE003'];
   if(state.acoes.some(a=>LEGACY_SEED_IDS.includes(a.id))){
-    state.acoes=state.acoes.filter(a=>!LEGACY_SEED_IDS.includes(a.id));
-    console.info('Acoes legadas do seed removidas. state.acoes iniciado vazio.');
+    state.acoes = state.acoes.filter(a=>!LEGACY_SEED_IDS.includes(a.id));
+    console.info('Acoes legadas do seed removidas.');
   }
-  // ── MIGRAÇÃO: preencher competência ausente em empenhos legados ──
-  // Garante que empenhos anteriores à implementação do campo tenham competência definida
-  let migCount=0;
+
+  // 5) Migração: preencher competência ausente em empenhos legados
+  let migCount = 0;
   state.lancamentos.forEach(l=>{
     if(l.tipo==='Empenho'&&l.status==='Ativo'&&!l.competencia){
-      // Derivar competência a partir da data do lançamento (melhor aproximação possível)
-      const d=new Date((l.data||'')+'T12:00:00');
+      const d = new Date((l.data||'')+'T12:00:00');
       if(!isNaN(d.getTime())){
-        l.competencia=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+        l.competencia = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
       } else {
-        // Fallback: mês corrente
-        const now=new Date();
-        l.competencia=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+        const now = new Date();
+        l.competencia = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
       }
       migCount++;
     }
   });
-  if(migCount>0){
-    console.info('[MIGRAÇÃO] Competência preenchida em '+migCount+' empenho(s) legado(s).');
-  }
-  // Persiste o estado final (com migrações e limpeza aplicadas) antes de renderizar.
-  // ★ FIX: zerar checksum antes de salvar para garantir que as migrações de inicialização
-  // sejam sempre sincronizadas para o Drive na próxima conexão, sem serem suprimidas
-  // pelo mecanismo de "sem mudanças" que compara com estado pré-migração.
-  _driveLastSyncChecksum='';
+  if(migCount > 0) console.info('[MIGRAÇÃO] Competência preenchida em '+migCount+' empenho(s) legado(s).');
+
+  // 6) Persiste estado final e renderiza
+  _sbLastChecksum = ''; // força sync inicial para Supabase
   salvar();
   init();
   initNovosModulos();
-  window.addEventListener('load',()=>setTimeout(showDriveWelcome,1500));
 });
 </script>
 
