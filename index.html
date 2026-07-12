@@ -2703,6 +2703,18 @@ function findEmpenhoCadByLanc(l){
 }
 function isLancEmpenhoModuloEXE(l){
   if(!l||l.status!=='Ativo'||l.tipo!=='Empenho')return false;
+  // ★ CORREÇÃO — dupla contagem por número reaproveitado:
+  // Quando um empenho cadastrado é excluído e um novo é recadastrado com o MESMO
+  // número, o lançamento original (preservado por design para auditoria) ficava
+  // sendo "adotado" pelo empenho novo através da busca por número em
+  // findEmpenhoCadByLanc, duplicando o valor nos totais do Dashboard.
+  // Se o lançamento tem vínculo DIRETO (por ID) com um empenho cadastrado que foi
+  // excluído, ele não deve contar nos totais — independentemente de outro empenho
+  // ativo compartilhar o mesmo número.
+  if(l.empenhoCadId){
+    const empDireto=(state.empenhosCad||[]).find(e=>e.id===l.empenhoCadId);
+    if(empDireto&&!empenhoCadAtivo(empDireto))return false;
+  }
   const empCad=findEmpenhoCadByLanc(l);
   const tipo=empCad?(empCad.tipoEmp||'EXE'):(l.tipoRecurso||'EXE');
   if(tipo!=='EXE')return false;
@@ -3556,6 +3568,9 @@ function renderDashboard(){
   const catRows=[];
   // Controla se o bloco de ENERGIA/COSIP já foi inserido
   let energiaCosipInserido=false;
+  // ★ Acumuladores para a linha de TOTAL da tabela — somam apenas as linhas-mãe
+  // (pool unificado ENERGIA+COSIP conta uma única vez; sub-linhas não entram no total)
+  let totCatCred=0,totCatEmp=0,totCatLiq=0,totCatPag=0,totCatSaldo=0;
 
   DEFAULT_CATS.filter(c=>totalCreditosOriginais(c)>0||totalEmpenhosEXE(c)>0).forEach(c=>{
     // --- Bloco unificado ENERGIA ELÉTRICA + COSIP ---
@@ -3575,6 +3590,8 @@ function renderDashboard(){
       const tpPool=tpEE+tpCO;
       const saldoPool=saldoCatEfetivo('ENERGIA ELÉTRICA'); // pool − empEE − empCO
       const pePool=tePool>0?Math.round(temPool/tePool*100):0;
+      // Acumula no total geral (uma única vez, referente à linha-mãe do pool)
+      totCatCred+=tePool;totCatEmp+=temPool;totCatLiq+=tlPool;totCatPag+=tpPool;totCatSaldo+=saldoPool;
 
       // Linha-mãe: pool unificado
       catRows.push(`<tr style="background:rgba(255,171,64,.04);border-left:3px solid var(--amber)">
@@ -3617,8 +3634,13 @@ function renderDashboard(){
     const tem=totalEmpenhosEXE(c);
     const tl=totalLiquidacoesEXE(c);
     const tp=totalPagamentosEXE(c);
-    const saldoEmp=te-tem;
+    // ★ CORREÇÃO: usar saldoCat(c) — mesma função que alimenta o "saldo dinâmico"
+    // do módulo Empenho — em vez de (te-tem), que ignorava Transferência Entrada/Saída
+    // por categoria e por isso divergia do saldo real exibido no módulo Empenho.
+    const saldoEmp=saldoCat(c);
     const pe=te>0?Math.round(tem/te*100):0;
+    // Acumula no total geral
+    totCatCred+=te;totCatEmp+=tem;totCatLiq+=tl;totCatPag+=tp;totCatSaldo+=saldoEmp;
     catRows.push(`<tr>
       <td>${catIcon(c)} <strong>${c}</strong></td>
       <td class="r text-green">${fmtBR(te)}</td>
@@ -3630,6 +3652,23 @@ function renderDashboard(){
       <td class="r">${te>0?`<span class="semaforo ${pe>=80?'sem-verde':pe>=50?'sem-amarelo':'sem-vermelho'}" style="font-size:9px;padding:2px 8px">${pe>=80?'🟢 Normal':pe>=50?'🟡 Atenção':'🔴 Crítico'}</span>`:'—'}</td>
     </tr>`);
   });
+
+  // ★ Linha de TOTAL — soma de todas as categorias (linhas-mãe) exibidas acima.
+  // % Exec. e Status seguem a mesma regra usada por linha: (Empenhado ÷ Crédito) × 100
+  if(catRows.length){
+    const peTotal=totCatCred>0?Math.round(totCatEmp/totCatCred*100):0;
+    catRows.push(`<tr style="font-weight:700;border-top:2px solid var(--border);background:var(--bg4)">
+      <td>Σ <strong>TOTAL</strong></td>
+      <td class="r text-green">${fmtBR(totCatCred)}</td>
+      <td class="r text-blue">${fmtBR(totCatEmp)}</td>
+      <td class="r" style="color:var(--amber)">${fmtBR(totCatLiq)}</td>
+      <td class="r text-green">${fmtBR(totCatPag)}</td>
+      <td class="r ${totCatSaldo<0?'text-red':'text-gold'}">${fmtBR(totCatSaldo)}</td>
+      <td class="r">${totCatCred>0?semaforo(peTotal):'—'}</td>
+      <td class="r">${totCatCred>0?`<span class="semaforo ${peTotal>=80?'sem-verde':peTotal>=50?'sem-amarelo':'sem-vermelho'}" style="font-size:9px;padding:2px 8px">${peTotal>=80?'🟢 Normal':peTotal>=50?'🟡 Atenção':'🔴 Crítico'}</span>`:'—'}</td>
+    </tr>`);
+  }
+
   document.getElementById('dash-cat-table').innerHTML=catRows.length?catRows.join(''):'<tr class="empty-row"><td colspan="8">Nenhum dado disponível</td></tr>';
 
   // Últimos 10 lançamentos
@@ -8353,11 +8392,25 @@ function renderLiquidacoes(){
   const totalBrutoFiltrado=all.reduce((s,l)=>s+(l.valorBruto||0),0);
   const el=document.getElementById('liq-count');if(el)el.textContent=total+' liquidação(ões)';
   const tbody=document.getElementById('liq-tbody');if(!tbody)return;
+  // ★ Coluna Fornecedor/Vínculo — regra específica para ASSISTÊNCIA ESTUDANTIL:
+  //   - Empenho vinculado a AÇÃO (modalidade diferente de Material de Consumo) → exibe a ação.
+  //   - Empenho na modalidade MATERIAL DE CONSUMO com fornecedor cadastrado → exibe o fornecedor.
+  //   - Demais categorias → comportamento original (fornecedor do empenho).
+  const liqColVinculo=(l)=>{
+    if(l.categoria==='ASSISTÊNCIA ESTUDANTIL'){
+      const isMatConsumo=l.subcategoria==='Material de Consumo'||l.subcategoria==='MATERIAL DE CONSUMO';
+      if(isMatConsumo&&l.fornNome) return l.fornNome;
+      const acaoNome=l.acaoId?(state.acoes||[]).find(a=>a.id===l.acaoId)?.nome:'';
+      if(acaoNome) return acaoNome;
+      return l.fornNome||'—';
+    }
+    return l.fornNome||'—';
+  };
   tbody.innerHTML=slice.length?slice.map(l=>`
     <tr>
       <td>${fmtData(l.data)}</td>
       <td>${catIcon(l.categoria)} <span style="font-size:11px">${l.categoria}</span>${l.subcategoria==='MATERIAL DE CONSUMO'?'<br><span style="font-size:9px;color:var(--gold);font-weight:700;background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:6px;padding:1px 6px">MAT.CONSUMO</span>':''}</td>
-      <td style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">${l.fornNome||'—'}</td>
+      <td style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">${liqColVinculo(l)}</td>
       <td style="font-size:11px">${l.nf||'—'}</td>
       <td><code style="font-size:10px">${l.npDh||'—'}</code></td>
       <td class="r fw6">${fmtBR(l.valorBruto)}</td>
