@@ -4129,10 +4129,16 @@ function valorLiquidacaoParaEmpenho(l,nEmp){
   const bruto=valorBrutoLiquidacao(l);
   const combinada=l&&l.grupo==='energia'&&l.nEmpenho&&l.nEmpenhoCosip&&l.nEmpenho!==l.nEmpenhoCosip;
   if(combinada){
-    const bc6147=+(l.bc6147||0),bc6190=+(l.bc6190||0);
-    const temSplit=bc6147>0||bc6190>0;
-    if(l.nEmpenho===nEmp&&l.nEmpenhoCosip!==nEmp)return temSplit?bc6147:bruto;
-    if(l.nEmpenhoCosip===nEmp&&l.nEmpenho!==nEmp)return temSplit?bc6190:0;
+    // ★ ALTERAÇÃO — Baixa do saldo do empenho para ENERGIA e COSIP passa a usar
+    // exclusivamente os valores exibidos em "Detalhes da Liquidação":
+    //   ENERGIA -> Seção 5 (SITUAÇÃO DSP001) → Campo "Valor" = max(0, Valor Fatura - 30)
+    //   COSIP   -> Seção 6 (SITUAÇÃO DSP003) → Campo "Valor" = R$ 30,00 (fixo)
+    // Mesmos valores calculados na renderização do modal de Detalhes, garantindo
+    // consistência entre o que é exibido ao usuário e o que baixa o saldo do empenho.
+    const valorDSP001=Math.max(0,bruto-30);
+    const valorDSP003=30;
+    if(l.nEmpenho===nEmp&&l.nEmpenhoCosip!==nEmp)return valorDSP001;
+    if(l.nEmpenhoCosip===nEmp&&l.nEmpenho!==nEmp)return valorDSP003;
   }
   return bruto;
 }
