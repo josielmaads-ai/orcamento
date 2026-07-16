@@ -1924,7 +1924,7 @@ function exportarJSON(){
 }
 function exportarCSV(){
   let csv='ID,Data,Tipo,Categoria,Subcategoria,Descricao,Valor,Fonte,PTRES,NaturezaDespesa,Referencia,Status\n';
-  state.lancamentos.forEach(x=>{csv+=`"${x.id}","${x.data}","${x.tipo}","${x.categoria||''}","${x.subcategoria||''}","${(x.descricao||'').replace(/"/g,"'")}","${x.valor}","${x.fonte||''}","${x.ptres||''}","${x.nd||''}","${x.referencia||''}","${x.status}"\n`;});
+  state.lancamentos.forEach(x=>{csv+=`"${x.id}","${fmtData(x.data)}","${x.tipo}","${x.categoria||''}","${x.subcategoria||''}","${(x.descricao||'').replace(/"/g,"'")}","${x.valor}","${x.fonte||''}","${x.ptres||''}","${x.nd||''}","${x.referencia||''}","${x.status}"\n`;});
   downloadFile(csv,'lancamentos_orcamento.csv','text/csv');
   toast('CSV exportado!','success');
 }
@@ -2085,7 +2085,7 @@ function importarJSON(evt){
 }
 function exportarHistoricoCSV(){
   let csv='ID,Data,Tipo,Categoria,Subcategoria,Fonte,PTRES,ND,Descricao,Valor,Referencia,Status\n';
-  state.lancamentos.forEach(x=>{csv+=`"${x.id}","${x.data}","${x.tipo}","${x.categoria||''}","${x.subcategoria||''}","${x.fonte||''}","${x.ptres||''}","${x.nd||''}","${(x.descricao||'').replace(/"/g,"'")}","${x.valor}","${x.referencia||''}","${x.status}"\n`;});
+  state.lancamentos.forEach(x=>{csv+=`"${x.id}","${fmtData(x.data)}","${x.tipo}","${x.categoria||''}","${x.subcategoria||''}","${x.fonte||''}","${x.ptres||''}","${x.nd||''}","${(x.descricao||'').replace(/"/g,"'")}","${x.valor}","${x.referencia||''}","${x.status}"\n`;});
   downloadFile(csv,'historico_movimentacoes.csv','text/csv');
   toast('CSV do histórico exportado!','success');
 }
@@ -5500,7 +5500,7 @@ function exportarRelatorioCSV(){
     ? _relFiltradoAtual
     : state.lancamentos.filter(x=>x.status==='Ativo');
   let csv='ID,Data,Competencia,Fase,TipoRecurso,Categoria,Subcategoria,Fonte,PTRES,ND,Descricao,Valor,Referencia,LiquidacaoId\n';
-  l.forEach(x=>{csv+=`"${x.id}","${x.data}","${x.competencia||''}","${x.tipo}","${x.tipoRecurso||'EXE'}","${x.categoria||''}","${x.subcategoria||''}","${x.fonte||''}","${x.ptres||''}","${x.nd||''}","${(x.descricao||'').replace(/"/g,"'")}","${x.valor}","${x.referencia||''}","${x.liquidacaoId||''}"\n`;});
+  l.forEach(x=>{csv+=`"${x.id}","${fmtData(x.data)}","${x.competencia||''}","${x.tipo}","${x.tipoRecurso||'EXE'}","${x.categoria||''}","${x.subcategoria||''}","${x.fonte||''}","${x.ptres||''}","${x.nd||''}","${(x.descricao||'').replace(/"/g,"'")}","${x.valor}","${x.referencia||''}","${x.liquidacaoId||''}"\n`;});
   downloadFile(csv,'relatorio_orcamento_'+new Date().toISOString().slice(0,10)+'.csv','text/csv');
   toast('CSV exportado com '+l.length+' registros (filtros aplicados)!','success');
 }
@@ -7782,7 +7782,11 @@ function liqBuscaEmpKey(ev){
 }
 
 // Selecionar empenho pela busca
-function liqSelecionarEmpBusca(empId){
+// ★ skipSaldoCheck (opcional): usado pela função duplicarLiquidacao() para permitir
+// reabrir o formulário mesmo quando o saldo atual do empenho está em R$ 0,00 (ex.: já
+// consumido pela liquidação original). A validação definitiva de saldo continua
+// ocorrendo em registrarLiquidacao() no momento de salvar — nada aqui muda essa regra.
+function liqSelecionarEmpBusca(empId,skipSaldoCheck){
   const e=(state.empenhosCad||[]).find(x=>x.id===empId);
   if(!e)return;
   const saldo=calcSaldoEmpenho(e.numero);
@@ -7796,7 +7800,7 @@ function liqSelecionarEmpBusca(empId){
   if(inp)inp.value=e.numero||'';
 
   // Sem saldo → exibir alerta e NÃO abrir formulário
-  if(saldo<=0){
+  if(saldo<=0&&!skipSaldoCheck){
     document.getElementById('liq-emp-preview').style.display='none';
     const sem=document.getElementById('liq-emp-sem-saldo');
     if(sem)sem.style.display='flex';
@@ -8579,6 +8583,79 @@ function registrarLiquidacao(grupo){
   limparLiqForm();
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// ★ ALTERAÇÃO 02 — DUPLICAR LIQUIDAÇÃO
+// Carrega os dados de uma liquidação já registrada no formulário padrão,
+// totalmente editável, para criação de um NOVO registro. O registro original
+// permanece intacto. O salvamento usa exatamente o mesmo fluxo/validações/
+// cálculos/auditoria de registrarLiquidacao() — consumindo novamente o saldo
+// do mesmo empenho, com todas as regras de saldo insuficiente preservadas.
+// ═══════════════════════════════════════════════════════════════════
+function duplicarLiquidacao(id){
+  const l=(state.liquidacoes||[]).find(x=>x.id===id&&x.status!=='Excluído');
+  if(!l){toast('Liquidação não encontrada','error');return;}
+  const emp=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
+  if(!emp){toast('Empenho original não encontrado — não é possível duplicar','error');return;}
+
+  // Limpa qualquer seleção/formulário em andamento antes de carregar a cópia
+  limparLiqForm();
+
+  // Seleciona o empenho original — ignora o bloqueio de "sem saldo" apenas para
+  // permitir a EDIÇÃO dos dados; a validação real ocorre ao clicar em Salvar.
+  liqSelecionarEmpBusca(emp.id,true);
+
+  // ENERGIA: seleciona também o empenho COSIP vinculado à liquidação original
+  if(l.nEmpenhoCosip){
+    const empCosip=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenhoCosip);
+    if(empCosip){
+      _liqEmpCosipId=empCosip.id;
+      const selCosip=document.getElementById('liq-empenho-cosip');
+      if(selCosip){
+        if(![...selCosip.options].some(o=>o.value===empCosip.id)){
+          const opt=document.createElement('option');opt.value=empCosip.id;opt.textContent=empCosip.numero;selCosip.appendChild(opt);
+        }
+        selCosip.value=empCosip.id;
+      }
+      liqMostrarInfoEmpenho();
+    }
+  }
+
+  // Assistência Estudantil (não Mat.Consumo automático): escolhe o mesmo subtipo da original
+  if(_liqGrupo==='ae'){
+    const subtipo=(l.subcategoria==='Material de Consumo'||l.subcategoria==='MATERIAL DE CONSUMO')?'mat':'edital';
+    liqAeEscolherSubtipo(subtipo);
+  }
+
+  // Preenche os campos do formulário recém-montado com os dados da liquidação original
+  const setV=(fid,v)=>{const el=document.getElementById(fid);if(el&&v!==undefined&&v!==null&&v!=='')el.value=v;};
+  setV('liq-data',l.data);
+  setV('liq-vlr-nf',l.valorBruto);
+  setV('liq-nf',l.nf);
+  setV('liq-data-emissao',l.dataEmissao);
+  setV('liq-mes-ref',l.mesRef);
+  setV('liq-np',l.npDh);
+  setV('liq-mes-pag',l.mesPag);
+  setV('liq-suap',l.suap);
+  setV('liq-bc-inss',l.bcInss);
+  setV('liq-vlr-cv',l.contaVinculada);
+  setV('liq-pregao',l.pregao);
+  setV('liq-ret6190',l.ret6190);
+  setV('liq-ret6147',l.ret6147);
+  setV('liq-bc6190',l.bc6190);
+  setV('liq-bc6147',l.bc6147);
+  setV('liq-vlr-ret',l.totalRetencoes);
+  setV('liq-introducao',l.introducao);
+  setV('liq-edital',l.edital);
+  setV('liq-oficio',l.oficio);
+
+  // Recalcula os previews de retenção conforme o grupo do formulário aberto
+  const calcFn={contratos:liqCalcContratos,mat:liqCalcMat,energia:liqCalcEnergia,agua:liqCalcAgua,pnae:liqCalcPnae,'ae-mat':liqCalcAeMat}[_liqGrupo];
+  if(typeof calcFn==='function')calcFn();
+
+  document.getElementById('liq-busca-emp')?.closest('.card,.section')?.scrollIntoView({behavior:'smooth',block:'start'});
+  toast('📋 Dados carregados a partir de '+emp.numero+'. Ajuste o que precisar e clique em "Registrar Liquidação" para criar um NOVO registro — o original não é alterado.','warn');
+}
+
 function renderLiquidacoes(){
   if(!state.liquidacoes)state.liquidacoes=[];
   const catSel=document.getElementById('liq-f-cat');
@@ -8640,6 +8717,7 @@ function renderLiquidacoes(){
       </td>
       <td style="white-space:nowrap">
         <button class="btn btn-sec btn-xs" onclick="editarLiquidacao('${l.id}')" style="margin-right:2px" title="Editar">✎</button>
+        <button class="btn btn-sec btn-xs" onclick="duplicarLiquidacao('${l.id}')" style="margin-right:2px" title="Duplicar liquidação (cria uma nova, sem alterar esta)">⧉</button>
         <button class="btn btn-sec btn-xs" onclick="abrirDetalheLiquidacao('${l.id}')" style="margin-right:2px" title="Detalhes">📋</button>
         <button class="btn btn-red btn-xs" onclick="excluirLiquidacao('${l.id}')" title="Excluir">✕</button>
       </td>
