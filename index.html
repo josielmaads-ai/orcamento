@@ -601,7 +601,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         <div class="field"><label>Fonte de Recurso</label><select id="cred-f-fonte" onchange="renderEntradas()"><option value="">Todas</option></select></div>
         <div class="field"><label>PTRES</label><select id="cred-f-ptres" onchange="renderEntradas()"><option value="">Todos</option></select></div>
       </div>
-      <div class="btn-row" style="margin-top:10px"><button class="btn btn-sec btn-sm" onclick="limparFiltrosCredito()">↺ Limpar filtros</button></div>
+      <div class="btn-row" style="margin-top:10px"><button class="btn btn-sec btn-sm" onclick="limparFiltrosCredito()">↺ Limpar filtros</button><button class="btn btn-amber btn-sm" onclick="gerarPdfCreditosFiltrados()">⬇ Gerar PDF</button></div>
     </div>
     <table><thead><tr><th>ID</th><th>Data</th><th>Categoria</th><th>Descrição</th><th>Fonte</th><th>PTRES</th><th class="r">Valor</th><th>Ações</th></tr></thead><tbody id="credito-table"></tbody></table>
   </div>
@@ -1028,8 +1028,9 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
           <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Data Final</label>
           <input type="date" id="cemp-f-ate" oninput="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px">
         </div>
-        <div style="display:flex;align-items:flex-end">
+        <div style="display:flex;align-items:flex-end;gap:6px">
           <button class="btn btn-sec" onclick="cempLimparFiltros()" style="padding:8px 14px;font-size:12px;white-space:nowrap">↺ Limpar</button>
+          <button class="btn btn-amber" onclick="gerarPdfEmpenhosFiltrados()" style="padding:8px 14px;font-size:12px;white-space:nowrap">⬇ Gerar PDF</button>
         </div>
       </div>
       <!-- Faixa de valor + Situação do saldo -->
@@ -1162,9 +1163,10 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <option value="contratos">CONTRATOS / APOIO AO ENSINO</option>
       <option value="ae">ASSISTÊNCIA ESTUDANTIL</option>
       <option value="energia">ENERGIA ELÉTRICA + COSIP</option>
-      <option value="mat">MATERIAL DE CONSUMO / RESTAURANTE / OUTROS</option>
+      <option value="mat">MATERIAL DE CONSUMO / RESTAURANTE</option>
+      <option value="outros">OUTROS (selecionar categoria real)</option>
       <option value="agua">ÁGUA E ESGOTO</option>
-      <option value="diarias">DIÁRIAS E PASSAGENS / TAXAS E TRIBUTOS</option>
+      <option value="diarias">DIÁRIAS / PASSAGENS / TAXAS E TRIBUTOS / SUPRIMENTOS DE FUNDOS</option>
       <option value="pnae">PNAE</option>
     </select>
     <select id="liq-empenho" style="display:none" onchange="liqCarregarEmpenho()"><option value="">— Selecione —</option></select>
@@ -1189,6 +1191,19 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         </button>
       </div>
     </div>
+
+    <!-- ★ NOVO: categoria OUTROS é universal — ao liquidar um empenho cadastrado
+         em OUTROS, exige-se escolher a categoria real da despesa; os campos do
+         formulário abaixo passam a ser exatamente os da categoria escolhida.
+         Não afeta liquidações já registradas (essas continuam como estão). -->
+    <div id="liq-outros-subtipo-area" style="display:none;margin-top:14px">
+      <div class="card-title" style="margin-bottom:10px"><span class="card-title-dot" style="background:var(--gold)"></span>Empenho na categoria OUTROS — selecione a categoria real da despesa</div>
+      <div class="info-box info" style="margin-bottom:10px"><span class="info-icon">ℹ</span><div>A categoria <strong>OUTROS</strong> é universal e pode conter despesas de qualquer outra categoria empenhadas por exceção. Escolha abaixo a categoria correta para exibir os campos de liquidação corretos.</div></div>
+      <div class="field" style="max-width:420px">
+        <label>Categoria da despesa<span class="required-mark">*</span></label>
+        <select id="liq-outros-cat-sel" onchange="liqOutrosEscolherCategoria(this.value)"><option value="">— Selecione a categoria —</option></select>
+      </div>
+    </div>
   </div>
   <!-- Formulário dinâmico -->
   <div id="liq-form-area"></div>
@@ -1203,8 +1218,10 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         <div class="field"><label>Fornecedor</label><input type="text" id="liq-f-forn" placeholder="Buscar fornecedor..." oninput="renderLiquidacoes()"></div>
         <div class="field"><label>Mês de referência</label><input type="text" id="liq-f-mes" placeholder="Ex: 2026-05 ou Maio" oninput="renderLiquidacoes()"></div>
         <div class="field"><label>Status</label><select id="liq-f-status" onchange="renderLiquidacoes()"><option value="">Todos</option><option value="Sim">Pago</option><option value="Não">Não pago</option></select></div>
+        <div class="field"><label>Emissão NF/Fatura — de</label><input type="date" id="liq-f-nfemi-de" oninput="renderLiquidacoes()" title="Filtra pela data de emissão da nota fiscal/fatura registrada na liquidação"></div>
+        <div class="field"><label>Emissão NF/Fatura — até</label><input type="date" id="liq-f-nfemi-ate" oninput="renderLiquidacoes()" title="Filtra pela data de emissão da nota fiscal/fatura registrada na liquidação"></div>
       </div>
-      <div class="btn-row" style="margin-top:10px"><button class="btn btn-sec btn-sm" onclick="limparFiltrosLiquidacao()">↺ Limpar filtros</button></div>
+      <div class="btn-row" style="margin-top:10px"><button class="btn btn-sec btn-sm" onclick="limparFiltrosLiquidacao()">↺ Limpar filtros</button><button class="btn btn-amber btn-sm" onclick="gerarPdfLiquidacoesFiltradas()">⬇ Gerar PDF</button></div>
     </div>
     <div class="scroll-h"><table><thead><tr><th>Data</th><th>Categoria</th><th>Fornecedor</th><th>NF/Fatura</th><th>NP/DH</th><th class="r">Valor Bruto</th><th class="r">Retenções</th><th class="r">Valor Líquido</th><th>Pago?</th><th>Ações</th></tr></thead><tbody id="liq-tbody"></tbody></table></div>
   </div>
@@ -1234,7 +1251,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
 <div id="page-ae" class="page">
   <div class="page-header">
     <div><div class="page-title"><span>🎓</span>Assistência Estudantil</div><div class="page-sub">Bolsas, auxílios e benefícios — referência temporal: <strong style="color:var(--gold)">mês de competência do empenho</strong></div></div>
-    <div class="page-actions"><button class="btn btn-primary btn-sm" onclick="openModalAcao()">+ Nova Ação</button></div>
+    <div class="page-actions"><button class="btn btn-primary btn-sm" onclick="setAeTab('gerenciar')">+ Nova Ação</button></div>
   </div>
   <!-- Filtro global de competência (regra obrigatória AE) -->
   <div class="card" style="padding:10px 14px;margin-bottom:10px;border-color:var(--gold-border);background:var(--gold-bg)">
@@ -1346,6 +1363,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
     <div class="btn-row" style="margin-top:12px">
       <button class="btn btn-primary" onclick="gerarRelatorio()">◈ Gerar Relatório</button>
       <button class="btn btn-blue btn-sm" onclick="exportarRelatorioCSV()">↓ CSV</button>
+      <button class="btn btn-amber btn-sm" onclick="gerarPdfRelatorioFiltrado()">⬇ Gerar PDF (filtro atual)</button>
       <button class="btn btn-amber btn-sm" onclick="imprimirRelatorio()">⎙ Imprimir / PDF</button>
       <button class="btn btn-sec btn-sm" style="border-color:var(--purple);color:var(--purple)" onclick="gerarRelatorioRAP()">📋 Relatório RAP</button>
     </div>
@@ -1457,7 +1475,9 @@ const DEFAULT_CATS = [
   'MATERIAL DE CONSUMO',
   'ÁGUA E ESGOTO',
   'APOIO AO ENSINO',
-  'DIÁRIAS E PASSAGENS',
+  'DIÁRIAS',
+  'PASSAGENS',
+  'SUPRIMENTOS DE FUNDOS',
   'TAXAS E TRIBUTOS',
   'OUTROS'
 ];
@@ -1473,7 +1493,9 @@ const CAT_ICONS = {
   'MATERIAL DE CONSUMO': '📦',
   'ÁGUA E ESGOTO': '💧',
   'APOIO AO ENSINO': '📚',
-  'DIÁRIAS E PASSAGENS': '✈️',
+  'DIÁRIAS': '🧳',
+  'PASSAGENS': '✈️',
+  'SUPRIMENTOS DE FUNDOS': '💳',
   'TAXAS E TRIBUTOS': '🏛️',
   'OUTROS': '📌',
   // Compatibilidade com nomes mistos e legado
@@ -1506,7 +1528,9 @@ function normalizarCategoria(cat) {
     'Energia Elétrica': 'ENERGIA ELÉTRICA',
     'Água e Esgoto': 'ÁGUA E ESGOTO',
     'Apoio ao Ensino': 'APOIO AO ENSINO',
-    'Diárias e Passagens': 'DIÁRIAS E PASSAGENS',
+    'Diárias': 'DIÁRIAS',
+    'Passagens': 'PASSAGENS',
+    'Suprimentos de Fundos': 'SUPRIMENTOS DE FUNDOS',
     'Taxas e Tributos': 'TAXAS E TRIBUTOS',
     'Outros': 'OUTROS',
     'Cosip': 'COSIP',
@@ -3518,7 +3542,7 @@ function renderDashboard(){
   const totLiqPago=liqPagas.reduce((s,l)=>s+(l.valorLiquido||l.valorBruto||0),0);
   const totLiqQtd=liqPagas.length;
   const nContratos=state.contratos.filter(c=>c.status!=='Excluído').length;
-  const nAcoes=state.acoes.filter(a=>a.status!=='Excluído').length;
+  const nAcoes=state.acoes.filter(a=>aeAtivo(a)).length;
   const nLancs=state.lancamentos.filter(l=>l.status==='Ativo').length;
 
   document.getElementById('dash-kpis').innerHTML=`
@@ -3776,8 +3800,17 @@ function renderDashboard(){
 
   document.getElementById('dash-cat-table').innerHTML=catRows.length?catRows.join(''):'<tr class="empty-row"><td colspan="8">Nenhum dado disponível</td></tr>';
 
-  // Últimos 10 lançamentos
-  const recentes=state.lancamentos.filter(l=>l.status==='Ativo').slice(-10).reverse();
+  // Últimos 10 lançamentos — ★ AUDITORIA DASHBOARD: antes usava a ORDEM DE INSERÇÃO
+  // no array (slice(-10)), que só corresponde à ordem cronológica se os registros
+  // forem sempre cadastrados em sequência de data. Após uma edição, importação de
+  // backup ou lançamento retroativo, a lista podia mostrar itens fora de ordem ou
+  // esconder um lançamento mais recente cadastrado antes de outro mais antigo.
+  // Agora ordena explicitamente por data (e por timestamp de registro como
+  // desempate) antes de pegar os 10 mais recentes.
+  const recentes=state.lancamentos.filter(l=>l.status==='Ativo')
+    .slice()
+    .sort((a,b)=>(a.data||'').localeCompare(b.data||'')||(a.ts||'').localeCompare(b.ts||''))
+    .slice(-10).reverse();
   document.getElementById('dash-recentes').innerHTML=recentes.length?recentes.map(l=>`
     <tr>
       <td><code style="font-size:10px;color:var(--text3)">${l.id.slice(-6)}</code></td>
@@ -3877,6 +3910,27 @@ function limparFormCredito(){
   ['c-valor','c-subcat','c-desc','c-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const d=document.getElementById('c-data');if(d)d.value=new Date().toISOString().slice(0,10);
 }
+// ── Filtros da aba Registrar Crédito: leitura do DOM + predicado únicos,
+//    reaproveitados pela tabela (renderEntradas) e pela exportação em PDF. ──
+function credFiltrosAtuais(){
+  return{
+    fCat:document.getElementById('cred-f-cat')?.value||'',
+    fDe:document.getElementById('cred-f-de')?.value||'',
+    fAte:document.getElementById('cred-f-ate')?.value||'',
+    fComp:document.getElementById('cred-f-comp')?.value||'',
+    fFonte:document.getElementById('cred-f-fonte')?.value||'',
+    fPtres:document.getElementById('cred-f-ptres')?.value||''
+  };
+}
+function credPassaFiltro(l,f){
+  if(f.fCat&&l.categoria!==f.fCat)return false;
+  if(f.fDe&&l.data<f.fDe)return false;
+  if(f.fAte&&l.data>f.fAte)return false;
+  if(f.fComp&&(l.competencia||'')!==f.fComp)return false;
+  if(f.fFonte&&(l.fonte||'')!==f.fFonte)return false;
+  if(f.fPtres&&(l.ptres||'')!==f.fPtres)return false;
+  return true;
+}
 function renderEntradas(){
   const entradasAtivas=state.lancamentos.filter(l=>l.tipo==='Entrada'&&l.status==='Ativo');
   const setOptions=(id,items,label)=>{
@@ -3889,21 +3943,8 @@ function renderEntradas(){
   setOptions('cred-f-ptres',[...new Set(entradasAtivas.map(l=>l.ptres).filter(Boolean))].sort(),'Todos');
   setOptions('cred-f-comp',[...new Set(entradasAtivas.map(l=>l.competencia).filter(Boolean))].sort().reverse(),'Todas');
 
-  const fCat=document.getElementById('cred-f-cat')?.value||'';
-  const fDe=document.getElementById('cred-f-de')?.value||'';
-  const fAte=document.getElementById('cred-f-ate')?.value||'';
-  const fComp=document.getElementById('cred-f-comp')?.value||'';
-  const fFonte=document.getElementById('cred-f-fonte')?.value||'';
-  const fPtres=document.getElementById('cred-f-ptres')?.value||'';
-  const all=entradasAtivas.filter(l=>{
-    if(fCat&&l.categoria!==fCat)return false;
-    if(fDe&&l.data<fDe)return false;
-    if(fAte&&l.data>fAte)return false;
-    if(fComp&&(l.competencia||'')!==fComp)return false;
-    if(fFonte&&(l.fonte||'')!==fFonte)return false;
-    if(fPtres&&(l.ptres||'')!==fPtres)return false;
-    return true;
-  }).slice().reverse();
+  const f=credFiltrosAtuais();
+  const all=entradasAtivas.filter(l=>credPassaFiltro(l,f)).slice().reverse();
   const {slice,pg,totalPgs,total}=paginar(all,'entradas');
   const totalValorFiltrado=all.reduce((s,l)=>s+(l.valor||0),0);
   document.getElementById('credito-count').textContent=total+' registros';
@@ -4179,7 +4220,7 @@ function updateAcaoRef(){
   sel.closest('.field').style.display=mostrar?'':'none';
   if(mostrar){
     const opts=['<option value="">Nenhuma</option>'].concat(
-      state.acoes.filter(a=>a.status!=='Excluído').map(a=>`<option value="${a.id}">${a.nome}</option>`)
+      state.acoes.filter(a=>aeAtivo(a)).map(a=>`<option value="${a.id}">${a.nome}</option>`)
     );
     sel.innerHTML=opts.join('');
   }
@@ -4840,7 +4881,7 @@ let _aeEditId=null; // null = nova ação, string = id da ação em edição
 function renderAeGerenciar(){
   const el=document.getElementById('ae-gerenciar');
   if(!el)return;
-  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  const acoes=state.acoes.filter(a=>aeAtivo(a));
   const editando=_aeEditId?state.acoes.find(a=>a.id===_aeEditId):null;
   const pm=Array.isArray(editando?.previstoMensalArr)?editando.previstoMensalArr:Array(12).fill(0);
   const MESES_FORM=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -5045,7 +5086,7 @@ function gae_confirmarExclusao(){
 function renderAeAcoes(){
   const el=document.getElementById('ae-acoes');
   if(!el)return; // guarda: elemento pode não estar no DOM
-  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  const acoes=state.acoes.filter(a=>aeAtivo(a));
   const comp=_aeFiltroComp; // '' = todas
   const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
   const headerFiltro=comp?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">📅</span><div>Mostrando dados da competência: <strong>${labelFiltro}</strong> · Apuração por <strong>mês de competência</strong> do empenho.</div></div>`:'';
@@ -5089,7 +5130,7 @@ function renderAeAcoes(){
 function renderAeMensal(){
   const elMensal=document.getElementById('ae-mensal');
   if(!elMensal)return;
-  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  const acoes=state.acoes.filter(a=>aeAtivo(a));
   const comp=_aeFiltroComp;
   const anoAtual=new Date().getFullYear();
   // Resumo mensal consolidado (todas as ações)
@@ -5151,7 +5192,7 @@ function renderAeMensal(){
 function renderAeDash(){
   const elDash=document.getElementById('ae-dashboard');
   if(!elDash)return;
-  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  const acoes=state.acoes.filter(a=>aeAtivo(a));
   const comp=_aeFiltroComp; // '' = todas
   const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
 
@@ -5255,7 +5296,14 @@ function openModalAcao(id){
     <div class="field" style="margin-top:8px"><label>Descrição</label><textarea id="ma-descricao" rows="2">${a?a.descricao||'':''}</textarea></div>
   </div>`;
 }
-function editarAcao(id){openModalAcao(id);}
+function editarAcao(id){
+  // ★ CORREÇÃO: antes abria um modal paralelo (openModalAcao) com lógica de
+  // salvamento duplicada em relação à aba "Gerenciar Ações" (gae_salvar).
+  // Agora redireciona para a aba oficial de edição, igual já é feito em
+  // excluirAcao(), unificando em um único caminho de escrita para state.acoes.
+  setAeTab('gerenciar');
+  setTimeout(()=>{ gae_editar(id); },80);
+}
 function excluirAcao(id){
   // Redireciona para a aba Gerenciar Ações onde a exclusão é feita de forma confiável
   _gaePendingDeleteId=id;
@@ -5386,7 +5434,19 @@ function gerarRelatorio(){
   if(ate)l=l.filter(x=>x.data<=ate);
   // CORREÇÃO: usar normalizarCategoria para comparação robusta
   if(cat){const catN=normalizarCategoria(cat);l=l.filter(x=>normalizarCategoria(x.categoria||'')===catN);}
-  if(tipo)l=l.filter(x=>x.tipo===tipo);
+  if(tipo){
+    // ★ CORREÇÃO — AUDITORIA RELATÓRIOS: quando uma liquidação é marcada como paga
+    // (togglePagoLiquidacao), o campo tipo do lançamento espelho muda internamente de
+    // 'Liquidação' para 'Pagamento' (mantendo liquidacaoId). Um filtro ingênuo
+    // x.tipo==='Liquidação' perdia silenciosamente todas as liquidações já pagas —
+    // tanto na listagem quanto nos totais de KPI calculados a partir de "l" abaixo.
+    // Mesma correção já usada em totalLiquidacoesEXE(); aplicada aqui também.
+    if(tipo==='Liquidação'){
+      l=l.filter(x=>x.tipo==='Liquidação'||(x.tipo==='Pagamento'&&x.liquidacaoId));
+    } else {
+      l=l.filter(x=>x.tipo===tipo);
+    }
+  }
   if(fonte)l=l.filter(x=>x.fonte===fonte);
   if(ptres)l=l.filter(x=>x.ptres===ptres);
   if(nd)l=l.filter(x=>x.nd===nd);
@@ -5565,7 +5625,8 @@ function seedDataDez2025(){
     {id:'C004',tipo:'Entrada',categoria:'ENERGIA ELÉTRICA',descricao:'Crédito – Energia Elétrica',valor:370000.00},
     {id:'C005',tipo:'Entrada',categoria:'ÁGUA E ESGOTO',descricao:'Crédito – Água e Esgoto',valor:5000.00},
     {id:'C006',tipo:'Entrada',categoria:'APOIO AO ENSINO',descricao:'Crédito – Apoio ao Ensino',valor:30000.00},
-    {id:'C007',tipo:'Entrada',categoria:'DIÁRIAS E PASSAGENS',descricao:'Crédito – Diárias e Passagens',valor:20000.00},
+    {id:'C007',tipo:'Entrada',categoria:'DIÁRIAS',descricao:'Crédito – Diárias',valor:14000.00},
+    {id:'C007B',tipo:'Entrada',categoria:'PASSAGENS',descricao:'Crédito – Passagens',valor:6000.00},
     {id:'C008',tipo:'Entrada',categoria:'TAXAS E TRIBUTOS',descricao:'Crédito – Taxas e Tributos',valor:2000.00},
     {id:'C009',tipo:'Entrada',categoria:'OUTROS',descricao:'Crédito – Outros Custeios',valor:35000.00},
     // EMPENHOS
@@ -5582,7 +5643,7 @@ function seedDataDez2025(){
     {id:'S011',tipo:'Empenho',categoria:'CONTRATOS',descricao:'Empenho – Cópias/Reprodução',valor:15253.19,referencia:'2025NE003983'},
     {id:'S012',tipo:'Empenho',categoria:'OUTROS',descricao:'Empenho – Locação Softwares',valor:829.00,referencia:'2025NE004006'},
     {id:'S013',tipo:'Empenho',categoria:'TAXAS E TRIBUTOS',descricao:'Empenho – Taxas Diversas',valor:793.40,referencia:'2025NE009999'},
-    {id:'S014',tipo:'Empenho',categoria:'DIÁRIAS E PASSAGENS',descricao:'Empenho – Diárias no País',valor:15808.63,referencia:'2025NE001414'},
+    {id:'S014',tipo:'Empenho',categoria:'DIÁRIAS',descricao:'Empenho – Diárias no País',valor:15808.63,referencia:'2025NE001414'},
     {id:'S015',tipo:'Empenho',categoria:'ASSISTÊNCIA ESTUDANTIL',descricao:'Empenho – Bolsas de Estudo',valor:286012.13,referencia:'2025NE001801'},
     {id:'S016',tipo:'Empenho',categoria:'ASSISTÊNCIA ESTUDANTIL',descricao:'Empenho – Outros Auxílios',valor:2340.00,referencia:'2025NE001899'},
     {id:'S017',tipo:'Empenho',categoria:'MATERIAL DE CONSUMO',descricao:'Empenho – Gás e Materiais',valor:2172.00,referencia:'2025NE003004'},
@@ -5590,9 +5651,9 @@ function seedDataDez2025(){
     {id:'S019',tipo:'Empenho',categoria:'MATERIAL DE CONSUMO',descricao:'Empenho – Material de Limpeza',valor:13121.52,referencia:'2025NE003022'},
     {id:'S020',tipo:'Empenho',categoria:'ASSISTÊNCIA ESTUDANTIL',descricao:'Empenho – Material Assistência Social',valor:46227.72,referencia:'2025NE003203'},
     {id:'S021',tipo:'Empenho',categoria:'OUTROS',descricao:'Empenho – Exerc. Anteriores',valor:31497.95,referencia:'2025NE009998'},
-    {id:'S022',tipo:'Empenho',categoria:'DIÁRIAS E PASSAGENS',descricao:'Empenho – Ressarcimento Passagens',valor:2572.87,referencia:'2025NE001415'},
+    {id:'S022',tipo:'Empenho',categoria:'PASSAGENS',descricao:'Empenho – Ressarcimento Passagens',valor:2572.87,referencia:'2025NE001415'},
     // LIQUIDAÇÕES
-    {id:'L001',tipo:'Liquidação',categoria:'DIÁRIAS E PASSAGENS',descricao:'Liquidação – Diárias no País',valor:15808.63,referencia:'2025NE001414',referenciaId:'S014'},
+    {id:'L001',tipo:'Liquidação',categoria:'DIÁRIAS',descricao:'Liquidação – Diárias no País',valor:15808.63,referencia:'2025NE001414',referenciaId:'S014'},
     {id:'L002',tipo:'Liquidação',categoria:'ASSISTÊNCIA ESTUDANTIL',descricao:'Liquidação – Bolsas de Estudo',valor:286012.13,referencia:'2025NE001801',referenciaId:'S015'},
     {id:'L003',tipo:'Liquidação',categoria:'ASSISTÊNCIA ESTUDANTIL',descricao:'Liquidação – Outros Auxílios',valor:2340.00,referencia:'2025NE001899',referenciaId:'S016'},
     {id:'L004',tipo:'Liquidação',categoria:'MATERIAL DE CONSUMO',descricao:'Liquidação – Gás e Materiais',valor:2172.00,referencia:'2025NE003004',referenciaId:'S017'},
@@ -5615,9 +5676,9 @@ function seedDataDez2025(){
     {id:'L021',tipo:'Liquidação',categoria:'TAXAS E TRIBUTOS',descricao:'Liquidação – Contrib. Previdenciária',valor:17.84,referencia:'2025NE009999',referenciaId:'S013'},
     {id:'L022',tipo:'Liquidação',categoria:'TAXAS E TRIBUTOS',descricao:'Liquidação – Iluminação Pública',valor:330.00,referencia:'2025NE009999',referenciaId:'S013'},
     {id:'L023',tipo:'Liquidação',categoria:'OUTROS',descricao:'Liquidação – Exerc. Anteriores',valor:31497.95,referencia:'2025NE009998',referenciaId:'S021'},
-    {id:'L024',tipo:'Liquidação',categoria:'DIÁRIAS E PASSAGENS',descricao:'Liquidação – Ressarcimento Passagens',valor:2572.87,referencia:'2025NE001415',referenciaId:'S022'},
+    {id:'L024',tipo:'Liquidação',categoria:'PASSAGENS',descricao:'Liquidação – Ressarcimento Passagens',valor:2572.87,referencia:'2025NE001415',referenciaId:'S022'},
     // PAGAMENTOS
-    {id:'P001',tipo:'Pagamento',categoria:'DIÁRIAS E PASSAGENS',descricao:'Pagamento – Diárias no País',valor:15808.63,referencia:'2025NE001414',referenciaId:'S014'},
+    {id:'P001',tipo:'Pagamento',categoria:'DIÁRIAS',descricao:'Pagamento – Diárias no País',valor:15808.63,referencia:'2025NE001414',referenciaId:'S014'},
     {id:'P002',tipo:'Pagamento',categoria:'ASSISTÊNCIA ESTUDANTIL',descricao:'Pagamento – Bolsas de Estudo',valor:286012.13,referencia:'2025NE001801',referenciaId:'S015'},
     {id:'P003',tipo:'Pagamento',categoria:'ASSISTÊNCIA ESTUDANTIL',descricao:'Pagamento – Outros Auxílios',valor:2340.00,referencia:'2025NE001899',referenciaId:'S016'},
     {id:'P004',tipo:'Pagamento',categoria:'MATERIAL DE CONSUMO',descricao:'Pagamento – Gás e Materiais',valor:2172.00,referencia:'2025NE003004',referenciaId:'S017'},
@@ -5640,7 +5701,7 @@ function seedDataDez2025(){
     {id:'P021',tipo:'Pagamento',categoria:'TAXAS E TRIBUTOS',descricao:'Pagamento – Contrib. Previdenciária',valor:17.84,referencia:'2025NE009999',referenciaId:'S013'},
     {id:'P022',tipo:'Pagamento',categoria:'TAXAS E TRIBUTOS',descricao:'Pagamento – Iluminação Pública',valor:300.00,referencia:'2025NE009999',referenciaId:'S013'},
     {id:'P023',tipo:'Pagamento',categoria:'OUTROS',descricao:'Pagamento – Exerc. Anteriores',valor:31497.95,referencia:'2025NE009998',referenciaId:'S021'},
-    {id:'P024',tipo:'Pagamento',categoria:'DIÁRIAS E PASSAGENS',descricao:'Pagamento – Ressarcimento Passagens',valor:2572.87,referencia:'2025NE001415',referenciaId:'S022'},
+    {id:'P024',tipo:'Pagamento',categoria:'PASSAGENS',descricao:'Pagamento – Ressarcimento Passagens',valor:2572.87,referencia:'2025NE001415',referenciaId:'S022'},
   ];
   // Usa o ano e mês atual para que os dados apareçam no dashboard
   const _anoSeed = new Date().getFullYear();
@@ -5724,7 +5785,7 @@ function init(){
 function renderAeDetalhe(){
   const el=document.getElementById('ae-detalhe');
   if(!el)return;
-  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  const acoes=state.acoes.filter(a=>aeAtivo(a));
   if(!acoes.length){
     el.innerHTML='<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhuma ação cadastrada.</div></div>';
     return;
@@ -6833,7 +6894,7 @@ let _cempAcaoIdPasso0 = '';
 function cempPreencherAcaoPasso0(){
   const sel=document.getElementById('cemp-acao-passo0');
   if(!sel)return;
-  const acoes=state.acoes.filter(a=>a.status!=='Excluído');
+  const acoes=state.acoes.filter(a=>aeAtivo(a));
   sel.innerHTML='<option value="">— Selecione a ação AE obrigatória —</option>'+
     acoes.map(a=>`<option value="${a.id}">${a.nome}${a.tipo?' · '+a.tipo:''}</option>`).join('');
   if(_cempAcaoIdPasso0)sel.value=_cempAcaoIdPasso0;
@@ -6933,7 +6994,7 @@ function cempSelecionarCat(cat){
   if(tit)tit.textContent='3º — Dados do Empenho';
   cempAtualizarSaldoInfo();
   // ★ ALTERAÇÃO 002: verificar se categoria tem restrição RAP; se não, remover trava visual
-  const CATS_APENAS_EXE_DEF=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS E PASSAGENS'];
+  const CATS_APENAS_EXE_DEF=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS','PASSAGENS','SUPRIMENTOS DE FUNDOS'];
   if(CATS_APENAS_EXE_DEF.includes(cat)){
     _cempAplicarTravaRap();
   } else {
@@ -7031,7 +7092,7 @@ function cempMontarVinculo(cat){
   const CATS_AE=['ASSISTÊNCIA ESTUDANTIL'];
   const CATS_CNPJ_APENAS=['ENERGIA ELÉTRICA','RESTAURANTE','MATERIAL DE CONSUMO','ÁGUA E ESGOTO','TAXAS E TRIBUTOS','OUTROS'];
   const CATS_PNAE=['PNAE'];
-  const CATS_SEM_FORN=['DIÁRIAS E PASSAGENS'];
+  const CATS_SEM_FORN=['DIÁRIAS','PASSAGENS','SUPRIMENTOS DE FUNDOS'];
 
   if(CATS_SEM_FORN.includes(cat)){
     area.innerHTML='<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">ℹ</span><div>Categoria sem vínculo de fornecedor ou contrato.</div></div>';
@@ -7190,7 +7251,7 @@ function registrarCadastroEmpenho(){
     if(!nd){toast('Natureza da Despesa obrigatória para empenho EXE','warn');return;}
   }
   // ★ VALIDAÇÃO: para AE, ação é obrigatória e deve ter sido selecionada no passo 0
-  const CATS_SEM=['DIÁRIAS E PASSAGENS'];
+  const CATS_SEM=['DIÁRIAS','PASSAGENS','SUPRIMENTOS DE FUNDOS'];
   const CATS_AE=['ASSISTÊNCIA ESTUDANTIL'];
   const CATS_PNAE=['PNAE'];
   if(CATS_AE.includes(_cempCat)&&!_cempAeMatConsumo){
@@ -7202,7 +7263,7 @@ function registrarCadastroEmpenho(){
   }
   if(state.empenhosCad.find(e=>e.numero===numero&&e.status!=='Excluído')){toast('Empenho '+numero+' já cadastrado.','warn');return;}
   // ★ ALTERAÇÃO 002 — Validação na persistência: bloquear RAP para categorias restritas
-  const CATS_APENAS_EXE_PERSIST=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS E PASSAGENS'];
+  const CATS_APENAS_EXE_PERSIST=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS','PASSAGENS','SUPRIMENTOS DE FUNDOS'];
   if(CATS_APENAS_EXE_PERSIST.includes(_cempCat) && tipoEmp==='RAP'){
     toast('❌ Bloqueado: A categoria "'+_cempCat+'" não permite RAP. Utilize Exercício Corrente (EXE).','warn');
     // Forçar retorno ao estado EXE visualmente
@@ -7349,6 +7410,63 @@ function cempLimparFiltros(){
   cempFiltroOp('');
   cempFiltroTipo('');
 }
+// ── Filtros da aba Empenho: leitura do DOM + predicado únicos, reaproveitados
+//    pela tabela (renderCadastroEmpenhos) e pela exportação em PDF. ──────────
+function cempFiltrosAtuais(){
+  return{
+    fNum:(document.getElementById('cemp-f-numero')?.value||'').toLowerCase().trim(),
+    fCat:document.getElementById('cemp-f-cat')?.value||'',
+    fComp:document.getElementById('cemp-f-comp')?.value||'',
+    fDe:document.getElementById('cemp-f-de')?.value||'',
+    fAte:document.getElementById('cemp-f-ate')?.value||'',
+    fForn:(document.getElementById('cemp-f-forn')?.value||'').toLowerCase().trim(),
+    fGlobal:(document.getElementById('cemp-f-global')?.value||'').toLowerCase().trim(),
+    fVmin:parseFloat(document.getElementById('cemp-f-vmin')?.value||'') || 0,
+    fVmax:parseFloat(document.getElementById('cemp-f-vmax')?.value||'') || 0,
+    fSaldo:document.getElementById('cemp-f-saldo')?.value||'',
+    fOp:_cempFiltroOp,
+    fTipo:_cempFiltroTipo
+  };
+}
+function cempPassaFiltro(e,f){
+  if(e.status==='Excluído')return false;
+  if(f.fNum&&!(e.numero||'').toLowerCase().includes(f.fNum))return false;
+  if(f.fCat&&e.categoria!==f.fCat)return false;
+  if(f.fTipo&&(e.tipoEmp||'EXE')!==f.fTipo)return false;
+  if(f.fComp&&(e.competencia||'')!==f.fComp)return false;
+  if(f.fDe&&e.data<f.fDe)return false;
+  if(f.fAte&&e.data>f.fAte)return false;
+  if(f.fForn&&!(e.fornNome||'').toLowerCase().includes(f.fForn))return false;
+  if(f.fGlobal){
+    const haystack=((e.numero||'')+' '+(e.fornNome||'')+' '+(e.categoria||'')+' '+(e.nd||'')+' '+(e.pi||'')+' '+(e.descricao||'')+' '+(e.observacoes||'')).toLowerCase();
+    const lancsTexto=(state.lancamentos||[]).filter(l=>l.empenhoCadId===e.id||l.referencia===e.numero)
+      .map(l=>(l.descricao||'')+' '+(l.subcategoria||'')).join(' ').toLowerCase();
+    if(!haystack.includes(f.fGlobal)&&!lancsTexto.includes(f.fGlobal))return false;
+  }
+  if(f.fVmin>0||f.fVmax>0){
+    const t2=calcEmpenhoTotais(e.id,e.numero);
+    if(f.fVmin>0&&t2.saldo<f.fVmin)return false;
+    if(f.fVmax>0&&t2.saldo>f.fVmax)return false;
+  }
+  if(f.fSaldo){
+    const t2=calcEmpenhoTotais(e.id,e.numero);
+    if(f.fSaldo==='disponivel'&&t2.saldo<=0)return false;
+    if(f.fSaldo==='zerado'&&t2.saldo>0)return false;
+    if(f.fSaldo==='anulado'&&t2.anulacoes<=0)return false;
+    if(f.fSaldo==='parcial'&&!(t2.anulacoes>0&&t2.saldo>0))return false;
+  }
+  if(f.fOp){
+    const lancs=state.lancamentos.filter(l=>l.status==='Ativo'&&(l.empenhoCadId===e.id||l.referencia===e.numero));
+    if(f.fOp==='INICIAL'){
+      if(!lancs.some(l=>l.tipo==='Empenho'&&l.tipoRegistro==='INICIAL'))return false;
+    } else if(f.fOp==='REFORCO'){
+      if(!lancs.some(l=>l.tipo==='Empenho'&&(l.tipoRegistro==='REFORCO'||(!l.tipoRegistro))))return false;
+    } else if(f.fOp==='ANULACAO'){
+      if(!lancs.some(l=>l.tipo==='Anulação'))return false;
+    }
+  }
+  return true;
+}
 function renderCadastroEmpenhos(){
   if(!state.empenhosCad)state.empenhosCad=[];
   // Populate categoria filter dynamically
@@ -7372,63 +7490,9 @@ function renderCadastroEmpenhos(){
     }).join('');
   }
   // Read filters
-  const fNum=(document.getElementById('cemp-f-numero')?.value||'').toLowerCase().trim();
-  const fCat=document.getElementById('cemp-f-cat')?.value||'';
-  const fComp=document.getElementById('cemp-f-comp')?.value||'';
-  const fDe=document.getElementById('cemp-f-de')?.value||'';
-  const fAte=document.getElementById('cemp-f-ate')?.value||'';
-  const fForn=(document.getElementById('cemp-f-forn')?.value||'').toLowerCase().trim();
-  const fGlobal=(document.getElementById('cemp-f-global')?.value||'').toLowerCase().trim();
-  const fVmin=parseFloat(document.getElementById('cemp-f-vmin')?.value||'') || 0;
-  const fVmax=parseFloat(document.getElementById('cemp-f-vmax')?.value||'') || 0;
-  const fSaldo=document.getElementById('cemp-f-saldo')?.value||'';
-  const fOp=_cempFiltroOp;
-  const fTipo=_cempFiltroTipo;
+  const f=cempFiltrosAtuais();
 
-  let listaAll=state.empenhosCad.filter(e=>{
-    if(e.status==='Excluído')return false;
-    if(fNum&&!(e.numero||'').toLowerCase().includes(fNum))return false;
-    if(fCat&&e.categoria!==fCat)return false;
-    if(fTipo&&(e.tipoEmp||'EXE')!==fTipo)return false;
-    if(fComp&&(e.competencia||'')!==fComp)return false;
-    if(fDe&&e.data<fDe)return false;
-    if(fAte&&e.data>fAte)return false;
-    if(fForn&&!(e.fornNome||'').toLowerCase().includes(fForn))return false;
-    // Busca global
-    if(fGlobal){
-      const haystack=((e.numero||'')+' '+(e.fornNome||'')+' '+(e.categoria||'')+' '+(e.nd||'')+' '+(e.pi||'')+' '+(e.descricao||'')+' '+(e.observacoes||'')).toLowerCase();
-      // Busca também nos lançamentos vinculados
-      const lancsTexto=(state.lancamentos||[]).filter(l=>l.empenhoCadId===e.id||l.referencia===e.numero)
-        .map(l=>(l.descricao||'')+' '+(l.subcategoria||'')).join(' ').toLowerCase();
-      if(!haystack.includes(fGlobal)&&!lancsTexto.includes(fGlobal))return false;
-    }
-    // Filtro faixa de valor (sobre saldo atual)
-    if(fVmin>0||fVmax>0){
-      const t2=calcEmpenhoTotais(e.id,e.numero);
-      if(fVmin>0&&t2.saldo<fVmin)return false;
-      if(fVmax>0&&t2.saldo>fVmax)return false;
-    }
-    // Filtro situação do saldo
-    if(fSaldo){
-      const t2=calcEmpenhoTotais(e.id,e.numero);
-      if(fSaldo==='disponivel'&&t2.saldo<=0)return false;
-      if(fSaldo==='zerado'&&t2.saldo>0)return false;
-      if(fSaldo==='anulado'&&t2.anulacoes<=0)return false;
-      if(fSaldo==='parcial'&&!(t2.anulacoes>0&&t2.saldo>0))return false;
-    }
-    // Filtro por tipo de operação
-    if(fOp){
-      const lancs=state.lancamentos.filter(l=>l.status==='Ativo'&&(l.empenhoCadId===e.id||l.referencia===e.numero));
-      if(fOp==='INICIAL'){
-        if(!lancs.some(l=>l.tipo==='Empenho'&&l.tipoRegistro==='INICIAL'))return false;
-      } else if(fOp==='REFORCO'){
-        if(!lancs.some(l=>l.tipo==='Empenho'&&(l.tipoRegistro==='REFORCO'||(!l.tipoRegistro))))return false;
-      } else if(fOp==='ANULACAO'){
-        if(!lancs.some(l=>l.tipo==='Anulação'))return false;
-      }
-    }
-    return true;
-  }).slice().reverse();
+  let listaAll=state.empenhosCad.filter(e=>cempPassaFiltro(e,f)).slice().reverse();
 
   const {slice,pg,totalPgs,total}=paginar(listaAll,'empenhosCad');
   const el=document.getElementById('cemp-count');if(el)el.textContent=total+' empenho(s)';
@@ -7657,7 +7721,7 @@ function salvarEdicaoEmpenho(){
   if(valorNovo<=0){toast('Valor inicial deve ser maior que zero','warn');return;}
 
   // ★ ALTERAÇÃO 002 — Validação na edição: bloquear RAP para categorias restritas
-  const CATS_APENAS_EXE_EDIT=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS E PASSAGENS'];
+  const CATS_APENAS_EXE_EDIT=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS','PASSAGENS','SUPRIMENTOS DE FUNDOS'];
   if(CATS_APENAS_EXE_EDIT.includes(normalizarCategoria(categoria)) && tipoEmp==='RAP'){
     toast('❌ Bloqueado: A categoria "'+categoria+'" não permite RAP. Utilize Exercício Corrente (EXE).','warn');
     return;
@@ -7722,15 +7786,33 @@ let _liqGrupo='',_liqEmpId='',_liqEmpCosipId='';
 var _liqAeSubtipo = ''; // 'edital' | 'mat'
 
 // Mapeia categoria do empenho para grupo interno
+// ★ NOVO — NP/DH é uma sequência ÚNICA e contínua entre TODAS as categorias de
+// liquidação (não reinicia por categoria). Retorna o maior número NP/DH já
+// utilizado em qualquer liquidação ativa + 1, como sugestão editável.
+function liqProximoNpDh(){
+  let maior=0;
+  (state.liquidacoes||[]).forEach(l=>{
+    if(l.status==='Excluído')return;
+    const n=parseInt(String(l.npDh||'').replace(/\D/g,''),10);
+    if(!isNaN(n)&&n>maior)maior=n;
+  });
+  return String(maior+1);
+}
 function liqCatParaGrupo(cat){
   if(!cat)return'';
   const c=cat.toUpperCase();
   if(c==='CONTRATOS'||c==='APOIO AO ENSINO')return'contratos';
   if(c==='ASSISTÊNCIA ESTUDANTIL')return'ae';
   if(c==='ENERGIA ELÉTRICA')return'energia';
-  if(c==='MATERIAL DE CONSUMO'||c==='RESTAURANTE'||c==='OUTROS')return'mat';
+  if(c==='MATERIAL DE CONSUMO'||c==='RESTAURANTE')return'mat';
+  // ★ OUTROS é categoria universal: em vez de ir direto para o formulário de
+  //   Material de Consumo, abre um seletor de categoria (ver liqOutrosEscolherCategoria).
+  if(c==='OUTROS')return'outros';
   if(c==='ÁGUA E ESGOTO')return'agua';
-  if(c==='DIÁRIAS E PASSAGENS'||c==='TAXAS E TRIBUTOS')return'diarias';
+  // ★ SUPRIMENTOS DE FUNDOS usa exatamente os mesmos campos de DIÁRIAS/PASSAGENS.
+  // DIÁRIAS e PASSAGENS agora são categorias próprias (separadas), mas continuam
+  // usando o mesmo formulário — o campo DH diferencia o prefixo (AV/RB).
+  if(c==='DIÁRIAS'||c==='PASSAGENS'||c==='TAXAS E TRIBUTOS'||c==='SUPRIMENTOS DE FUNDOS')return'diarias';
   if(c==='PNAE')return'pnae';
   return'';
 }
@@ -7891,8 +7973,71 @@ function liqSelecionarEmpBusca(empId,skipSaldoCheck){
     if(area)area.innerHTML=liqFormAeMatConsumo();
     const today=new Date().toISOString().slice(0,10);
     ['liq-data','liq-data-emissao'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=today;});
+    const npEl=document.getElementById('liq-np');if(npEl&&!npEl.value)npEl.value=liqProximoNpDh();
   } else if(grupo==='ae'){
     // AE normal: mostrar seleção Edital/Monitoria ou Material de Consumo (alteração 002)
+    if(aeArea)aeArea.style.display='block';
+    document.getElementById('liq-form-area').innerHTML='';
+    _liqAeSubtipo='';
+    ['liq-ae-btn-edital','liq-ae-btn-mat'].forEach(id=>{
+      const b=document.getElementById(id);
+      if(b){b.style.borderColor='var(--border2)';b.style.background='var(--bg4)';}
+    });
+  } else if(grupo==='outros'){
+    // ★ NOVO: empenho cadastrado em OUTROS — exige escolher a categoria real
+    // da despesa antes de exibir o formulário de liquidação correspondente.
+    document.getElementById('liq-form-area').innerHTML='';
+    const outrosArea=document.getElementById('liq-outros-subtipo-area');
+    if(outrosArea){
+      outrosArea.style.display='block';
+      const sel=document.getElementById('liq-outros-cat-sel');
+      if(sel){
+        sel.value='';
+        sel.innerHTML='<option value="">— Selecione a categoria —</option>'+
+          DEFAULT_CATS.filter(c=>c!=='OUTROS').map(c=>`<option value="${c}">${catIcon(c)} ${c}</option>`).join('');
+      }
+    }
+  } else {
+    if(aeArea)aeArea.style.display='none';
+    _liqAeSubtipo='';
+    liqMontarFormulario();
+  }
+}
+
+// ── OUTROS: usuário escolhe a categoria real da despesa e o formulário passa
+//    a exibir exatamente os campos configurados para essa categoria ──────────
+function liqOutrosEscolherCategoria(catEscolhida){
+  if(!catEscolhida){
+    document.getElementById('liq-form-area').innerHTML='';
+    _liqGrupo='outros';
+    return;
+  }
+  const grupo=liqCatParaGrupo(catEscolhida);
+  _liqGrupo=grupo;
+  const selGrupo=document.getElementById('liq-grupo');
+  if(selGrupo)selGrupo.value=grupo;
+
+  // Deixa claro no preview que a origem do empenho é OUTROS, liquidado como a categoria escolhida
+  const catEl=document.getElementById('liq-prev-cat');
+  if(catEl)catEl.innerHTML='OUTROS &nbsp;→&nbsp; '+catEscolhida.toUpperCase()+' <span style="font-size:9px;font-weight:700;color:var(--gold);background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:8px;padding:1px 7px">CATEGORIA ESPECÍFICA</span>';
+
+  // ENERGIA → mesma lógica de exibição do campo COSIP usada para empenhos nativos de Energia
+  const cosipField=document.getElementById('liq-emp-cosip-field');
+  if(cosipField){
+    cosipField.style.display=grupo==='energia'?'block':'none';
+    if(grupo==='energia'){
+      const empsCosip=(state.empenhosCad||[]).filter(x=>x.status!=='Excluído'&&x.categoria==='COSIP');
+      const selCosip=document.getElementById('liq-empenho-cosip');
+      if(selCosip)selCosip.innerHTML='<option value="">— Selecione —</option>'+empsCosip.map(x=>{
+        const sc=calcSaldoEmpenho(x.numero);
+        return`<option value="${x.id}">${x.numero} · COSIP · Saldo: ${fmtBR(sc)}</option>`;
+      }).join('');
+    }
+  }
+
+  const aeArea=document.getElementById('liq-ae-subtipo-area');
+  if(grupo==='ae'){
+    // Categoria escolhida foi Assistência Estudantil → mesma sub-escolha Edital/Mat.Consumo
     if(aeArea)aeArea.style.display='block';
     document.getElementById('liq-form-area').innerHTML='';
     _liqAeSubtipo='';
@@ -7916,6 +8061,7 @@ function liqLimparEmpSelecionado(onlyState){
   const prev=document.getElementById('liq-emp-preview');if(prev)prev.style.display='none';
   const sem=document.getElementById('liq-emp-sem-saldo');if(sem)sem.style.display='none';
   const aeArea=document.getElementById('liq-ae-subtipo-area');if(aeArea)aeArea.style.display='none';
+  const outrosArea=document.getElementById('liq-outros-subtipo-area');if(outrosArea)outrosArea.style.display='none';
   const cosipField=document.getElementById('liq-emp-cosip-field');if(cosipField)cosipField.style.display='none';
   document.getElementById('liq-form-area').innerHTML='';
 }
@@ -7947,6 +8093,7 @@ function liqAeEscolherSubtipo(subtipo){
   }
   const today=new Date().toISOString().slice(0,10);
   ['liq-data','liq-data-emissao'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=today;});
+    const npEl=document.getElementById('liq-np');if(npEl&&!npEl.value)npEl.value=liqProximoNpDh();
 }
 
 // Formulário Material de Consumo quando empenho é de AE
@@ -8011,8 +8158,8 @@ function liqAtualizarGrupo(){
   cosipField.style.display=_liqGrupo==='energia'?'':'none';
   const cats={
     contratos:['CONTRATOS','APOIO AO ENSINO'],ae:['ASSISTÊNCIA ESTUDANTIL'],
-    energia:['ENERGIA ELÉTRICA'],mat:['MATERIAL DE CONSUMO','RESTAURANTE','OUTROS'],
-    agua:['ÁGUA E ESGOTO'],diarias:['DIÁRIAS E PASSAGENS','TAXAS E TRIBUTOS'],pnae:['PNAE']
+    energia:['ENERGIA ELÉTRICA'],mat:['MATERIAL DE CONSUMO','RESTAURANTE'],outros:['OUTROS'],
+    agua:['ÁGUA E ESGOTO'],diarias:['DIÁRIAS','PASSAGENS','TAXAS E TRIBUTOS','SUPRIMENTOS DE FUNDOS'],pnae:['PNAE']
   }[_liqGrupo]||[];
   const empsSel=document.getElementById('liq-empenho');
   if(empsSel){
@@ -8174,6 +8321,7 @@ function liqMontarFormulario(){
   // Init date fields
   const today=new Date().toISOString().slice(0,10);
   ['liq-data','liq-data-emissao'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=today;});
+    const npEl=document.getElementById('liq-np');if(npEl&&!npEl.value)npEl.value=liqProximoNpDh();
 }
 
 // Formulário CONTRATOS / APOIO AO ENSINO
@@ -8302,6 +8450,13 @@ function liqFormMat(){
   <div class="form-grid cols3">
     <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="liq-data"></div>
     <div class="field"><label>Valor Total NF (R$)<span class="required-mark">*</span></label><input type="number" id="liq-vlr-nf" min="0" step="0.01" placeholder="0,00" oninput="liqCalcMat()"></div>
+    <div class="field"><label>Tipo de Produto<span class="required-mark">*</span></label>
+      <select id="liq-mat-tipo-produto" onchange="liqCalcMat()">
+        <option value="">— Selecione —</option>
+        <option value="MERCADORIA EM GERAL">Mercadoria em Geral (DARF 6147 · 5,85%)</option>
+        <option value="GÁS GLP">Gás GLP (DARF 8739 · 1,24%)</option>
+      </select>
+    </div>
     <div class="field"><label>Número da NF</label><input type="text" id="liq-nf" placeholder="Nº da nota fiscal"></div>
     <div class="field"><label>Data de Emissão</label><input type="date" id="liq-data-emissao"></div>
     <div class="field"><label>Mês de Referência</label><input type="text" id="liq-mes-ref" placeholder="Ex: MARÇO/26"></div>
@@ -8321,15 +8476,19 @@ function liqFormMat(){
 }
 function liqCalcMat(){
   const nf=parseFloat(document.getElementById('liq-vlr-nf')?.value)||0;
+  const tipoProduto=document.getElementById('liq-mat-tipo-produto')?.value||'';
   const emp=_liqEmpId?(state.empenhosCad||[]).find(x=>x.id===_liqEmpId):null;
   const forn=emp&&emp.cnpj?buscarFornecedorPorDoc(emp.cnpj):null;
   const isSimples=forn&&forn.simplesNacional==='Sim';
-  const tribFed=isSimples?0:Math.round(nf*5.85)/100;
-  const liquido=nf-tribFed;
   const el=document.getElementById('liq-calc-preview');
   if(!el)return;
+  if(!tipoProduto){el.innerHTML='<div style="color:var(--amber)">⚠ Selecione o Tipo de Produto (Mercadoria em Geral ou Gás GLP) para calcular a retenção</div>';return;}
+  const aliquota=tipoProduto==='GÁS GLP'?1.24:5.85;
+  const darf=tipoProduto==='GÁS GLP'?'8739':'6147';
+  const tribFed=isSimples?0:Math.round(nf*aliquota)/100;
+  const liquido=nf-tribFed;
   if(isSimples){el.innerHTML='<div style="color:var(--text4)">Simples Nacional — sem retenção de Tributos Federais</div>';return;}
-  el.innerHTML=`<div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">Tributos Federais (5,85%)</span><span style="color:var(--amber)">${fmtBR(tribFed)}</span></div>
+  el.innerHTML=`<div style="display:flex;justify-content:space-between"><span style="color:var(--text3)">Tributos Federais — DARF ${darf} (${aliquota.toFixed(2).replace('.',',')}%)</span><span style="color:var(--amber)">${fmtBR(tribFed)}</span></div>
     <div style="display:flex;justify-content:space-between"><span style="font-weight:600">Valor Líquido</span><span style="color:var(--green);font-weight:700">${fmtBR(liquido)}</span></div>`;
 }
 
@@ -8363,11 +8522,31 @@ function liqCalcAgua(){
 }
 
 // Formulário DIÁRIAS / TAXAS
+// ★ NOVO — DH (Diárias/Passagens) é uma sequência própria por prefixo:
+// 2026AV000001, 2026AV000002... para DIÁRIAS e 2026RB000001, 2026RB000002...
+// para PASSAGENS. Cada prefixo tem sua contagem independente.
+function liqProximoDH(prefixo){
+  if(!prefixo)return'';
+  const ano=new Date().getFullYear();
+  const re=new RegExp('^'+ano+prefixo+'(\\d{6})$');
+  let maior=0;
+  (state.liquidacoes||[]).forEach(l=>{
+    if(l.status==='Excluído')return;
+    const m=(l.dh||'').match(re);
+    if(m){const n=parseInt(m[1],10);if(n>maior)maior=n;}
+  });
+  return ano+prefixo+String(maior+1).padStart(6,'0');
+}
 function liqFormDiarias(){
-  return `<div class="card"><div class="card-title"><span class="card-title-dot" style="background:var(--purple)"></span>Liquidação — Diárias e Passagens / Taxas e Tributos</div>
+  const emp=_liqEmpId?(state.empenhosCad||[]).find(x=>x.id===_liqEmpId):null;
+  const catEmp=emp?normalizarCategoria(emp.categoria||''):'';
+  const prefixoDH=catEmp==='DIÁRIAS'?'AV':(catEmp==='PASSAGENS'?'RB':'');
+  const dhSugerido=liqProximoDH(prefixoDH);
+  return `<div class="card"><div class="card-title"><span class="card-title-dot" style="background:var(--purple)"></span>Liquidação — ${catEmp||'Diárias / Passagens / Taxas e Tributos'}</div>
   <div class="form-grid cols2">
     <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="liq-data"></div>
     <div class="field"><label>Valor da Liquidação (R$)<span class="required-mark">*</span></label><input type="number" id="liq-vlr-nf" min="0" step="0.01" placeholder="0,00"></div>
+    ${prefixoDH?`<div class="field"><label>DH<span class="required-mark">*</span></label><input type="text" id="liq-dh" value="${dhSugerido}" placeholder="Ex: 2026${prefixoDH}000001"></div>`:`<div class="field"><label>DH</label><input type="text" id="liq-dh" placeholder="Nº do DH (se aplicável)"></div>`}
     <div class="field" style="grid-column:1/-1"><label>Introdução (até 300 car.)</label><textarea id="liq-introducao" rows="3" maxlength="300" placeholder="Descrição da despesa..."></textarea></div>
     <div class="field"><label>Mês de Referência</label><select id="liq-mes-ref">${MESES_FULL.map(m=>`<option value="${m.toUpperCase()}">${m}</option>`).join('')}</select></div>
     <div class="field"><label>Ofício</label><input type="text" id="liq-oficio" maxlength="100" placeholder="Nº do ofício"></div>
@@ -8428,6 +8607,7 @@ function limparLiqForm(){
   var prev=document.getElementById('liq-emp-preview');if(prev)prev.style.display='none';
   var sem=document.getElementById('liq-emp-sem-saldo');if(sem)sem.style.display='none';
   var aeArea=document.getElementById('liq-ae-subtipo-area');if(aeArea)aeArea.style.display='none';
+  var outrosArea=document.getElementById('liq-outros-subtipo-area');if(outrosArea)outrosArea.style.display='none';
   var dd=document.getElementById('liq-busca-dropdown');if(dd)dd.style.display='none';
 }
 
@@ -8448,6 +8628,14 @@ function registrarLiquidacao(grupo){
   const vlr=parseFloat(document.getElementById('liq-vlr-nf')?.value)||0;
   if(!data){toast('Data obrigatória','warn');return;}
   if(vlr<=0){toast('Valor deve ser maior que zero','warn');return;}
+
+  // ★ NOVO — DH obrigatório para empenhos das categorias DIÁRIAS/PASSAGENS
+  if(grupo==='diarias'){
+    const catEmpDH=normalizarCategoria(emp.categoria||'');
+    if((catEmpDH==='DIÁRIAS'||catEmpDH==='PASSAGENS')&&!document.getElementById('liq-dh')?.value.trim()){
+      toast('Informe o número do DH','warn');return;
+    }
+  }
   
   // CORREÇÃO: Para ENERGIA ELÉTRICA + COSIP, verificar SOMA dos dois saldos
   if(grupo==='energia'){
@@ -8490,9 +8678,16 @@ function registrarLiquidacao(grupo){
     const aPagar=Math.round((vlr-inss-tribFed)*100)/100;
     calcExtra={tribFed,inss,iss,contaVinculada:cv,bcInss,aPagar};
   } else if(grupo==='mat'){
-    totalRet=isSimples?0:Math.round(vlr*5.85)/100;
+    // ★ NOVO — Material de Consumo/Restaurante agora exige escolher o tipo de
+    // produto, pois a Seção 2 (DARF 6147 · 5,85%) e a Seção 2.1 (DARF 8739 ·
+    // 1,24% · Gás GLP) são mutuamente exclusivas por liquidação: só uma delas
+    // pode ser contabilizada em cada nota.
+    const tipoProdutoMat=get('liq-mat-tipo-produto');
+    if(!tipoProdutoMat){toast('Selecione o Tipo de Produto: Mercadoria em Geral ou Gás GLP','warn');return;}
+    const aliqMat=tipoProdutoMat==='GÁS GLP'?1.24:5.85;
+    totalRet=isSimples?0:Math.round(vlr*aliqMat)/100;
     liquido=Math.round((vlr-totalRet)*100)/100;
-    calcExtra={tribFed:totalRet,pregao:get('liq-pregao')};
+    calcExtra={tribFed:totalRet,pregao:get('liq-pregao'),tipoProdutoMat};
   } else if(grupo==='energia'){
     const r6190=parseFloat(get('liq-ret6190'))||0;
     const r6147=parseFloat(get('liq-ret6147'))||0;
@@ -8533,7 +8728,7 @@ function registrarLiquidacao(grupo){
     empenhoCadId: emp.id,
     referenciaId: emp.id,
     nf:get('liq-nf'),dataEmissao:get('liq-data-emissao'),mesRef:get('liq-mes-ref'),
-    npDh:get('liq-np'),mesPag:get('liq-mes-pag'),suap:get('liq-suap'),
+    npDh:get('liq-np'),dh:get('liq-dh'),mesPag:get('liq-mes-pag'),suap:get('liq-suap'),
     introducao:get('liq-introducao'),edital:get('liq-edital'),oficio:get('liq-oficio'),
     // ★ acaoId vem SEMPRE do empenho cadastrado (passo 0 do empenho) — não selecionado novamente na liquidação
     acaoId:emp.acaoId||(calcExtra.acaoId||'')||get('liq-ae-acao')||'',
@@ -8633,7 +8828,9 @@ function duplicarLiquidacao(id){
   setV('liq-nf',l.nf);
   setV('liq-data-emissao',l.dataEmissao);
   setV('liq-mes-ref',l.mesRef);
-  setV('liq-np',l.npDh);
+  // ★ NP/DH NÃO é copiado do original: é sequência única entre categorias — o
+  // valor já foi preenchido automaticamente (próximo número) quando o formulário
+  // foi montado acima, e permanece editável.
   setV('liq-mes-pag',l.mesPag);
   setV('liq-suap',l.suap);
   setV('liq-bc-inss',l.bcInss);
@@ -8656,6 +8853,40 @@ function duplicarLiquidacao(id){
   toast('📋 Dados carregados a partir de '+emp.numero+'. Ajuste o que precisar e clique em "Registrar Liquidação" para criar um NOVO registro — o original não é alterado.','warn');
 }
 
+// ── Filtros da aba Liquidação: leitura do DOM + predicado únicos, reaproveitados
+//    tanto pela tabela (renderLiquidacoes) quanto pela exportação em PDF, para
+//    garantir que "o que está na tela" seja sempre igual a "o que vai pro PDF". ──
+function liqFiltrosAtuais(){
+  return{
+    fCat:document.getElementById('liq-f-cat')?.value||'',
+    fDe:document.getElementById('liq-f-de')?.value||'',
+    fAte:document.getElementById('liq-f-ate')?.value||'',
+    fForn:(document.getElementById('liq-f-forn')?.value||'').toLowerCase().trim(),
+    fMes:(document.getElementById('liq-f-mes')?.value||'').toLowerCase().trim(),
+    fStatus:document.getElementById('liq-f-status')?.value||'',
+    // ★ NOVO: filtro por período de emissão da NF/Fatura (campo dataEmissao da liquidação)
+    fNfEmiDe:document.getElementById('liq-f-nfemi-de')?.value||'',
+    fNfEmiAte:document.getElementById('liq-f-nfemi-ate')?.value||''
+  };
+}
+function liqPassaFiltro(l,f){
+  if(l.status==='Excluído')return false;
+  if(f.fCat&&l.categoria!==f.fCat)return false;
+  if(f.fDe&&l.data<f.fDe)return false;
+  if(f.fAte&&l.data>f.fAte)return false;
+  if(f.fForn&&!(l.fornNome||'').toLowerCase().includes(f.fForn))return false;
+  if(f.fMes&&!((l.mesRef||'').toLowerCase().includes(f.fMes)||(l.mesPag||'').toLowerCase().includes(f.fMes)))return false;
+  if(f.fStatus&&((l.pago==='Sim'?'Sim':'Não')!==f.fStatus))return false;
+  // Só aplica o filtro de emissão de NF às liquidações que possuem esse campo preenchido;
+  // se a liquidação não tem dataEmissao registrada, ela é excluída quando o filtro está ativo.
+  if(f.fNfEmiDe||f.fNfEmiAte){
+    const de=l.dataEmissao||'';
+    if(!de)return false;
+    if(f.fNfEmiDe&&de<f.fNfEmiDe)return false;
+    if(f.fNfEmiAte&&de>f.fNfEmiAte)return false;
+  }
+  return true;
+}
 function renderLiquidacoes(){
   if(!state.liquidacoes)state.liquidacoes=[];
   const catSel=document.getElementById('liq-f-cat');
@@ -8664,22 +8895,8 @@ function renderLiquidacoes(){
     const cats=[...new Set((state.liquidacoes||[]).filter(l=>l.status!=='Excluído'&&l.categoria).map(l=>l.categoria))].sort();
     catSel.innerHTML='<option value="">Todas</option>'+cats.map(c=>`<option value="${c}" ${c===cur?'selected':''}>${c}</option>`).join('');
   }
-  const fCat=document.getElementById('liq-f-cat')?.value||'';
-  const fDe=document.getElementById('liq-f-de')?.value||'';
-  const fAte=document.getElementById('liq-f-ate')?.value||'';
-  const fForn=(document.getElementById('liq-f-forn')?.value||'').toLowerCase().trim();
-  const fMes=(document.getElementById('liq-f-mes')?.value||'').toLowerCase().trim();
-  const fStatus=document.getElementById('liq-f-status')?.value||'';
-  const all=state.liquidacoes.filter(l=>{
-    if(l.status==='Excluído')return false;
-    if(fCat&&l.categoria!==fCat)return false;
-    if(fDe&&l.data<fDe)return false;
-    if(fAte&&l.data>fAte)return false;
-    if(fForn&&!(l.fornNome||'').toLowerCase().includes(fForn))return false;
-    if(fMes&&!((l.mesRef||'').toLowerCase().includes(fMes)||(l.mesPag||'').toLowerCase().includes(fMes)))return false;
-    if(fStatus&&((l.pago==='Sim'?'Sim':'Não')!==fStatus))return false;
-    return true;
-  }).slice().reverse();
+  const f=liqFiltrosAtuais();
+  const all=state.liquidacoes.filter(l=>liqPassaFiltro(l,f)).slice().reverse();
   const {slice,pg,totalPgs,total}=paginar(all,'liquidacoes');
   const totalBrutoFiltrado=all.reduce((s,l)=>s+(l.valorBruto||0),0);
   const el=document.getElementById('liq-count');if(el)el.textContent=total+' liquidação(ões)';
@@ -8728,7 +8945,7 @@ function renderLiquidacoes(){
 }
 
 function limparFiltrosLiquidacao(){
-  ['liq-f-de','liq-f-ate','liq-f-forn','liq-f-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['liq-f-de','liq-f-ate','liq-f-forn','liq-f-mes','liq-f-nfemi-de','liq-f-nfemi-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const cat=document.getElementById('liq-f-cat');if(cat)cat.value='';
   const st=document.getElementById('liq-f-status');if(st)st.value='';
   renderLiquidacoes();
@@ -8803,6 +9020,7 @@ function editarLiquidacao(id){
     l.dataEmissao=get('dataemissao');
     l.mesRef=get('mesref');
     l.npDh=get('npdh');
+    l.dh=get('dh');
     l.mesPag=get('mespag');
     l.suap=get('suap');
     l.introducao=get('introducao');
@@ -8835,10 +9053,13 @@ function editarLiquidacao(id){
       l.aPagar=Math.round((vlr-inss-tribFed)*100)/100;
     } else if(l.grupo==='mat'){
       l.pregao=get('pregao');
+      const tipoProdutoMat=get('tipoprodutomat')||l.tipoProdutoMat||'MERCADORIA EM GERAL';
+      l.tipoProdutoMat=tipoProdutoMat;
+      const aliqMat=tipoProdutoMat==='GÁS GLP'?1.24:5.85;
       const emp=(state.empenhosCad||[]).find(e=>e.numero===l.nEmpenho);
       const forn=emp&&emp.cnpj?buscarFornecedorPorDoc(emp.cnpj):null;
       const isSimples=forn&&forn.simplesNacional==='Sim';
-      const tribFed=isSimples?0:Math.round(vlr*5.85)/100;
+      const tribFed=isSimples?0:Math.round(vlr*aliqMat)/100;
       l.tribFed=tribFed;
       l.totalRetencoes=tribFed;
       l.valorLiquido=Math.round((vlr-tribFed)*100)/100;
@@ -8966,6 +9187,12 @@ function editarLiquidacao(id){
       <div class="field"><label>Mês de Referência</label><input type="text" id="edit-liq-mesref" value="${l.mesRef||''}"></div>
       <div class="field"><label>NP/DH</label><input type="text" id="edit-liq-npdh" value="${l.npDh||''}"></div>
       <div class="field"><label>Mês de Pagamento</label><input type="text" id="edit-liq-mespag" value="${l.mesPag||''}"></div>
+      <div class="field"><label>Tipo de Produto<span class="required-mark">*</span></label>
+        <select id="edit-liq-tipoprodutomat">
+          <option value="MERCADORIA EM GERAL" ${(l.tipoProdutoMat||'MERCADORIA EM GERAL')==='MERCADORIA EM GERAL'?'selected':''}>Mercadoria em Geral (DARF 6147 · 5,85%)</option>
+          <option value="GÁS GLP" ${l.tipoProdutoMat==='GÁS GLP'?'selected':''}>Gás GLP (DARF 8739 · 1,24%)</option>
+        </select>
+      </div>
       <div class="field"><label>Pregão</label><input type="text" id="edit-liq-pregao" value="${l.pregao||''}"></div>
       <div class="field"><label>Processo SUAP</label><input type="text" id="edit-liq-suap" value="${l.suap||''}"></div>`;
   } else if(l.grupo==='agua'){
@@ -8983,6 +9210,7 @@ function editarLiquidacao(id){
     campos=`
       <div class="field"><label>Data</label><input type="date" id="edit-liq-data" value="${l.data}"></div>
       <div class="field"><label>Valor (R$)</label><input type="number" id="edit-liq-valorbruto" value="${l.valorBruto}" min="0" step="0.01"></div>
+      <div class="field"><label>DH</label><input type="text" id="edit-liq-dh" value="${l.dh||''}" placeholder="Nº do DH"></div>
       <div class="field" style="grid-column:1/-1"><label>Introdução</label><textarea id="edit-liq-introducao" rows="2" maxlength="300">${l.introducao||''}</textarea></div>
       <div class="field"><label>Mês de Referência</label><input type="text" id="edit-liq-mesref" value="${l.mesRef||''}"></div>
       <div class="field"><label>Ofício</label><input type="text" id="edit-liq-oficio" value="${l.oficio||''}"></div>
@@ -9251,6 +9479,7 @@ function abrirDetalheLiquidacao(id){
     const _desc2Tabela=d2?descBlockComTabelaCor(
       `Descrição 2 — DDF055 Tributos Federais`,
       d2,
+      _tbLinha('Código DDF055','DDF055','var(--amber)')+
       _tbLinha('CPF/CNPJ',cnpjEmpresa,'var(--cyan)')+
       _tbLinha('Valor Total NF',_vNF,'var(--text)')+
       _tbLinha('Tributos Federais (9,45%)',_vTribFed,'var(--amber)')+
@@ -9263,6 +9492,7 @@ function abrirDetalheLiquidacao(id){
     const _desc3Tabela=descBlockComTabelaCor(
       `Descrição 3 — DDF050 INSS`,
       d3,
+      _tbLinha('Código DDF050','DDF050','var(--teal)')+
       _tbLinha('CPF/CNPJ',cnpjEmpresa,'var(--cyan)')+
       _tbLinha('Valor Total NF',_vNF,'var(--text)')+
       _tbLinha('Valor INSS',_vInss,'var(--teal)')+
@@ -9277,6 +9507,7 @@ function abrirDetalheLiquidacao(id){
     const _desc4Tabela=descBlockComTabelaCor(
       `Descrição 4 DOB001 — ISS`,
       d4,
+      _tbLinha('Código DOB001','DOB001','var(--cyan)')+
       _tbLinha('CPF/CNPJ',cnpjEmpresa,'var(--cyan)')+
       _tbLinha('Valor Total NF',_vNF,'var(--text)')+
       _tbLinha('Valor ISS',_vIss,'var(--cyan)')+
@@ -9288,6 +9519,7 @@ function abrirDetalheLiquidacao(id){
     const _desc5Tabela=descBlockComTabela(
       `Descrição 5 — DOB039 Conta Vinculada`,
       d5,
+      _tbLinha('Código DOB039','DOB039','var(--purple)')+
       _tbLinha('Valor Conta Vinculada',_vCv,'var(--purple)')+
       _tbLinha('CNPJ BB','00000000000191','var(--purple)')+
       _tbLinha('154704J','154704J','var(--purple)')+
@@ -9347,12 +9579,12 @@ function abrirDetalheLiquidacao(id){
       </div>`
     );
 
-    // Descrições (BLOCO 4 item 3: cabeçalho DDF050-158146; item 4: empenho na desc1)
+    // Descrições (BLOCO 4 item 3: cabeçalho DDF050-154704; item 4: empenho na desc1)
     const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADO A ASSISTÊNCIA SOCIAL, P/ O RESTAURANTE INSTITUCIONAL, NO IFPI-CAMPUS SÃO JOÃO/PI, CONF CONTRATO Nº ${nCtPnae} - EMPENHO ${pnaeEmpNumero}`;
     const d2=`RETENÇÃO DE CONTRIBUIÇÃO PREVIDENCIÁRIA SOBRE PAGTO Nº ${l.nf} - EMIT EM ${dataEmissaoBR} - REF À AQUISIÇÃO DE GÊN ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADO A ASSIST SOCIAL, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     const d3=`RETENÇÃO DE CONTRIBUIÇÃO PREVIDENCIÁRIA (GILRAT) SOBRE PAGTO Nº ${l.nf} - EMIT EM ${dataEmissaoBR} - REF À AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADOS À ASSISTÊNCIA SOCIAL, NO IFPI - CAMPUS SÃO JOÃO/PI`;
     const d4=`RETENÇÃO DE CONTRIBUIÇÃO PREVIDENCIÁRIA (SENAR) SOBRE PAGTO Nº ${l.nf} - EMIT EM ${dataEmissaoBR} - REF À AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS DA AGRICULTURA FAMILIAR DESTINADOS À ASSISTÊNCIA SOCIAL, NO IFPI - CAMPUS SÃO JOÃO/PI`;
-    // BLOCO 4 item 3: DDF050 - 158146 com tabela e cores distintas por descrição
+    // BLOCO 4 item 3: DDF050 - 154704 com tabela e cores distintas por descrição
     const _pnaeDocForn=emp?(emp.pnaeDocumento||emp.cnpj||''):'';const _pnaeCpfForn=(()=>{if(!_pnaeDocForn)return'—';const _pf=buscarFornecedorPorDoc(_pnaeDocForn);return _pf?_pf.documento||_pnaeDocForn:_pnaeDocForn;})();
     const _pnaeVnf=fmtBR(l.valorBruto);
     const _pnaePrev=prev.toFixed(4).replace('.',',');
@@ -9371,7 +9603,7 @@ function abrirDetalheLiquidacao(id){
       return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid ${borderColor};border-radius:10px;overflow:hidden">
         <div style="padding:8px 12px;background:${bgColor};border-bottom:1px solid ${borderColor}">
           <div style="font-size:13px;font-weight:700;color:${corTitulo};letter-spacing:.02em">${label}</div>
-          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:2px">DDF050 - 158146</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:2px">DDF050 - 154704</div>
         </div>
         <div style="padding:10px 12px">${tabela}</div>
         <div style="padding:10px 12px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word;border-top:1px solid var(--border)">${texto}</div>
@@ -9385,7 +9617,7 @@ function abrirDetalheLiquidacao(id){
       return `<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--green-border);border-radius:10px;overflow:hidden">
         <div style="padding:8px 12px;background:rgba(0,230,118,.08);border-bottom:1px solid var(--green-border)">
           <div style="font-size:13px;font-weight:700;color:var(--green);letter-spacing:.02em">${label}</div>
-          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:2px">DDF050 - 158146</div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:2px">DDF050 - 154704</div>
         </div>
         <div style="padding:10px 12px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word">${texto}</div>
         <div style="padding:6px 12px;border-top:1px solid var(--border)">
@@ -9398,6 +9630,9 @@ function abrirDetalheLiquidacao(id){
       descBlockPnaeTabela(
         'Descrição 2 — Contrib. Previdenciária (1,2%) · Código 1656 · Vinc 499',d2,
         _pnaeTbTabela(
+          _pnaeTbLinha('DDF050','DDF050','var(--amber)')+
+          _pnaeTbLinha('Código','1656','var(--amber)')+
+          _pnaeTbLinha('Vinc','499','var(--amber)')+
           _pnaeTbLinha('CPF Fornecedor',_pnaeCpfForn,'var(--cyan)')+
           _pnaeTbLinha('Valor Total NF',_pnaeVnf,'var(--text)')+
           _pnaeTbLinha('Contribuição Previdenciária (1,2%)',_pnaePrev,'var(--amber)')
@@ -9407,6 +9642,9 @@ function abrirDetalheLiquidacao(id){
       descBlockPnaeTabela(
         'Descrição 3 — DDF050 GILRAT (0,1%) · Código 1646 · Vinc 499',d3,
         _pnaeTbTabela(
+          _pnaeTbLinha('DDF050','DDF050','var(--purple)')+
+          _pnaeTbLinha('Código','1646','var(--purple)')+
+          _pnaeTbLinha('Vinc','499','var(--purple)')+
           _pnaeTbLinha('CPF Fornecedor',_pnaeCpfForn,'var(--cyan)')+
           _pnaeTbLinha('Valor Total NF',_pnaeVnf,'var(--text)')+
           _pnaeTbLinha('GILRAT (0,1%)',_pnaeGilrat,'var(--purple)')
@@ -9416,6 +9654,9 @@ function abrirDetalheLiquidacao(id){
       descBlockPnaeTabela(
         'Descrição 4 — DDF050 SENAR (0,2%) · Código 1213 · Vinc 499',d4,
         _pnaeTbTabela(
+          _pnaeTbLinha('DDF050','DDF050','var(--teal)')+
+          _pnaeTbLinha('Código','1213','var(--teal)')+
+          _pnaeTbLinha('Vinc','499','var(--teal)')+
           _pnaeTbLinha('CPF Fornecedor',_pnaeCpfForn,'var(--cyan)')+
           _pnaeTbLinha('Valor Total NF',_pnaeVnf,'var(--text)')+
           _pnaeTbLinha('SENAR (0,2%)',_pnaeSenar,'var(--teal)')
@@ -9480,7 +9721,7 @@ function abrirDetalheLiquidacao(id){
     sec3=`<div style="background:linear-gradient(135deg,rgba(255,171,64,.15),rgba(255,171,64,.04));border:2px solid #ffab4055;border-radius:12px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:800;color:var(--amber);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #ffab4040">🔶 SEÇÃO 3 — SITUAÇÃO DDF055 - DARF 6190</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        ${secColorRow('UG Pagadora','158146','rgba(255,171,64,.1)')}
+        ${secColorRow('UG Pagadora','154704','rgba(255,171,64,.1)')}
         ${secColorRow('BC-6190',fmtBR(bc6190),'rgba(255,171,64,.1)')}
         ${secColorRow('Retenção 6190',fmtBR(r6190),'rgba(255,68,68,.1)')}
         ${secColorRow('Natureza Rend (6190)','17099','rgba(255,171,64,.08)')}
@@ -9490,7 +9731,7 @@ function abrirDetalheLiquidacao(id){
     <div style="background:linear-gradient(135deg,rgba(170,102,255,.15),rgba(170,102,255,.04));border:2px solid #aa66ff55;border-radius:12px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:800;color:var(--purple);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #aa66ff40">🟣 SEÇÃO 4 — SITUAÇÃO DDF055 - DARF 6147</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        ${secColorRow('UG Pagadora','158146','rgba(170,102,255,.1)')}
+        ${secColorRow('UG Pagadora','154704','rgba(170,102,255,.1)')}
         ${secColorRow('BC-6147',fmtBR(bc6147),'rgba(170,102,255,.1)')}
         ${secColorRow('Retenção 6147',fmtBR(r6147),'rgba(255,68,68,.1)')}
         ${secColorRow('Natureza Rend (6147)','17002','rgba(170,102,255,.08)')}
@@ -9559,7 +9800,13 @@ function abrirDetalheLiquidacao(id){
     // Descrições (Erro 017)
     const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA FATURA DE SERV DE TRATAMENTO DE ÁGUA E ESGOTO SOBRE O MÊS DE ${l.mesRef}, CONFORME CONTRATO ${ctAgua}, DO IFPI-CAMPUS SÃO JOÃO/PI - REFERENTE À FATURA Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR}`;
     const d2=`RETENÇÃO DE TRIB FED CONF IN 1234/2012 SOBRE PAGTO DE FATURA SERV DE TRAT DE ÁGUA E ESGOTO INCID SOBRE O MÊS DE ${l.mesRef}, DO IFPI-CAMPUS SÃO JOÃO/PI - REF À FATURA ${l.nf} - EMIT EM ${dataEmissaoBR}`;
-    descricoes=descBlock('Descrição 1 — SIAFI',d1)+descBlock('Descrição 2 — Retenção Trib. Fed.',d2);
+    // ★ NOVO — título da Descrição 2 (Água e Esgoto) ganha os badges DARF 6190 e
+    // Nat. Rendimento 17028, cada um com seu próprio botão de copiar.
+    function _aguaBadgeTitulo(rotulo,valor){
+      return `<span style="display:inline-flex;align-items:center;gap:5px;margin-left:10px;font-size:10px;font-weight:800;color:var(--amber);background:rgba(255,171,64,.12);border:1px solid rgba(255,171,64,.35);border-radius:6px;padding:2px 8px;vertical-align:middle;letter-spacing:.02em">${(rotulo?rotulo+' ':'')+valor}<button style="padding:0 5px;font-size:10px;line-height:1.6;border-radius:4px;border:1px solid var(--border3);background:var(--bg4);color:var(--text3);cursor:pointer" onclick="event.stopPropagation();navigator.clipboard.writeText('${valor}').then(()=>toast('Copiado!','success'))">📋</button></span>`;
+    }
+    const _labelDesc2Agua='Descrição 2 — Retenção Trib. Fed.'+_aguaBadgeTitulo('','DDF055')+_aguaBadgeTitulo('DARF','6190')+_aguaBadgeTitulo('Nat Rendimento','17028');
+    descricoes=descBlock('Descrição 1 — SIAFI',d1)+descBlock(_labelDesc2Agua,d2);
     rodape=`
     <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px">
@@ -9577,14 +9824,49 @@ function abrirDetalheLiquidacao(id){
     const retencao=isSimples?0:(l.totalRetencoes||0);
     const descObs=ct?ct.descricao||ct.obs||ct.nome||'':forn?forn.objeto||'':'';
 
-    // Seção 2 — Valores (Erro 014)
-    sec2=secCard('Seção 2 — Valores',
-      sec2Row('Valor Total NF',fmtBR(l.valorBruto))+
-      (!isSimples?sec2Row('Retenção (5,85%)',fmtBR(retencao),'var(--red)'):'')+
-      sec2Row('Valor Líquido',fmtBR(l.valorLiquido),'var(--green)')
-    );
+    // ── Helper local: linha de tabela de valores (label / valor) ──
+    function valorTableRow(label,valor,cor){
+      return `<tr>
+        <td style="padding:7px 4px;font-size:13px;color:var(--text3);border-bottom:1px solid rgba(255,255,255,.06)">${label}</td>
+        <td class="r" style="padding:7px 4px;font-size:14px;font-weight:700;font-family:'IBM Plex Mono',monospace;color:${cor||'var(--text)'};border-bottom:1px solid rgba(255,255,255,.06)">${valor}</td>
+      </tr>`;
+    }
+    // ── Helper local: cartão de seção de valores com faixa de identificação do DARF ──
+    function secValoresDarf(numSecao,titulo,faixaTexto,linhas,corBase,corFaixa){
+      return `<div style="background:linear-gradient(135deg,${corBase}1a,${corBase}08);border:2px solid ${corBase}4d;border-radius:12px;padding:16px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:800;color:${corBase};letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid ${corBase}40">🔶 ${titulo}</div>
+        <div style="font-size:10.5px;font-weight:700;color:${corFaixa||corBase};background:${corBase}14;border:1px solid ${corBase}40;border-radius:6px;padding:7px 10px;margin-bottom:10px;letter-spacing:.02em">${faixaTexto}</div>
+        <table style="width:100%;border-collapse:collapse"><tbody>${linhas}</tbody></table>
+      </div>`;
+    }
 
-    // Seção 3 — Dados Bancários (Erro 014)
+    // Seção 2 / Seção 2.1 — Valores (MUTUAMENTE EXCLUSIVAS por liquidação)
+    // ★ Registros antigos (anteriores a este ajuste) não têm tipoProdutoMat
+    // gravado — assume-se 'MERCADORIA EM GERAL' pois era a única alíquota
+    // aplicada antes da existência da seleção Gás GLP.
+    const tipoProdutoMat=l.tipoProdutoMat||'MERCADORIA EM GERAL';
+    if(tipoProdutoMat==='GÁS GLP'){
+      sec2=secValoresDarf('2.1','Seção 2.1 — Valores',
+        'SEÇÃO 02.1 - GÁS GLP - COD DARF- 8739- ALIQUOTA 1,24 % - NAT RENDIMENTOS 17013',
+        valorTableRow('Valor Total NF',fmtBR(l.valorBruto))+
+        (!isSimples?valorTableRow('Retenção (1,24%)',fmtBR(retencao),'var(--red2)'):'')+
+        valorTableRow('Valor Líquido',fmtBR(l.valorLiquido),'var(--cyan)'),
+        '#00cfff','var(--cyan)'
+      );
+    } else {
+      sec2=secValoresDarf('2','Seção 2 — Valores',
+        'SEÇÃO 02 - MERCADORIAS EM GERAL - COD DARF- 6147 - ALIQUOTA 5,85% - NAT RENDIMENTOS 17009',
+        valorTableRow('Valor Total NF',fmtBR(l.valorBruto))+
+        (!isSimples?valorTableRow('Retenção (5,85%)',fmtBR(retencao),'var(--red)'):'')+
+        valorTableRow('Valor Líquido',fmtBR(l.valorLiquido),'var(--green)'),
+        '#ffab40','var(--amber)'
+      );
+    }
+
+    // Seção 3 — Dados Bancários e Informações Complementares
+    // ★ REDUZIDA: apenas Agência, Conta, Processo SUAP, Contas a Pagar, Conta Estoque
+    // e Situação — NAT RENDIMENTOS e DARF-ALIQ passaram a ficar nas faixas de
+    // identificação das Seções 2 e 2.1 acima, evitando repetição de informação.
     sec3=secCard('Seção 3 — Dados Bancários e Informações Complementares',
       infoRow('Agência',forn?forn.agencia||'—':'—')+
       infoRow('Conta',forn?forn.conta||'—':'—')+
@@ -9593,17 +9875,36 @@ function abrirDetalheLiquidacao(id){
         ${infoRow('CONTAS A PAGAR','2.1.3.1.1.04.00')}
         ${infoRow('CONTA ESTOQUE','1.1.5.6.1.01.00')}
         ${infoRow('SITUAÇÃO','DSP101')}
-        ${infoRow('NAT RENDIMENTOS','17009 - Mercadoria')}
-        ${infoRow('NAT RENDIMENTOS','17010 - Gás')}
-        ${infoRow('DARF-ALIQ (MERCADORIA)','6147 - 5,85%')}
-        ${infoRow('DARF-ALIQ (GÁS)','9060 - 4,89%')}
       </div>`
     );
+
+    // ── Helper local: tabela moderna para a Descrição 2 (DDF055) ──
+    // Separa "Descrição 2" · "DDF055" · "Retenção Tributos Federais" em células
+    // próprias no cabeçalho; botão de copiar fica dentro da célula "DDF055".
+    function ddf055Table(texto){
+      const safe=texto.replace(/'/g,"\\'").replace(/\n/g,' ');
+      return `<div style="margin-bottom:14px;border-radius:12px;overflow:hidden;border:2px solid rgba(255,171,64,.35);box-shadow:0 6px 18px rgba(0,0,0,.28)">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:linear-gradient(135deg,rgba(255,171,64,.24),rgba(255,171,64,.08))">
+              <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase;border-right:1px solid rgba(255,171,64,.22)">Descrição 2</th>
+              <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase;border-right:1px solid rgba(255,171,64,.22)">
+                <div style="display:flex;align-items:center;gap:8px">DDF055
+                  <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('${safe}').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+                </div>
+              </th>
+              <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase">Retenção Tributos Federais</th>
+            </tr>
+          </thead>
+        </table>
+        <div style="padding:12px 14px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word;background:var(--bg3);border-top:1px solid rgba(255,171,64,.22)">${texto}</div>
+      </div>`;
+    }
 
     // Descrições (Erro 015)
     const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs.slice(0,200)}, CONFORME PREGÃO ELETR ${l.pregao||'—'}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     const d2=isSimples?null:`RETENÇÃO DE TRIBUTOS FED CONF IN 1234/2012 SOBRE PAGTO DA NF Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REF À ${descObs}, CONF PREGÃO ${l.pregao||'—'}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
-    descricoes=descBlock('Descrição 1 — SIAFI',d1)+(d2?descBlock('Descrição 2 — DDF055 Retenção Tributos Federais',d2):'');
+    descricoes=descBlock('Descrição 1 — SIAFI',d1)+(d2?ddf055Table(d2):'');
     rodape=`
     <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:var(--bg4);border:1px solid var(--gold-border);border-radius:8px">
@@ -9621,6 +9922,7 @@ function abrirDetalheLiquidacao(id){
   } else if(l.grupo==='diarias'){
     // BLOCO 5: Seção Taxas e descrição dinâmica
     sec2=secCard('Seção — Taxas',
+      (l.dh?sec2Row('DH',l.dh,'var(--purple)'):'')+
       sec2Row('Situação','DSP 005')+
       sec2Row('VPD com Encargos Tributários com União, Estados ou Municípios','3.7.1.2.1.01.00','var(--amber)')+
       sec2Row('Obrigações Fiscais a Curto Prazo a Pagar','2.1.4.1.1.14.01','var(--blue)')
@@ -9786,7 +10088,7 @@ function selecionarTipoEmpenho(tipo){
   cempValidarAno();
   cempAtualizarSaldoInfo();
 
-  // ★ ALTERAÇÃO 002 — Trava RAP: ASSISTÊNCIA ESTUDANTIL e DIÁRIAS E PASSAGENS só permitem EXE
+  // ★ ALTERAÇÃO 002 — Trava RAP: ASSISTÊNCIA ESTUDANTIL, DIÁRIAS e PASSAGENS só permitem EXE
   _cempAplicarTravaRap();
 
   // ITEM 6 — Campos condicionais EXE vs RAP:
@@ -9818,10 +10120,10 @@ function selecionarTipoEmpenho(tipo){
 
 
 // ★ ALTERAÇÃO 002 — Função de trava RAP por categoria
-// Categorias ASSISTÊNCIA ESTUDANTIL e DIÁRIAS E PASSAGENS não permitem RAP.
+// Categorias ASSISTÊNCIA ESTUDANTIL, DIÁRIAS e PASSAGENS não permitem RAP.
 // Chamada por selecionarTipoEmpenho e cempSelecionarCat para garantir consistência.
 function _cempAplicarTravaRap(){
-  const CATS_APENAS_EXE=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS E PASSAGENS'];
+  const CATS_APENAS_EXE=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS','PASSAGENS','SUPRIMENTOS DE FUNDOS'];
   if(!CATS_APENAS_EXE.includes(_cempCat)) return; // sem restrição para outras categorias
 
   const rapRadio=document.getElementById('cemp-rap');
@@ -12599,6 +12901,276 @@ async function gerarPDF(){
     setPdfStatus('Erro: ' + err.message);
     document.getElementById('btn-pdf-gerar').disabled = false;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO: EXPORTAÇÃO PDF DE LISTAGENS FILTRADAS
+// Usado pelos botões "⬇ Gerar PDF" das abas Liquidação, Empenho e Registrar
+// Crédito. Reaproveita a mesma identidade visual do Relatório Executivo
+// (cabeçalho institucional, tabela paginada e rodapé com data/hora e nº de
+// página), mas monta um documento leve com apenas a listagem já filtrada.
+// ═══════════════════════════════════════════════════════════════════════════
+async function gerarPdfListaFiltrada(opts){
+  // opts = {
+  //   titulo:'Liquidações Registradas', arquivoPrefix:'Liquidacoes',
+  //   filtrosTexto:['Categoria: Todas','Emissão NF: 01/08/2026 a 30/08/2026'],
+  //   countLabel:'126 registro(s)', landscape:true,
+  //   cols:[{label:'Data',w:20},{label:'Valor',w:24,align:'right'}, ...],
+  //   rows:[[...],[...]], totalRow:[...] (opcional)
+  // }
+  try{
+    toast('Gerando PDF...','info');
+    const jsPDF = await carregarJsPDF();
+    const landscape = opts.landscape!==false;
+    const doc = new jsPDF({orientation: landscape?'landscape':'portrait', unit:'mm', format:'a4'});
+    const PW = landscape?297:210, PH = landscape?210:297;
+    const ML=10, MR=10, CW=PW-ML-MR;
+    const C={darkBg:[10,10,15],gold:[245,200,66],goldDark:[184,140,20],midGray:[180,180,195],
+             darkGray:[80,80,100],rowAlt:[245,245,250],rowHead:[28,28,42],white:[255,255,255]};
+    let y=0;
+    const agora=new Date();
+    const dataHoraStr = agora.toLocaleDateString('pt-BR')+' '+agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+    function cabecalho(){
+      doc.setFillColor(...C.darkBg); doc.rect(0,0,PW,24,'F');
+      doc.setFillColor(...C.gold);   doc.rect(0,24,PW,1,'F');
+      doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(...C.gold);
+      doc.text('SUCO — '+opts.titulo, ML, 10);
+      doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(200,200,210);
+      doc.text('IFPI - Campus Sao Joao do Piaui - COCF', ML, 15.5);
+      doc.text('Emitido em: '+dataHoraStr, ML, 20.5);
+      if(opts.countLabel){
+        doc.setFontSize(8.5); doc.setFont('helvetica','bold'); doc.setTextColor(...C.gold);
+        doc.text(opts.countLabel, PW-MR, 10, {align:'right'});
+      }
+      y = 29;
+      if(opts.filtrosTexto && opts.filtrosTexto.length){
+        const txt='Filtros aplicados: '+opts.filtrosTexto.join('   |   ');
+        doc.setFillColor(250,246,225);
+        doc.roundedRect(ML, y, CW, 7, 1.4, 1.4, 'F');
+        doc.setFontSize(6.8); doc.setFont('helvetica','normal'); doc.setTextColor(...C.darkGray);
+        doc.text(txt, ML+3, y+4.6, {maxWidth:CW-6});
+        y += 9.5;
+      }
+      cabecalhoTabela();
+    }
+    function cabecalhoTabela(){
+      doc.setFillColor(...C.rowHead);
+      doc.rect(ML, y, CW, 6, 'F');
+      let cx=ML+1.5;
+      doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(...C.midGray);
+      opts.cols.forEach(c=>{
+        if(c.align==='right') doc.text(c.label, cx+c.w-2, y+4, {align:'right'});
+        else doc.text(c.label, cx, y+4);
+        cx += c.w;
+      });
+      y += 6;
+    }
+    function quebraSeNecessario(){
+      if(y > PH-18){ doc.addPage(); cabecalho(); }
+    }
+
+    cabecalho();
+    (opts.rows||[]).forEach((row,i)=>{
+      quebraSeNecessario();
+      if(i%2===1){ doc.setFillColor(...C.rowAlt); doc.rect(ML,y,CW,5.4,'F'); }
+      let cx=ML+1.5;
+      doc.setFontSize(6.3); doc.setFont('helvetica','normal'); doc.setTextColor(...C.darkBg);
+      row.forEach((val,ci)=>{
+        const c=opts.cols[ci]; if(!c)return;
+        const txt=String(val==null||val===''?'—':val);
+        if(c.align==='right') doc.text(txt, cx+c.w-2, y+3.7, {align:'right'});
+        else doc.text(txt, cx, y+3.7, {maxWidth:c.w-3});
+        cx += c.w;
+      });
+      y += 5.4;
+    });
+    if(!opts.rows || !opts.rows.length){
+      quebraSeNecessario();
+      doc.setFontSize(8); doc.setFont('helvetica','italic'); doc.setTextColor(...C.darkGray);
+      doc.text('Nenhum registro encontrado para os filtros aplicados.', ML+2, y+5);
+      y += 8;
+    }
+    if(opts.totalRow){
+      quebraSeNecessario();
+      doc.setFillColor(...C.goldDark);
+      doc.rect(ML,y,CW,6,'F');
+      let cx=ML+1.5;
+      doc.setFontSize(6.7); doc.setFont('helvetica','bold'); doc.setTextColor(...C.white);
+      opts.totalRow.forEach((val,ci)=>{
+        const c=opts.cols[ci]; if(!c)return;
+        const txt=String(val==null?'':val);
+        if(c.align==='right') doc.text(txt, cx+c.w-2, y+4.2, {align:'right'});
+        else doc.text(txt, cx, y+4.2);
+        cx += c.w;
+      });
+      y += 6;
+    }
+
+    // Rodapé em todas as páginas — data, hora e paginação, conforme padrão do sistema
+    const totalPaginas = doc.internal.getNumberOfPages();
+    for(let pg=1; pg<=totalPaginas; pg++){
+      doc.setPage(pg);
+      doc.setFillColor(...C.darkBg); doc.rect(0,PH-10,PW,10,'F');
+      doc.setFontSize(6.4); doc.setFont('helvetica','normal'); doc.setTextColor(...C.midGray);
+      doc.text('SUCO v1.1 - IFPI Campus Sao Joao do Piaui - COCF', ML, PH-4);
+      doc.text('Emitido em '+dataHoraStr+' - Pagina '+pg+' de '+totalPaginas, PW-MR, PH-4, {align:'right'});
+    }
+
+    const nomeArquivo='SUCO_'+(opts.arquivoPrefix||'Lista')+'_'+agora.toISOString().slice(0,10)+'_'+agora.toTimeString().slice(0,5).replace(':','')+'.pdf';
+    doc.save(nomeArquivo);
+    toast('PDF gerado com sucesso!','success');
+  }catch(err){
+    console.error('Erro ao gerar PDF de lista filtrada:', err);
+    toast('Erro ao gerar PDF: '+err.message,'error');
+  }
+}
+
+// ── Liquidação: exporta exatamente o que está filtrado na tabela ───────────
+function gerarPdfLiquidacoesFiltradas(){
+  const f=liqFiltrosAtuais();
+  const rows=(state.liquidacoes||[]).filter(l=>liqPassaFiltro(l,f)).slice().reverse();
+  const filtrosTexto=[];
+  filtrosTexto.push('Categoria: '+(f.fCat||'Todas'));
+  if(f.fDe||f.fAte) filtrosTexto.push('Data: '+(f.fDe?fmtData(f.fDe):'—')+' a '+(f.fAte?fmtData(f.fAte):'—'));
+  if(f.fForn) filtrosTexto.push('Fornecedor: '+f.fForn);
+  if(f.fMes) filtrosTexto.push('Mês de referência: '+f.fMes);
+  if(f.fStatus) filtrosTexto.push('Status: '+(f.fStatus==='Sim'?'Pago':'Não pago'));
+  if(f.fNfEmiDe||f.fNfEmiAte) filtrosTexto.push('Emissão NF/Fatura: '+(f.fNfEmiDe?fmtData(f.fNfEmiDe):'—')+' a '+(f.fNfEmiAte?fmtData(f.fNfEmiAte):'—'));
+  const totBruto=rows.reduce((s,l)=>s+(l.valorBruto||0),0);
+  const totRet=rows.reduce((s,l)=>s+(l.totalRetencoes||0),0);
+  const totLiq=rows.reduce((s,l)=>s+(l.valorLiquido||l.valorBruto||0),0);
+  gerarPdfListaFiltrada({
+    titulo:'Liquidações Registradas',
+    arquivoPrefix:'Liquidacoes',
+    countLabel: rows.length+' liquidação(ões)',
+    filtrosTexto,
+    landscape:true,
+    cols:[
+      {label:'DATA',w:16},{label:'EMISSÃO NF',w:18},{label:'CATEGORIA',w:34},
+      {label:'FORNECEDOR',w:44},{label:'NF/FATURA',w:20},{label:'VALOR BRUTO',w:24,align:'right'},
+      {label:'RETENÇÕES',w:22,align:'right'},{label:'VALOR LÍQUIDO',w:24,align:'right'},{label:'PAGO?',w:14}
+    ],
+    rows: rows.map(l=>[
+      fmtData(l.data), l.dataEmissao?fmtData(l.dataEmissao):'—', l.categoria||'—',
+      l.fornNome||'—', l.nf||'—', pdfFmt(l.valorBruto),
+      pdfFmt(l.totalRetencoes), pdfFmt(l.valorLiquido||l.valorBruto), l.pago==='Sim'?'Sim':'Não'
+    ]),
+    totalRow:['TOTAL FILTRADO','','','','',pdfFmt(totBruto),pdfFmt(totRet),pdfFmt(totLiq),'']
+  });
+}
+
+// ── Registrar Crédito: exporta exatamente o que está filtrado na tabela ────
+function gerarPdfCreditosFiltrados(){
+  const f=credFiltrosAtuais();
+  const entradasAtivas=state.lancamentos.filter(l=>l.tipo==='Entrada'&&l.status==='Ativo');
+  const rows=entradasAtivas.filter(l=>credPassaFiltro(l,f)).slice().reverse();
+  const filtrosTexto=[];
+  filtrosTexto.push('Categoria: '+(f.fCat||'Todas'));
+  if(f.fDe||f.fAte) filtrosTexto.push('Data: '+(f.fDe?fmtData(f.fDe):'—')+' a '+(f.fAte?fmtData(f.fAte):'—'));
+  if(f.fComp) filtrosTexto.push('Competência: '+f.fComp);
+  if(f.fFonte) filtrosTexto.push('Fonte: '+f.fFonte);
+  if(f.fPtres) filtrosTexto.push('PTRES: '+f.fPtres);
+  const totValor=rows.reduce((s,l)=>s+(l.valor||0),0);
+  gerarPdfListaFiltrada({
+    titulo:'Créditos Registrados',
+    arquivoPrefix:'RegistrarCredito',
+    countLabel: rows.length+' registro(s)',
+    filtrosTexto,
+    landscape:false,
+    cols:[
+      {label:'DATA',w:20},{label:'CATEGORIA',w:44},{label:'DESCRIÇÃO',w:50},
+      {label:'FONTE',w:28},{label:'PTRES',w:20},{label:'VALOR',w:24,align:'right'}
+    ],
+    rows: rows.map(l=>[
+      fmtData(l.data), l.categoria||'—', (l.descricao||'—').substring(0,40),
+      (l.fonte||'—').split('–')[0].trim(), l.ptres||'—', pdfFmt(l.valor)
+    ]),
+    totalRow:['TOTAL FILTRADO','','','','',pdfFmt(totValor)]
+  });
+}
+
+// ── Empenho: exporta exatamente o que está filtrado na tabela ──────────────
+function gerarPdfEmpenhosFiltrados(){
+  const f=cempFiltrosAtuais();
+  const rows=(state.empenhosCad||[]).filter(e=>cempPassaFiltro(e,f)).slice().reverse();
+  const filtrosTexto=[];
+  filtrosTexto.push('Categoria: '+(f.fCat||'Todas'));
+  filtrosTexto.push('Tipo: '+(f.fTipo||'Todos'));
+  if(f.fOp) filtrosTexto.push('Operação: '+f.fOp);
+  if(f.fComp) filtrosTexto.push('Competência: '+f.fComp);
+  if(f.fDe||f.fAte) filtrosTexto.push('Data: '+(f.fDe?fmtData(f.fDe):'—')+' a '+(f.fAte?fmtData(f.fAte):'—'));
+  if(f.fForn) filtrosTexto.push('Fornecedor: '+f.fForn);
+  if(f.fNum) filtrosTexto.push('Número: '+f.fNum);
+  if(f.fGlobal) filtrosTexto.push('Busca: '+f.fGlobal);
+  if(f.fSaldo) filtrosTexto.push('Situação do saldo: '+f.fSaldo);
+  const totInicial=rows.reduce((s,e)=>s+(e.valorInicial||0),0);
+  const totSaldo=rows.reduce((s,e)=>s+calcEmpenhoTotais(e.id,e.numero).saldo,0);
+  gerarPdfListaFiltrada({
+    titulo:'Empenhos Cadastrados',
+    arquivoPrefix:'Empenho',
+    countLabel: rows.length+' empenho(s)',
+    filtrosTexto,
+    landscape:true,
+    cols:[
+      {label:'TIPO',w:14},{label:'Nº EMPENHO',w:30},{label:'DATA',w:18},{label:'COMPETÊNCIA',w:20},
+      {label:'CATEGORIA',w:36},{label:'FORNECEDOR',w:44},{label:'VALOR INICIAL',w:26,align:'right'},{label:'SALDO ATUAL',w:26,align:'right'}
+    ],
+    rows: rows.map(e=>{
+      const t=calcEmpenhoTotais(e.id,e.numero);
+      return[
+        e.tipoEmp||'EXE', e.numero||'—', fmtData(e.data), e.competencia||'—',
+        e.categoria||'—', (e.fornNome||'—').substring(0,40), pdfFmt(e.valorInicial), pdfFmt(t.saldo)
+      ];
+    }),
+    totalRow:['TOTAL FILTRADO','','','','','',pdfFmt(totInicial),pdfFmt(totSaldo)]
+  });
+}
+
+// ── Relatórios: exporta a listagem de lançamentos filtrados na aba de
+//    Filtros Avançados. Reexecuta gerarRelatorio() para garantir que o PDF
+//    reflita exatamente os filtros preenchidos na tela no momento do clique. ──
+function gerarPdfRelatorioFiltrado(){
+  if(typeof gerarRelatorio==='function') gerarRelatorio();
+  const rows=(_relFiltradoAtual||[]).slice().reverse();
+  const de=document.getElementById('rel-de')?.value||'';
+  const ate=document.getElementById('rel-ate')?.value||'';
+  const cat=document.getElementById('rel-cat')?.value||'';
+  const tipo=document.getElementById('rel-tipo')?.value||'';
+  const fonte=document.getElementById('rel-fonte')?.value||'';
+  const ptres=document.getElementById('rel-ptres')?.value||'';
+  const nd=document.getElementById('rel-nd')?.value||'';
+  const tipoExeRap=document.getElementById('rel-tipo-exe-rap')?.value||'';
+  const competencia=document.getElementById('rel-competencia')?.value||'';
+  const filtrosTexto=[];
+  if(de||ate) filtrosTexto.push('Data: '+(de?fmtData(de):'—')+' a '+(ate?fmtData(ate):'—'));
+  filtrosTexto.push('Categoria: '+(cat||'Todas'));
+  filtrosTexto.push('Fase: '+(tipo||'Todas'));
+  if(tipoExeRap) filtrosTexto.push('Tipo: '+tipoExeRap);
+  if(competencia) filtrosTexto.push('Competência: '+competencia);
+  if(fonte) filtrosTexto.push('Fonte: '+fonte.split('–')[0].trim());
+  if(ptres) filtrosTexto.push('PTRES: '+ptres);
+  if(nd) filtrosTexto.push('ND: '+nd);
+  const totValor=rows.reduce((s,x)=>s+(x.tipo==='Entrada'?(x.valor||0):-(x.valor||0)),0);
+  gerarPdfListaFiltrada({
+    titulo:'Relatório — Lançamentos Filtrados',
+    arquivoPrefix:'Relatorio',
+    countLabel: rows.length+' registro(s)',
+    filtrosTexto,
+    landscape:true,
+    cols:[
+      {label:'DATA',w:18},{label:'COMPETÊNCIA',w:20},{label:'FASE',w:22},{label:'TIPO',w:14},
+      {label:'CATEGORIA',w:34},{label:'FONTE',w:24},{label:'PTRES',w:18},{label:'DESCRIÇÃO',w:56},{label:'VALOR',w:24,align:'right'}
+    ],
+    rows: rows.map(x=>{
+      const compLabel=x.competencia?(()=>{const p=x.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:x.competencia;})():'—';
+      return[
+        fmtData(x.data), compLabel, x.tipo||'—', x.tipo==='Empenho'||x.tipo==='Liquidação'||x.tipo==='Pagamento'?(x.tipoRecurso||'EXE'):'—',
+        x.categoria||'—', (x.fonte||'').split('–')[0].trim()||'—', x.ptres||'—', (x.descricao||'—').substring(0,44), pdfFmt(x.valor)
+      ];
+    }),
+    totalRow:['TOTAL LÍQUIDO DO PERÍODO','','','','','','','',pdfFmt(totValor)]
+  });
 }
 </script>
 </body>
