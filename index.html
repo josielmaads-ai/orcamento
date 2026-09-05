@@ -959,10 +959,17 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <div class="form-grid cols3 mt4">
         <div class="field"><label>Natureza da Despesa<span class="required-mark">*</span></label><input type="text" id="cemp-nd" placeholder="Ex: 33903702"></div>
         <div class="field"><label>Plano Interno</label><input type="text" id="cemp-pi" placeholder="Opcional"></div>
-        <div class="field"><label>Subcategoria</label><input type="text" id="cemp-subcat" placeholder="Opcional"></div>
+        <div class="field" id="cemp-subcat-field"><label>Subcategoria</label><input type="text" id="cemp-subcat" placeholder="Opcional"></div>
+        <div class="field" id="cemp-pregao-field" style="display:none"><label>Pregão Eletrônico<span class="required-mark">*</span></label><input type="text" id="cemp-pregao" placeholder="Ex: 90047/2024"></div>
       </div>
       <div class="form-grid cols2 mt4">
-        <div class="field"><label>Descrição</label><input type="text" id="cemp-desc" placeholder="Opcional"></div>
+        <div class="field" id="cemp-desc-field">
+          <label>Descrição</label>
+          <input type="text" id="cemp-desc" placeholder="Opcional">
+          <select id="cemp-desc-select" style="display:none">
+            <option value="">— Selecione a atividade —</option>
+          </select>
+        </div>
         <div class="field"><label>Observação</label><input type="text" id="cemp-obs" placeholder="Opcional"></div>
       </div>
       <div id="cemp-saldo-bar"></div>
@@ -1409,6 +1416,19 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <div><div class="cfg-col-title">Tipo de Serviço</div><div class="cfg-list" id="cfg-ts"></div><div class="cfg-add"><input type="text" id="new-ts" placeholder="Ex: Limpeza, TI..." onkeydown="if(event.key==='Enter')addCfg('ts')"><button onclick="addCfg('ts')">+ Add</button></div></div>
     </div>
   </div>
+  <div class="sep-title"><span>Cadastro de Atividades para Registro de Empenho</span></div>
+  <div class="card">
+    <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">ℹ</span><div>Usado pelo módulo <strong>Empenho</strong> nas categorias <strong>MATERIAL DE CONSUMO</strong> e <strong>RESTAURANTE</strong> — substitui o campo de descrição manual por uma lista de atividades padronizadas.</div></div>
+    <div class="cfg-add" style="margin-bottom:10px"><input type="text" id="new-atividade-empenho" placeholder="Nova atividade... Ex: AQUISIÇÃO DE MATERIAIS DE EXPEDIENTE" onkeydown="if(event.key==='Enter')addAtividadeEmpenho()"><button onclick="addAtividadeEmpenho()">+ Add</button></div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--bg4)">
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;width:60px">ID</th>
+        <th style="padding:8px 10px;text-align:left;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em">Atividade</th>
+        <th style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;width:90px">Ações</th>
+      </tr></thead>
+      <tbody id="cfg-atividades-empenho"></tbody>
+    </table>
+  </div>
   <div class="sep-title"><span>Contratos Cadastrados</span></div>
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1567,6 +1587,18 @@ function catIcon(cat) {
 const DEFAULT_ND     = ['33901414 – Diárias','33901801 – Bolsas','33901899 – Outros Auxílios','33902001 – Aux. Pesquisadores','33903004 – Gás','33903007 – Gêneros Alimentícios','33903022 – Material Limpeza','33903203 – Material Assistência Social','33903701 – Apoio Adm.','33903702 – Limpeza','33903703 – Vigilância','33903704 – Manut. Imóveis','33903705 – Copa/Cozinha','33903916 – Manut. Bens Imóveis','33903943 – Energia Elétrica','33903944 – Água e Esgoto','33903965 – Apoio ao Ensino','33903983 – Cópias/Reprod.','33904006 – Software'];
 const DEFAULT_PI     = ['PI-001 – Ensino','PI-002 – Pesquisa','PI-003 – Extensão','PI-004 – Admin.'];
 const DEFAULT_TS     = ['Limpeza e Conservação','Vigilância Ostensiva','Copa e Cozinha','Apoio Administrativo','Manutenção Predial','TI/Informática','Reprografia','Energia Elétrica'];
+// ★ NOVO — Cadastro de Atividades para Registro de Empenho (Configurações),
+// usado pelas categorias MATERIAL DE CONSUMO e RESTAURANTE no Empenho.
+const DEFAULT_ATIVIDADES_EMPENHO = [
+  'AQUISIÇÃO DE MATERIAIS DE COPA E COZINHA PARA O REFEITÓRIO',
+  'AQUISIÇÃO DE MATERIAIS DE LIMPEZA E PRODUTOS DE HIGIENIZAÇÃO PARA O REFEITÓRIO',
+  'AQUISIÇÃO DE MATERIAIS DE EXPEDIENTE',
+  'AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS (ÁGUA MINERAL)',
+  'AQUISIÇÃO DE MATERIAL ODONTOLÓGICO PARA O SETOR DE SAÚDE',
+  'AQUISIÇÃO DE MATERIAIS PERSONALIZADOS (AGENDAS)',
+  'AQUISIÇÃO DE FECHADURA PARA PORTA (MANUTENÇÃO DE IMÓVEIS)',
+  'AQUISIÇÃO DE GÊNEROS ALIMENTÍCIOS PARA O REFEITÓRIO'
+];
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -1577,6 +1609,7 @@ const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho
 let state = {
   meta: {version:VERSION, created:new Date().toISOString(), lastSaved:null, instituicao:'IFPI Campus São João do Piauí'},
   fontes:[...DEFAULT_FONTES], ptres:[...DEFAULT_PTRES], cats:[...DEFAULT_CATS], nd:[...DEFAULT_ND], pi:[...DEFAULT_PI], ts:[...DEFAULT_TS],
+  atividadesEmpenho:[...DEFAULT_ATIVIDADES_EMPENHO],
   lancamentos:[], contratos:[], acoes:[], auditLog:[],
   fornecedores:[], empenhosCad:[], liquidacoes:[], contratosPnae:[],
   catSelecionadaE:null
@@ -1709,6 +1742,7 @@ async function _sbSalvarSilencioso(){
         nd            : state.nd,
         pi            : state.pi,
         ts            : state.ts,
+        atividadesEmpenho: state.atividadesEmpenho,
         lancamentos   : state.lancamentos,
         contratos     : state.contratos,
         acoes         : state.acoes,
@@ -1797,6 +1831,7 @@ function _sbAplicarDados(d){
   state.nd            = arr(d.nd,            [...DEFAULT_ND]);
   state.pi            = arr(d.pi,            [...DEFAULT_PI]);
   state.ts            = arr(d.ts,            [...DEFAULT_TS]);
+  state.atividadesEmpenho = arr(d.atividadesEmpenho, [...DEFAULT_ATIVIDADES_EMPENHO]);
   state.lancamentos   = arr(d.lancamentos,   []).map(l=>({...l, categoria: l.categoria ? normalizarCategoria(l.categoria) : l.categoria}));
   state.contratos     = arr(d.contratos,     []).map(c=>({...c, categoria: c.categoria ? normalizarCategoria(c.categoria) : c.categoria}));
   state.acoes         = arr(d.acoes,         []).map(a=>{
@@ -1839,6 +1874,7 @@ function salvar(){
     const estadoCompleto = {
       meta: state.meta, fontes: state.fontes, ptres: state.ptres,
       cats: state.cats, nd: state.nd, pi: state.pi, ts: state.ts,
+      atividadesEmpenho: state.atividadesEmpenho,
       lancamentos: state.lancamentos, contratos: state.contratos,
       acoes: state.acoes, auditLog: state.auditLog,
       fornecedores: state.fornecedores, empenhosCad: state.empenhosCad,
@@ -1877,6 +1913,7 @@ function carregar(){
       state.nd          = Array.isArray(d.nd)     ? [...d.nd]      : [...DEFAULT_ND];
       state.pi          = Array.isArray(d.pi)     ? [...d.pi]      : [...DEFAULT_PI];
       state.ts          = Array.isArray(d.ts)     ? [...d.ts]      : [...DEFAULT_TS];
+      state.atividadesEmpenho = Array.isArray(d.atividadesEmpenho) ? [...d.atividadesEmpenho] : [...DEFAULT_ATIVIDADES_EMPENHO];
       state.lancamentos = Array.isArray(d.lancamentos) ? d.lancamentos.map(l=>({...l, categoria: l.categoria ? normalizarCategoria(l.categoria) : l.categoria})) : [];
       state.contratos   = Array.isArray(d.contratos)   ? d.contratos.map(c=>({...c, categoria: c.categoria ? normalizarCategoria(c.categoria) : c.categoria}))   : [];
       state.acoes       = Array.isArray(d.acoes) ? d.acoes.map(a=>{
@@ -1922,6 +1959,7 @@ function exportarJSON(){
     nd: state.nd,
     pi: state.pi,
     ts: state.ts,
+    atividadesEmpenho: state.atividadesEmpenho,
     lancamentos: state.lancamentos,
     contratos: state.contratos,
     acoes: state.acoes,
@@ -1965,6 +2003,7 @@ function importarJSON(evt){
       if(d.nd)state.nd=d.nd;
       if(d.pi)state.pi=d.pi;
       if(d.ts)state.ts=d.ts;
+      if(d.atividadesEmpenho)state.atividadesEmpenho=d.atividadesEmpenho;
       if(d.lancamentos)state.lancamentos=d.lancamentos;
       if(d.contratos)state.contratos=d.contratos;
       if(d.acoes)state.acoes=d.acoes;
@@ -5588,10 +5627,89 @@ function renderConfig(){
     const el=document.getElementById('cfg-'+key);if(!el)return;
     el.innerHTML=(state[key]||[]).map((v,i)=>`<div class="cfg-item">${v}<button class="cfg-del" onclick="delCfg('${key}',${i})">✕</button></div>`).join('');
   });
+  renderAtividadesEmpenho();
   // Contratos
   const cts=state.contratos.filter(c=>c.status!=='Excluído');
   const el=document.getElementById('cfg-contratos-list');
   if(el)el.innerHTML=cts.length?cts.map(c=>`<div class="cfg-item">${c.nContrato||'S/N'} — ${c.nome} <span style="font-size:10px;color:var(--text3)">(${fmtBR(c.valorTotal||0)})</span><button class="cfg-del" onclick="editarContrato('${c.id}')">✎</button></div>`).join(''):'<div style="padding:8px;font-size:11px;color:var(--text3)">Nenhum contrato cadastrado</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CADASTRO DE ATIVIDADES PARA REGISTRO DE EMPENHO (Configurações)
+//  Usado nas categorias MATERIAL DE CONSUMO e RESTAURANTE do Empenho.
+//  Segue exatamente o mesmo padrão de persistência dos demais parâmetros
+//  (state.atividadesEmpenho → salvar()/localStorage → Supabase).
+// ═══════════════════════════════════════════════════════════
+let _ativEmpEditIdx=null;
+function renderAtividadesEmpenho(){
+  const tbody=document.getElementById('cfg-atividades-empenho');
+  if(!tbody)return;
+  if(!Array.isArray(state.atividadesEmpenho))state.atividadesEmpenho=[...DEFAULT_ATIVIDADES_EMPENHO];
+  const lista=state.atividadesEmpenho;
+  if(!lista.length){
+    tbody.innerHTML='<tr><td colspan="3" style="padding:12px;text-align:center;font-size:12px;color:var(--text3)">Nenhuma atividade cadastrada</td></tr>';
+    return;
+  }
+  tbody.innerHTML=lista.map((a,i)=>{
+    if(_ativEmpEditIdx===i){
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 10px;font-size:12px;color:var(--text3)">${i+1}</td>
+        <td style="padding:8px 10px"><input type="text" id="ativ-edit-input-${i}" value="${a.replace(/"/g,'&quot;')}" style="width:100%;padding:6px 8px;font-size:12.5px" onkeydown="if(event.key==='Enter')salvarEdicaoAtividadeEmpenho(${i});if(event.key==='Escape')cancelarEdicaoAtividadeEmpenho()"></td>
+        <td style="padding:8px 10px;text-align:right;white-space:nowrap">
+          <button class="cfg-del" title="Salvar" onclick="salvarEdicaoAtividadeEmpenho(${i})">✓</button>
+          <button class="cfg-del" title="Cancelar" onclick="cancelarEdicaoAtividadeEmpenho()">✕</button>
+        </td>
+      </tr>`;
+    }
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 10px;font-size:12px;color:var(--text3)">${i+1}</td>
+      <td style="padding:8px 10px;font-size:12.5px">${a}</td>
+      <td style="padding:8px 10px;text-align:right;white-space:nowrap">
+        <button class="cfg-del" title="Editar" onclick="iniciarEdicaoAtividadeEmpenho(${i})">✎</button>
+        <button class="cfg-del" title="Excluir" onclick="excluirAtividadeEmpenho(${i})">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+function addAtividadeEmpenho(){
+  const inp=document.getElementById('new-atividade-empenho');
+  const val=inp.value.trim().toUpperCase();
+  if(!val){toast('Informe o texto da atividade','warn');return;}
+  if(!Array.isArray(state.atividadesEmpenho))state.atividadesEmpenho=[];
+  if(state.atividadesEmpenho.includes(val)){toast('Atividade já cadastrada','warn');return;}
+  state.atividadesEmpenho.push(val);
+  auditLog('CREATE','ATIVIDADE_EMPENHO',val,'Atividade cadastrada: '+val,{value:val});
+  salvar();renderAtividadesEmpenho();inp.value='';
+  toast('Atividade adicionada','success');
+}
+function iniciarEdicaoAtividadeEmpenho(idx){
+  _ativEmpEditIdx=idx;
+  renderAtividadesEmpenho();
+  setTimeout(()=>{const el=document.getElementById('ativ-edit-input-'+idx);if(el){el.focus();el.select();}},30);
+}
+function cancelarEdicaoAtividadeEmpenho(){
+  _ativEmpEditIdx=null;
+  renderAtividadesEmpenho();
+}
+function salvarEdicaoAtividadeEmpenho(idx){
+  const inp=document.getElementById('ativ-edit-input-'+idx);
+  const val=inp?inp.value.trim().toUpperCase():'';
+  if(!val){toast('Informe o texto da atividade','warn');return;}
+  const anterior=state.atividadesEmpenho[idx];
+  state.atividadesEmpenho[idx]=val;
+  auditLog('UPDATE','ATIVIDADE_EMPENHO',val,'Atividade editada: "'+anterior+'" → "'+val+'"',{anterior,novo:val});
+  _ativEmpEditIdx=null;
+  salvar();renderAtividadesEmpenho();
+  toast('Atividade atualizada','success');
+}
+function excluirAtividadeEmpenho(idx){
+  const val=state.atividadesEmpenho[idx];
+  openModal('Excluir atividade?','A atividade "'+val+'" será removida da lista. Empenhos já cadastrados que a utilizam não serão afetados.',()=>{
+    state.atividadesEmpenho.splice(idx,1);
+    auditLog('DELETE','ATIVIDADE_EMPENHO',val,'Atividade excluída: '+val,{value:val});
+    salvar();closeModal();renderAtividadesEmpenho();
+    toast('Atividade excluída','warn');
+  });
 }
 function addCfg(key){
   const inp=document.getElementById('new-'+key);
@@ -6931,7 +7049,28 @@ function cempAcaoStep0Selecionada(){
   }
 }
 
+function cempAtualizarCamposAtividade(cat){
+  const isMatRest=(cat==='MATERIAL DE CONSUMO'||cat==='RESTAURANTE');
+  const subcatField=document.getElementById('cemp-subcat-field');
+  const pregaoField=document.getElementById('cemp-pregao-field');
+  const descInput=document.getElementById('cemp-desc');
+  const descSelect=document.getElementById('cemp-desc-select');
+  if(subcatField)subcatField.style.display=isMatRest?'none':'';
+  if(pregaoField)pregaoField.style.display=isMatRest?'':'none';
+  if(descInput)descInput.style.display=isMatRest?'none':'';
+  if(descSelect){
+    descSelect.style.display=isMatRest?'':'none';
+    if(isMatRest){
+      const atual=descSelect.value;
+      descSelect.innerHTML='<option value="">— Selecione a atividade —</option>'+
+        (state.atividadesEmpenho||[]).map(a=>`<option value="${a}" ${a===atual?'selected':''}>${a}</option>`).join('');
+    }
+  }
+}
 function cempSelecionarCat(cat){
+  // ★ Reset dos campos de Atividade/Pregão (específicos de Material de Consumo/
+  // Restaurante) sempre que outra categoria for selecionada
+  cempAtualizarCamposAtividade(cat);
   // ★ AE: ao clicar em Assistência Estudantil, mostrar PRIMEIRO o seletor de ação (passo 0)
   if(cat==='ASSISTÊNCIA ESTUDANTIL'){
     _cempAeMatConsumo=false;
@@ -7240,6 +7379,15 @@ function registrarCadastroEmpenho(){
   const ptres=document.getElementById('cemp-ptres')?.value;
   const nd=document.getElementById('cemp-nd')?.value.trim();
   const subcat=document.getElementById('cemp-subcat')?.value.trim()||'';
+  // ★ NOVO — MATERIAL DE CONSUMO/RESTAURANTE: Atividade (select) + Pregão Eletrônico
+  // substituem Descrição manual + Subcategoria, apenas para essas duas categorias.
+  const isMatRestCemp=(_cempCat==='MATERIAL DE CONSUMO'||_cempCat==='RESTAURANTE');
+  const pregaoEletronico=isMatRestCemp?(document.getElementById('cemp-pregao')?.value.trim()||''):'';
+  const atividadeSelecionada=isMatRestCemp?(document.getElementById('cemp-desc-select')?.value||''):'';
+  if(isMatRestCemp){
+    if(!atividadeSelecionada){toast('Selecione a Atividade (Configurações → Cadastro de Atividades)','warn');return;}
+    if(!pregaoEletronico){toast('Informe o Pregão Eletrônico','warn');return;}
+  }
   if(!numero){toast('Número do empenho obrigatório','warn');return;}
   if(!data){toast('Data obrigatória','warn');return;}
   if(!competencia){toast('Competência (mês) obrigatória','warn');return;}
@@ -7310,13 +7458,16 @@ function registrarCadastroEmpenho(){
   const obj={
     id:shortId('CE'),numero,tipoEmp,categoria:normalizarCategoria(_cempCat),cnpj,fornNome,
     // ★ AE-MAT: subcategoria gravada para identificar na liquidação
-    subcategoria:_cempAeMatConsumo?'MATERIAL DE CONSUMO':(subcat||''),
+    // ★ MATERIAL DE CONSUMO/RESTAURANTE: subcategoria deixa de existir (campo removido)
+    subcategoria:_cempAeMatConsumo?'MATERIAL DE CONSUMO':(isMatRestCemp?'':(subcat||'')),
     aeMatConsumo:_cempAeMatConsumo?true:undefined, // flag explícita para roteamento de liquidação
     contratoId,acaoId,pnaeDocumento,pnaeContratoId,pnaeEmpenho,
     fonte,ptres,nd,pi:document.getElementById('cemp-pi')?.value.trim()||'',
     valorInicial,        // ★ valor inicial do empenho
     competencia,         // ★ mês de competência
-    desc:document.getElementById('cemp-desc')?.value.trim()||'',
+    // ★ MATERIAL DE CONSUMO/RESTAURANTE: desc vem da Atividade selecionada; demais categorias inalteradas
+    desc:isMatRestCemp?atividadeSelecionada:(document.getElementById('cemp-desc')?.value.trim()||''),
+    pregao:isMatRestCemp?pregaoEletronico:'', // ★ NOVO — Pregão Eletrônico (só MATERIAL DE CONSUMO/RESTAURANTE)
     obs:document.getElementById('cemp-obs')?.value.trim()||'',
     data,status:'Ativo',ts:new Date().toISOString()
   };
@@ -7330,7 +7481,7 @@ function registrarCadastroEmpenho(){
     tipoRegistro: 'INICIAL',
     tipoRecurso: tipoEmp,          // ★ EXE ou RAP — determina se consome saldo do crédito
     categoria: normalizarCategoria(_cempCat),
-    subcategoria: _cempAeMatConsumo?'MATERIAL DE CONSUMO':(subcat||''),
+    subcategoria: _cempAeMatConsumo?'MATERIAL DE CONSUMO':(isMatRestCemp?'':(subcat||'')),
     descricao: obj.desc || ('Empenho inicial: '+numero),
     valor: valorInicial,
     data,
@@ -7382,8 +7533,10 @@ function limparCadastroEmpenho(){
     if(b){b.style.borderColor='var(--border2)';b.style.background='var(--bg4)';}
   });
   document.querySelectorAll('#cemp-cat-grid .cat-btn').forEach(b=>b.classList.remove('active'));
-  const ids=['cemp-numero','cemp-nd','cemp-pi','cemp-desc','cemp-obs','cemp-valor-inicial','cemp-subcat'];
+  const ids=['cemp-numero','cemp-nd','cemp-pi','cemp-desc','cemp-obs','cemp-valor-inicial','cemp-subcat','cemp-pregao'];
   ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const descSel=document.getElementById('cemp-desc-select');if(descSel)descSel.value='';
+  cempAtualizarCamposAtividade('');
   document.getElementById('cemp-saldo-info').innerHTML='';
   const sb=document.getElementById('cemp-saldo-bar');if(sb)sb.innerHTML='';
   document.getElementById('cemp-vinculo-area').innerHTML='';
@@ -7616,6 +7769,25 @@ function editarCadastroEmpenho(id){
 // ═══════════════════════════════════════════════════════════
 //  MODAL EDIÇÃO COMPLETA DO EMPENHO INICIAL
 // ═══════════════════════════════════════════════════════════
+function meeAtualizarCamposAtividade(){
+  const cat=document.getElementById('mee-categoria')?.value||'';
+  const isMatRest=(cat==='MATERIAL DE CONSUMO'||cat==='RESTAURANTE');
+  const subcatField=document.getElementById('mee-subcat-field');
+  const pregaoField=document.getElementById('mee-pregao-field');
+  const descInput=document.getElementById('mee-desc');
+  const descSelect=document.getElementById('mee-desc-select');
+  if(subcatField)subcatField.style.display=isMatRest?'none':'';
+  if(pregaoField)pregaoField.style.display=isMatRest?'':'none';
+  if(descInput)descInput.style.display=isMatRest?'none':'';
+  if(descSelect){
+    descSelect.style.display=isMatRest?'':'none';
+    if(isMatRest){
+      const atual=descSelect.value||descInput?.value||'';
+      descSelect.innerHTML='<option value="">— Selecione a atividade —</option>'+
+        (state.atividadesEmpenho||[]).map(a=>`<option value="${a}" ${a===atual?'selected':''}>${a}</option>`).join('');
+    }
+  }
+}
 function abrirModalEditarEmpenho(id){
   const e=state.empenhosCad.find(x=>x.id===id);
   if(!e){toast('Empenho não encontrado','error');return;}
@@ -7633,6 +7805,7 @@ function abrirModalEditarEmpenho(id){
   document.getElementById('mee-desc').value=e.desc||e.descricao||'';
   document.getElementById('mee-obs').value=e.obs||e.observacoes||'';
   document.getElementById('mee-subcat').value=e.subcat||e.subcategoria||'';
+  document.getElementById('mee-pregao').value=e.pregao||'';
 
   // Valor inicial
   const t=calcEmpenhoTotais(e.id,e.numero);
@@ -7647,6 +7820,7 @@ function abrirModalEditarEmpenho(id){
   // Categoria
   const catSel=document.getElementById('mee-categoria');
   catSel.innerHTML=DEFAULT_CATS.map(c=>`<option value="${c}" ${c===e.categoria?'selected':''}>${c}</option>`).join('');
+  meeAtualizarCamposAtividade();
 
   // Fonte e PTRES
   const fonteSel=document.getElementById('mee-fonte');
@@ -7709,8 +7883,16 @@ function salvarEdicaoEmpenho(){
   const nd=document.getElementById('mee-nd').value.trim();
   const pi=document.getElementById('mee-pi').value.trim();
   const subcat=document.getElementById('mee-subcat').value.trim();
-  const desc=document.getElementById('mee-desc').value.trim();
   const obs=document.getElementById('mee-obs').value.trim();
+  // ★ NOVO — MATERIAL DE CONSUMO/RESTAURANTE: Atividade (select) + Pregão Eletrônico
+  // no lugar de Descrição manual + Subcategoria — retroativo a empenhos já cadastrados.
+  const isMatRestMee=(normalizarCategoria(categoria)==='MATERIAL DE CONSUMO'||normalizarCategoria(categoria)==='RESTAURANTE');
+  const pregao=isMatRestMee?document.getElementById('mee-pregao').value.trim():'';
+  const desc=isMatRestMee?document.getElementById('mee-desc-select').value:document.getElementById('mee-desc').value.trim();
+  if(isMatRestMee){
+    if(!desc){toast('Selecione a Atividade (Configurações → Cadastro de Atividades)','warn');return;}
+    if(!pregao){toast('Informe o Pregão Eletrônico','warn');return;}
+  }
 
   if(!numero){toast('Número do empenho obrigatório','warn');return;}
   if(!data){toast('Data obrigatória','warn');return;}
@@ -7733,12 +7915,15 @@ function salvarEdicaoEmpenho(){
 
   const antes={numero:e.numero,data:e.data,tipoEmp:e.tipoEmp,categoria:e.categoria,
     fornNome:e.fornNome,fonte:e.fonte,ptres:e.ptres,competencia:e.competencia,
-    valorInicial:e.valorInicial,nd:e.nd,pi:e.pi,subcat:e.subcat,desc:e.desc,obs:e.obs};
+    valorInicial:e.valorInicial,nd:e.nd,pi:e.pi,subcat:e.subcat,desc:e.desc,obs:e.obs,pregao:e.pregao};
 
   // Atualizar empenho
   e.numero=numero; e.data=data; e.tipoEmp=tipoEmp; e.categoria=categoria;
   e.fornNome=fornNome; e.fonte=fonte; e.ptres=ptres; e.competencia=competencia;
-  e.valorInicial=valorNovo; e.nd=nd; e.pi=pi; e.subcat=subcat; e.desc=desc; e.obs=obs;
+  e.valorInicial=valorNovo; e.nd=nd; e.pi=pi;
+  e.subcat=isMatRestMee?'':subcat;
+  e.subcategoria=isMatRestMee?'':subcat;
+  e.desc=desc; e.obs=obs; e.pregao=pregao;
   e.tsModif=new Date().toISOString();
 
   // Atualizar lançamento INICIAL vinculado (valor e referência)
@@ -7758,6 +7943,8 @@ function salvarEdicaoEmpenho(){
     lancInicial.nd=nd;
     lancInicial.pi=pi;
     lancInicial.fornNome=fornNome;
+    lancInicial.descricao=desc||lancInicial.descricao;
+    lancInicial.subcategoria=e.subcategoria;
   }
 
   // Atualizar referências nos demais lançamentos vinculados (reforços/anulações)
@@ -8446,6 +8633,10 @@ function liqCalcEnergia(){
 
 // Formulário MAT/RESTAURANTE/OUTROS
 function liqFormMat(){
+  // ★ NOVO — Pregão Eletrônico não é mais digitado manualmente aqui: vem
+  // automaticamente do Empenho (campo "Pregão Eletrônico" cadastrado no Empenho).
+  const _empMat=_liqEmpId?(state.empenhosCad||[]).find(x=>x.id===_liqEmpId):null;
+  const _pregaoEmp=_empMat?.pregao||'';
   return `<div class="card"><div class="card-title"><span class="card-title-dot" style="background:var(--green)"></span>Liquidação — Material de Consumo / Restaurante / Outros</div>
   <div class="form-grid cols3">
     <div class="field"><label>Data<span class="required-mark">*</span></label><input type="date" id="liq-data"></div>
@@ -8462,7 +8653,7 @@ function liqFormMat(){
     <div class="field"><label>Mês de Referência</label><input type="text" id="liq-mes-ref" placeholder="Ex: MARÇO/26"></div>
     <div class="field"><label>NP/DH</label><input type="text" id="liq-np" placeholder="Nº pré-documento"></div>
     <div class="field"><label>Mês de Pagamento</label><input type="text" id="liq-mes-pag" placeholder="Ex: ABRIL/26"></div>
-    <div class="field"><label>Pregão</label><input type="text" id="liq-pregao" placeholder="90023/2025"></div>
+    <div class="field"><label>Pregão Eletrônico</label><input type="text" id="liq-pregao" value="${_pregaoEmp}" readonly style="opacity:.75;cursor:not-allowed" title="Importado automaticamente do Empenho — não editável aqui"></div>
     <div class="field"><label>Processo SUAP</label><input type="text" id="liq-suap" placeholder="23186.000148/2026-66"></div>
   </div>
   <div class="card" style="margin-top:14px;background:var(--bg4)">
@@ -8687,7 +8878,7 @@ function registrarLiquidacao(grupo){
     const aliqMat=tipoProdutoMat==='GÁS GLP'?1.24:5.85;
     totalRet=isSimples?0:Math.round(vlr*aliqMat)/100;
     liquido=Math.round((vlr-totalRet)*100)/100;
-    calcExtra={tribFed:totalRet,pregao:get('liq-pregao'),tipoProdutoMat};
+    calcExtra={tribFed:totalRet,pregao:emp.pregao||get('liq-pregao'),tipoProdutoMat};
   } else if(grupo==='energia'){
     const r6190=parseFloat(get('liq-ret6190'))||0;
     const r6147=parseFloat(get('liq-ret6147'))||0;
@@ -9193,7 +9384,7 @@ function editarLiquidacao(id){
           <option value="GÁS GLP" ${l.tipoProdutoMat==='GÁS GLP'?'selected':''}>Gás GLP (DARF 8739 · 1,24%)</option>
         </select>
       </div>
-      <div class="field"><label>Pregão</label><input type="text" id="edit-liq-pregao" value="${l.pregao||''}"></div>
+      <div class="field"><label>Pregão Eletrônico</label><input type="text" id="edit-liq-pregao" value="${l.pregao||''}" readonly style="opacity:.75;cursor:not-allowed" title="Importado automaticamente do Empenho"></div>
       <div class="field"><label>Processo SUAP</label><input type="text" id="edit-liq-suap" value="${l.suap||''}"></div>`;
   } else if(l.grupo==='agua'){
     campos=`
@@ -9822,7 +10013,11 @@ function abrirDetalheLiquidacao(id){
   } else if(l.grupo==='mat'){
     const isSimples=forn&&forn.simplesNacional==='Sim';
     const retencao=isSimples?0:(l.totalRetencoes||0);
-    const descObs=ct?ct.descricao||ct.obs||ct.nome||'':forn?forn.objeto||'':'';
+    // ★ NOVO — Nova origem da Atividade (só MATERIAL DE CONSUMO/RESTAURANTE):
+    // Empenho → Atividade (emp.desc), no lugar de Fornecedor → Objeto.
+    const descObs=emp&&emp.desc?emp.desc:(ct?ct.descricao||ct.obs||ct.nome||'':forn?forn.objeto||'':'');
+    // ★ NOVO — Pregão Eletrônico vem do Empenho, não mais digitado na liquidação
+    const pregaoEmpenho=(emp&&emp.pregao)||l.pregao||'—';
 
     // ── Helper local: linha de tabela de valores (label / valor) ──
     function valorTableRow(label,valor,cor){
@@ -9831,12 +10026,16 @@ function abrirDetalheLiquidacao(id){
         <td class="r" style="padding:7px 4px;font-size:14px;font-weight:700;font-family:'IBM Plex Mono',monospace;color:${cor||'var(--text)'};border-bottom:1px solid rgba(255,255,255,.06)">${valor}</td>
       </tr>`;
     }
-    // ── Helper local: cartão de seção de valores com faixa de identificação do DARF ──
+    // ── Helper local: cartão de seção de valores com a faixa de identificação
+    // do DARF agora DENTRO da própria tabela (primeira linha, célula única) ──
     function secValoresDarf(numSecao,titulo,faixaTexto,linhas,corBase,corFaixa){
       return `<div style="background:linear-gradient(135deg,${corBase}1a,${corBase}08);border:2px solid ${corBase}4d;border-radius:12px;padding:16px;margin-bottom:12px">
         <div style="font-size:13px;font-weight:800;color:${corBase};letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid ${corBase}40">🔶 ${titulo}</div>
-        <div style="font-size:10.5px;font-weight:700;color:${corFaixa||corBase};background:${corBase}14;border:1px solid ${corBase}40;border-radius:6px;padding:7px 10px;margin-bottom:10px;letter-spacing:.02em">${faixaTexto}</div>
-        <table style="width:100%;border-collapse:collapse"><tbody>${linhas}</tbody></table>
+        <table style="width:100%;border-collapse:collapse"><tbody>
+          <tr><td colspan="2" style="padding:8px 10px;font-size:10.5px;font-weight:700;color:${corFaixa||corBase};background:${corBase}14;border:1px solid ${corBase}40;border-radius:6px;letter-spacing:.02em">${faixaTexto}</td></tr>
+          <tr><td colspan="2" style="height:6px;border:none"></td></tr>
+          ${linhas}
+        </tbody></table>
       </div>`;
     }
 
@@ -9889,8 +10088,9 @@ function abrirDetalheLiquidacao(id){
             <tr style="background:linear-gradient(135deg,rgba(255,171,64,.24),rgba(255,171,64,.08))">
               <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase;border-right:1px solid rgba(255,171,64,.22)">Descrição 2</th>
               <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase;border-right:1px solid rgba(255,171,64,.22)">
-                <div style="display:flex;align-items:center;gap:8px">DDF055
-                  <button class="btn btn-amber btn-xs" onclick="navigator.clipboard.writeText('${safe}').then(()=>toast('Copiado!','success'))">📋 Copiar</button>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">DDF055
+                  <button class="btn btn-amber btn-xs" title="Copia apenas o código DDF055" onclick="navigator.clipboard.writeText('DDF055').then(()=>toast('Código copiado!','success'))">📋 Copiar Código</button>
+                  <button class="btn btn-sec btn-xs" title="Copia a Descrição 2 completa" onclick="navigator.clipboard.writeText('${safe}').then(()=>toast('Descrição copiada!','success'))">📄 Copiar Descrição</button>
                 </div>
               </th>
               <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase">Retenção Tributos Federais</th>
@@ -9902,8 +10102,8 @@ function abrirDetalheLiquidacao(id){
     }
 
     // Descrições (Erro 015)
-    const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs.slice(0,200)}, CONFORME PREGÃO ELETR ${l.pregao||'—'}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
-    const d2=isSimples?null:`RETENÇÃO DE TRIBUTOS FED CONF IN 1234/2012 SOBRE PAGTO DA NF Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REF À ${descObs}, CONF PREGÃO ${l.pregao||'—'}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
+    const d1=`LIQUIDAÇÃO PARA PAGAMENTO DA NOTA FISCAL Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REFERENTE À ${descObs.slice(0,200)}, CONFORME PREGÃO ELETRÔNICO ${pregaoEmpenho}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
+    const d2=isSimples?null:`RETENÇÃO DE TRIBUTOS FED CONF IN 1234/2012 SOBRE PAGTO DA NF Nº ${l.nf} - EMITIDA EM ${dataEmissaoBR} - REF À ${descObs}, CONF PREGÃO ${pregaoEmpenho}, NO IFPI-CAMPUS SÃO JOÃO/PI`;
     descricoes=descBlock('Descrição 1 — SIAFI',d1)+(d2?ddf055Table(d2):'');
     rodape=`
     <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
@@ -11747,7 +11947,7 @@ function registrarAnulacaoNovo(){
       <div class="mee-grid2">
         <div class="mee-field">
           <label>Categoria <span style="color:var(--red)">*</span></label>
-          <select id="mee-categoria"></select>
+          <select id="mee-categoria" onchange="meeAtualizarCamposAtividade()"></select>
         </div>
         <div class="mee-field">
           <label>Fornecedor</label>
@@ -11783,18 +11983,25 @@ function registrarAnulacaoNovo(){
           <label>Plano Interno (PI)</label>
           <input type="text" id="mee-pi" placeholder="Opcional">
         </div>
-        <div class="mee-field">
+        <div class="mee-field" id="mee-subcat-field">
           <label>Subcategoria</label>
           <input type="text" id="mee-subcat" placeholder="Opcional">
+        </div>
+        <div class="mee-field" id="mee-pregao-field" style="display:none">
+          <label>Pregão Eletrônico <span style="color:var(--red)">*</span></label>
+          <input type="text" id="mee-pregao" placeholder="Ex: 90047/2024">
         </div>
       </div>
 
       <!-- Descrição -->
       <div class="mee-section">Descrição e Observações</div>
       <div class="mee-grid2">
-        <div class="mee-field">
+        <div class="mee-field" id="mee-desc-field">
           <label>Descrição</label>
           <input type="text" id="mee-desc" placeholder="Descrição do empenho">
+          <select id="mee-desc-select" style="display:none">
+            <option value="">— Selecione a atividade —</option>
+          </select>
         </div>
         <div class="mee-field">
           <label>Observações</label>
