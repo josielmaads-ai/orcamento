@@ -1373,11 +1373,14 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       <button class="btn btn-amber btn-sm" onclick="gerarPdfRelatorioFiltrado()">⬇ Gerar PDF (filtro atual)</button>
       <button class="btn btn-amber btn-sm" onclick="imprimirRelatorio()">⎙ Imprimir / PDF</button>
       <button class="btn btn-sec btn-sm" style="border-color:var(--purple);color:var(--purple)" onclick="gerarRelatorioRAP()">📋 Relatório RAP</button>
+      <button class="btn btn-sec btn-sm" style="border-color:var(--green);color:var(--green);font-weight:700" onclick="gerarLevantamentoTela()">📊 Levantamento Contratos/AE</button>
     </div>
   </div>
   <div id="rel-resultado"></div>
   <!-- Relatório RAP exclusivo -->
   <div id="rel-rap-area" style="margin-top:18px"></div>
+  <!-- Levantamento Contratos/AE — tabela interativa -->
+  <div id="lev-area"></div>
 </div>
 
 <!-- ════════ AUDITORIA ════════ -->
@@ -13161,17 +13164,21 @@ async function gerarPdfListaFiltrada(opts){
       }
       cabecalhoTabela();
     }
+    // Altura da linha de dados — 7 mm comporta até 2 linhas de texto (6.3 pt)
+    // sem sobreposição. Cabeçalho e total usam a mesma medida por consistência.
+    const RH=7, RH_HEAD=7, RH_TOTAL=7;
+
     function cabecalhoTabela(){
       doc.setFillColor(...C.rowHead);
-      doc.rect(ML, y, CW, 6, 'F');
+      doc.rect(ML, y, CW, RH_HEAD, 'F');
       let cx=ML+1.5;
       doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(...C.midGray);
       opts.cols.forEach(c=>{
-        if(c.align==='right') doc.text(c.label, cx+c.w-2, y+4, {align:'right'});
-        else doc.text(c.label, cx, y+4);
+        if(c.align==='right') doc.text(c.label, cx+c.w-2, y+4.8, {align:'right'});
+        else doc.text(c.label, cx, y+4.8);
         cx += c.w;
       });
-      y += 6;
+      y += RH_HEAD;
     }
     function quebraSeNecessario(){
       if(y > PH-18){ doc.addPage(); cabecalho(); }
@@ -13180,17 +13187,20 @@ async function gerarPdfListaFiltrada(opts){
     cabecalho();
     (opts.rows||[]).forEach((row,i)=>{
       quebraSeNecessario();
-      if(i%2===1){ doc.setFillColor(...C.rowAlt); doc.rect(ML,y,CW,5.4,'F'); }
+      if(i%2===1){ doc.setFillColor(...C.rowAlt); doc.rect(ML,y,CW,RH,'F'); }
       let cx=ML+1.5;
       doc.setFontSize(6.3); doc.setFont('helvetica','normal'); doc.setTextColor(...C.darkBg);
       row.forEach((val,ci)=>{
         const c=opts.cols[ci]; if(!c)return;
-        const txt=String(val==null||val===''?'—':val);
-        if(c.align==='right') doc.text(txt, cx+c.w-2, y+3.7, {align:'right'});
-        else doc.text(txt, cx, y+3.7, {maxWidth:c.w-3});
+        // Truncar texto para evitar wrap além de 1 linha: ~1.45 mm/char a 6.3 pt
+        const raw=String(val==null||val===''?'—':val);
+        const maxChars=Math.max(6, Math.floor((c.w-3)/1.45));
+        const txt=raw.length>maxChars?raw.substring(0,maxChars-1)+'…':raw;
+        if(c.align==='right') doc.text(txt, cx+c.w-2, y+4.8, {align:'right'});
+        else doc.text(txt, cx, y+4.8);
         cx += c.w;
       });
-      y += 5.4;
+      y += RH;
     });
     if(!opts.rows || !opts.rows.length){
       quebraSeNecessario();
@@ -13201,17 +13211,17 @@ async function gerarPdfListaFiltrada(opts){
     if(opts.totalRow){
       quebraSeNecessario();
       doc.setFillColor(...C.goldDark);
-      doc.rect(ML,y,CW,6,'F');
+      doc.rect(ML,y,CW,RH_TOTAL,'F');
       let cx=ML+1.5;
       doc.setFontSize(6.7); doc.setFont('helvetica','bold'); doc.setTextColor(...C.white);
       opts.totalRow.forEach((val,ci)=>{
         const c=opts.cols[ci]; if(!c)return;
         const txt=String(val==null?'':val);
-        if(c.align==='right') doc.text(txt, cx+c.w-2, y+4.2, {align:'right'});
-        else doc.text(txt, cx, y+4.2);
+        if(c.align==='right') doc.text(txt, cx+c.w-2, y+4.8, {align:'right'});
+        else doc.text(txt, cx, y+4.8);
         cx += c.w;
       });
-      y += 6;
+      y += RH_TOTAL;
     }
 
     // Rodapé em todas as páginas — data, hora e paginação, conforme padrão do sistema
@@ -13337,6 +13347,225 @@ function gerarPdfEmpenhosFiltrados(){
 // ── Relatórios: exporta a listagem de lançamentos filtrados na aba de
 //    Filtros Avançados. Reexecuta gerarRelatorio() para garantir que o PDF
 //    reflita exatamente os filtros preenchidos na tela no momento do clique. ──
+// ══════════════════════════════════════════════════════════════════════════════
+//  LEVANTAMENTO — Contratos / Apoio ao Ensino  (módulo Relatório)
+// ══════════════════════════════════════════════════════════════════════════════
+let _levRowsContratos=[];
+let _levRowsApoio=[];
+
+function _levBuildData(){
+  // Maps de última liquidação por empenho
+  const liqPorEmpId={},liqPorNEmp={};
+  (state.liquidacoes||[]).filter(l=>l.status!=='Excluído').forEach(l=>{
+    const d=l.data||'';
+    if(l.empenhoCadId){
+      if(!liqPorEmpId[l.empenhoCadId]||(d>(liqPorEmpId[l.empenhoCadId].data||'')))
+        liqPorEmpId[l.empenhoCadId]=l;
+    }
+    if(l.nEmpenho){
+      if(!liqPorNEmp[l.nEmpenho]||(d>(liqPorNEmp[l.nEmpenho].data||'')))
+        liqPorNEmp[l.nEmpenho]=l;
+    }
+  });
+  const hoje=new Date();
+  const lim90=new Date(hoje); lim90.setDate(hoje.getDate()-90);
+  function buildRows(cat){
+    return (state.empenhosCad||[])
+      .filter(e=>e.status!=='Excluído'&&(e.categoria||'').toUpperCase()===cat.toUpperCase())
+      .reduce((acc,emp)=>{
+        const ct=emp.contratoId?(state.contratos||[]).find(c=>c.id===emp.contratoId):null;
+        if(ct&&ct.dataFim){const df=new Date(ct.dataFim+'T12:00:00');if(df<lim90)return acc;}
+        const cnpj=(ct&&ct.cnpj)||emp.cnpj||'—';
+        const empresa=(ct&&ct.empresa)||emp.fornNome||'—';
+        const liq=liqPorEmpId[emp.id]||liqPorNEmp[emp.numero]||null;
+        acc.push({cnpj,empresa,nEmpenho:emp.numero||'—',
+          ultimoMes:liq?(liq.mesRef||'—'):'—',
+          valorLiq:liq?(liq.valorBruto||0):0,
+          saldoEmp:calcSaldoEmpenho(emp.numero),
+          suap:liq?(liq.suap||'—'):'—'});
+        return acc;
+      },[])
+      .sort((a,b)=>a.empresa.localeCompare(b.empresa,'pt-BR'));
+  }
+  return{ct:buildRows('CONTRATOS'),ae:buildRows('APOIO AO ENSINO')};
+}
+
+function gerarLevantamentoTela(){
+  const d=_levBuildData();
+  _levRowsContratos=d.ct; _levRowsApoio=d.ae;
+  if(!d.ct.length&&!d.ae.length){toast('Nenhum dado encontrado para o levantamento.','warn');return;}
+
+  function trRows(rows,sec){
+    if(!rows.length) return `<tr><td colspan="8" style="text-align:center;padding:14px;color:var(--text3);font-style:italic">Nenhuma empresa encontrada para esta categoria.</td></tr>`;
+    return rows.map((r,i)=>`
+      <tr>
+        <td style="text-align:center;padding:4px 6px"><input type="checkbox" class="lev-chk lev-chk-${sec}" data-sec="${sec}" data-idx="${i}" checked style="width:14px;height:14px;accent-color:var(--gold);cursor:pointer"></td>
+        <td style="font-size:11.5px;white-space:nowrap">${r.cnpj}</td>
+        <td style="font-size:11.5px">${r.empresa}</td>
+        <td style="font-size:11.5px;white-space:nowrap"><strong>${r.nEmpenho}</strong></td>
+        <td style="font-size:11.5px;white-space:nowrap">${r.ultimoMes}</td>
+        <td class="r" style="font-size:11.5px">${fmtBR(r.valorLiq)}</td>
+        <td class="r" style="font-size:11.5px;color:var(--gold)">${fmtBR(r.saldoEmp)}</td>
+        <td style="font-size:11.5px">${r.suap}</td>
+      </tr>`).join('');
+  }
+
+  function secHeader(label,count,accColor,allId,sec){
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 16px 6px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:${accColor};border-bottom:2px solid ${accColor}44;padding-bottom:3px;flex:1">
+        ■ ${label} <span style="font-weight:400;color:var(--text3)">(${count} empenho(s))</span>
+      </div>
+      <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" id="${allId}" checked
+          onchange="document.querySelectorAll('.lev-chk-${sec}').forEach(x=>x.checked=this.checked)"
+          style="accent-color:${accColor};cursor:pointer">
+        Marcar todos
+      </label>
+    </div>`;
+  }
+
+  const tblHead=`<thead><tr>
+    <th style="width:28px"></th>
+    <th>CNPJ</th><th>EMPRESA</th><th>Nº DE EMPENHO</th>
+    <th>ÚLTIMO MÊS</th><th class="r">VALOR LIQUIDAÇÃO</th>
+    <th class="r">SALDO DO EMPENHO</th><th>PROCESSO SUAP</th>
+  </tr></thead>`;
+
+  const html=`
+  <div class="card" style="margin-top:16px;padding:0;overflow:hidden">
+    <div style="background:var(--card2,#1a1a28);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+      <div class="card-title" style="margin:0">📊 Levantamento — Contratos / Apoio ao Ensino</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="gerarPdfLevantamentoSelecionados()">⬇ Gerar PDF dos Selecionados</button>
+        <button class="btn btn-sec btn-sm" onclick="document.getElementById('lev-area').innerHTML=''">✕ Fechar</button>
+      </div>
+    </div>
+
+    ${secHeader('Seção 1 — Contratos',d.ct.length,'var(--gold)','lev-all-ct','ct')}
+    <div class="tbl-wrap" style="margin:0 0 4px;border-radius:0;border-left:none;border-right:none;border-top:none">
+      <div class="scroll-h"><table>${tblHead}<tbody>${trRows(d.ct,'ct')}</tbody></table></div>
+    </div>
+
+    ${secHeader('Seção 2 — Apoio ao Ensino',d.ae.length,'var(--green)','lev-all-ae','ae')}
+    <div class="tbl-wrap" style="margin:0;border-radius:0;border-left:none;border-right:none;border-top:none">
+      <div class="scroll-h"><table>${tblHead}<tbody>${trRows(d.ae,'ae')}</tbody></table></div>
+    </div>
+
+    <div style="padding:12px 16px;display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="gerarPdfLevantamentoSelecionados()">⬇ Gerar PDF dos Selecionados</button>
+    </div>
+  </div>`;
+
+  const area=document.getElementById('lev-area');
+  if(area){area.innerHTML=html; setTimeout(()=>area.scrollIntoView({behavior:'smooth',block:'start'}),80);}
+}
+
+async function gerarPdfLevantamentoSelecionados(){
+  const idxCt=new Set([...document.querySelectorAll('.lev-chk-ct:checked')].map(x=>+x.dataset.idx));
+  const idxAe=new Set([...document.querySelectorAll('.lev-chk-ae:checked')].map(x=>+x.dataset.idx));
+  const selCt=(_levRowsContratos||[]).filter((_,i)=>idxCt.has(i));
+  const selAe=(_levRowsApoio||[]).filter((_,i)=>idxAe.has(i));
+  if(!selCt.length&&!selAe.length){
+    toast('Selecione pelo menos um empenho antes de gerar o PDF.','warn');
+    return;
+  }
+  try{
+    toast('Gerando PDF...','info');
+    const jsPDF=await carregarJsPDF();
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const PW=297,PH=210,ML=10,MR=10,CW=PW-ML-MR;
+    const C={darkBg:[10,10,15],gold:[245,200,66],goldDark:[184,140,20],
+              midGray:[180,180,195],darkGray:[80,80,100],rowAlt:[245,245,250],
+              rowHead:[28,28,42],white:[255,255,255]};
+    const agora=new Date();
+    const dtStr=agora.toLocaleDateString('pt-BR')+' '+agora.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    let y=0;
+    const cols=[
+      {label:'CNPJ',w:38},{label:'EMPRESA',w:65},{label:'Nº DE EMPENHO',w:38},
+      {label:'ÚLTIMO MÊS',w:28},{label:'VALOR LIQUIDAÇÃO',w:35,align:'right'},
+      {label:'SALDO DO EMPENHO',w:35,align:'right'},{label:'PROCESSO SUAP',w:38}
+    ];
+    function cabPag(){
+      doc.setFillColor(...C.darkBg);doc.rect(0,0,PW,24,'F');
+      doc.setFillColor(...C.gold);doc.rect(0,24,PW,1,'F');
+      doc.setFontSize(12);doc.setFont('helvetica','bold');doc.setTextColor(...C.gold);
+      doc.text('SUCO — Levantamento de Empresas — Contratos / Apoio ao Ensino',ML,10);
+      doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(200,200,210);
+      doc.text('IFPI - Campus Sao Joao do Piaui - COCF',ML,15.5);
+      doc.text('Emitido em: '+dtStr,ML,20.5);
+      y=29;
+    }
+    function cabTab(){
+      doc.setFillColor(...C.rowHead);doc.rect(ML,y,CW,6,'F');
+      let cx=ML+1.5;
+      doc.setFontSize(6.5);doc.setFont('helvetica','bold');doc.setTextColor(...C.midGray);
+      cols.forEach(c=>{
+        if(c.align==='right')doc.text(c.label,cx+c.w-2,y+4,{align:'right'});
+        else doc.text(c.label,cx,y+4);
+        cx+=c.w;
+      });y+=6;
+    }
+    function quebra(e){if(y>PH-18-(e||0)){doc.addPage();cabPag();cabTab();}}
+    function cabSec(titulo,corFundo,corTxt){
+      quebra(14);
+      doc.setFillColor(...corFundo);doc.rect(ML,y,CW,8,'F');
+      doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(...corTxt);
+      doc.text(titulo,ML+3,y+5.5);y+=8;
+    }
+    function renderSec(rows){
+      let totL=0,totS=0;
+      if(!rows.length){
+        quebra(8);doc.setFontSize(8);doc.setFont('helvetica','italic');doc.setTextColor(...C.darkGray);
+        doc.text('Nenhum empenho selecionado para esta categoria.',ML+2,y+5);y+=8;
+      } else {
+        rows.forEach((r,i)=>{
+          quebra(5.4);
+          if(i%2===1){doc.setFillColor(...C.rowAlt);doc.rect(ML,y,CW,5.4,'F');}
+          let cx=ML+1.5;
+          doc.setFontSize(6.3);doc.setFont('helvetica','normal');doc.setTextColor(...C.darkBg);
+          [r.cnpj,r.empresa,r.nEmpenho,r.ultimoMes,pdfFmt(r.valorLiq),pdfFmt(r.saldoEmp),r.suap].forEach((v,ci)=>{
+            const c=cols[ci];if(!c)return;
+            const t=String(v==null||v===''?'—':v);
+            if(c.align==='right')doc.text(t,cx+c.w-2,y+3.7,{align:'right'});
+            else doc.text(t,cx,y+3.7,{maxWidth:c.w-3});
+            cx+=c.w;
+          });
+          totL+=r.valorLiq;totS+=r.saldoEmp;y+=5.4;
+        });
+      }
+      quebra(6);doc.setFillColor(...C.goldDark);doc.rect(ML,y,CW,6,'F');
+      let cx=ML+1.5;
+      doc.setFontSize(6.7);doc.setFont('helvetica','bold');doc.setTextColor(...C.white);
+      ['','TOTAL DA SEÇÃO ('+rows.length+' empenho(s))','','',pdfFmt(totL),pdfFmt(totS),''].forEach((v,ci)=>{
+        const c=cols[ci];if(!c)return;
+        if(c.align==='right')doc.text(v,cx+c.w-2,y+4.2,{align:'right'});
+        else doc.text(v,cx,y+4.2);
+        cx+=c.w;
+      });y+=6;
+    }
+    cabPag();
+    cabSec('■  SEÇÃO 1 — EMPRESAS DA CATEGORIA CONTRATOS  ('+selCt.length+' empenho(s))',[28,28,42],C.gold);
+    cabTab();renderSec(selCt);
+    y+=6;quebra(20);
+    cabSec('■  SEÇÃO 2 — EMPRESAS DA CATEGORIA APOIO AO ENSINO  ('+selAe.length+' empenho(s))',[20,55,30],[170,255,170]);
+    cabTab();renderSec(selAe);
+    const nPag=doc.internal.getNumberOfPages();
+    for(let p=1;p<=nPag;p++){
+      doc.setPage(p);
+      doc.setFillColor(...C.darkBg);doc.rect(0,PH-10,PW,10,'F');
+      doc.setFontSize(6.4);doc.setFont('helvetica','normal');doc.setTextColor(...C.midGray);
+      doc.text('SUCO v1.1 - IFPI Campus Sao Joao do Piaui - COCF',ML,PH-4);
+      doc.text('Emitido em '+dtStr+' - Pagina '+p+' de '+nPag,PW-MR,PH-4,{align:'right'});
+    }
+    const nome='SUCO_Levantamento_Contratos_AE_'+agora.toISOString().slice(0,10)+'_'+agora.toTimeString().slice(0,5).replace(':','')+'.pdf';
+    doc.save(nome);
+    toast('PDF gerado com sucesso!','success');
+  }catch(err){
+    console.error('[SUCO] Erro gerarPdfLevantamentoSelecionados:',err);
+    toast('Erro ao gerar PDF: '+err.message,'error');
+  }
+}
+
 function gerarPdfRelatorioFiltrado(){
   if(typeof gerarRelatorio==='function') gerarRelatorio();
   const rows=(_relFiltradoAtual||[]).slice().reverse();
