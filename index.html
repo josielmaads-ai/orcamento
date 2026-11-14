@@ -6136,7 +6136,7 @@ function aeMatriz(D){
   const vg=z(),ger=z(),det=z(),men=z(),dash=z();
   D.linhas.forEach(l=>{add(vg,l.tot);vg.prev+=l.pv.v;});
   const g=new Map();D.comAcao.forEach(x=>{const o=g.get(x.e.acaoId)||[];o.push(x);g.set(x.e.acaoId,o);});
-  g.forEach((emps,id)=>{add(ger,aeSoma(emps));const a=D.acoes.find(y=>y.id===id);ger.prev+=aePrevInfo(a,D.ex,D.comp).v;});
+  D.acoes.forEach(a=>{const emps=g.get(a.id)||[];add(ger,aeSoma(emps));ger.prev+=aePrevInfo(a,D.ex,D.comp).v;});
   const ano=aeAnoGrade(D);
   D.linhas.forEach(l=>{const t=aeBSum(aeBuckets(l.emps,ano));det.n+=t.n;det.inicial+=t.ini;det.reforcos+=t.ref;det.anulacoes+=t.anu;det.liquidado+=t.liq;det.pago+=t.pago;det.atualizado+=t.ini+t.ref-t.anu;
     if(l.pv.aplica){if(D.comp)det.prev+=l.pv.v;else det.prev+=l.pv.pm.reduce((s,v)=>s+v,0)||ctCents(l.a.previsto);}});
