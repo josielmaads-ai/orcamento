@@ -2179,6 +2179,7 @@ function importarJSON(evt){
       if(_impCtVinc>0)
         console.info('Importação CONTRATOS: '+_impCtVinc+' lançamento(s) histórico(s) reindexado(s) para contratos continuados.');
       // ── FIM MIGRAÇÃO HISTÓRICA CONTRATOS CONTINUADOS (importação) ────────────
+      try{ viradaExercicio(); }catch(_){}
       const resumo = {
         lancamentos: state.lancamentos.length,
         contratos: state.contratos.length,
@@ -2908,6 +2909,61 @@ function totalEmpenhos(cat,refId){
   if(refId!==undefined)return sum(state.lancamentos.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&(cat?l.categoria===cat:true)&&l.referenciaId===refId));
   return sum(getLancsAtivos('Empenho',cat||null));
 }
+// ═══════════════════════════════════════════════════════════════════════════
+//  VIRADA DE EXERCÍCIO — EXE → RAP (automática, a partir de 01/01 de cada ano)
+//  Regra: todo empenho cujo número começa com um ano ANTERIOR ao ano corrente e que
+//  ainda esteja como EXE passa a RAP (restos a pagar), sem exceção de categoria.
+//  • Não apaga nem recalcula nada: só muda a classificação (tipoEmp / tipoRecurso) e
+//    registra a origem (tipoEmpOrigem, rapAutoEm, rapAutoExercicio) + Log de Auditoria.
+//  • Liquidações/pagamentos já executados em exercícios anteriores PERMANECEM como EXE;
+//    movimentos datados do novo exercício em diante já nascem/ficam RAP.
+//  • Idempotente: empenho já convertido (rapAutoEm) nunca é convertido de novo — se o
+//    usuário reverter manualmente na edição, a decisão dele é respeitada.
+//  • Empenho cujo número não começa com ano (legado) não é alterado e é contado à parte.
+// ═══════════════════════════════════════════════════════════════════════════
+function viradaExercicio(opt){
+  const hoje=(opt&&opt.hoje)||new Date();
+  const ano=hoje.getFullYear(),iniAno=ano+'-01-01',ts=new Date().toISOString();
+  const r={ano,empenhos:0,lancEmpenho:0,lancMov:0,liquidacoes:0,semAno:0,numeros:[]};
+  (state.empenhosCad||[]).forEach(e=>{
+    if(!e||e.status==='Excluído'||e.tipoEmp==='RAP'||e.rapAutoEm)return;
+    const m=String(e.numero||'').match(/^(\d{4})/);
+    if(!m){r.semAno++;return;}
+    if(+m[1]>=ano)return;
+    e.tipoEmpOrigem=e.tipoEmp||'EXE';e.tipoEmp='RAP';e.rapAutoEm=ts;e.rapAutoExercicio=ano;
+    r.empenhos++;r.numeros.push(e.numero);
+    (state.lancamentos||[]).forEach(l=>{
+      if(!l||l.status==='Excluído')return;
+      const meu=l.empenhoCadId?l.empenhoCadId===e.id:(l.referenciaId===e.id||l.referencia===e.numero||l.numeroEmpenho===e.numero);
+      if(!meu)return;
+      if(l.tipo==='Empenho'||l.tipo==='Anulação'){
+        if(l.tipoRecurso!=='RAP'){l.tipoRecursoOrig=l.tipoRecurso||'EXE';l.tipoRecurso='RAP';r.lancEmpenho++;}
+      }else if((l.tipo==='Liquidação'||l.tipo==='Pagamento')&&String(l.data||'')>=iniAno&&l.tipoRecurso!=='RAP'){
+        l.tipoRecursoOrig=l.tipoRecurso||'EXE';l.tipoRecurso='RAP';r.lancMov++;
+      }
+    });
+    (state.liquidacoes||[]).forEach(q=>{
+      if(!q||q.status==='Excluído')return;
+      const meu=q.empenhoCadId?q.empenhoCadId===e.id:(q.nEmpenho===e.numero||q.nEmpenhoCosip===e.numero);
+      if(meu&&String(q.data||'')>=iniAno&&q.tipoRecurso!=='RAP'){q.tipoRecursoOrig=q.tipoRecurso||'EXE';q.tipoRecurso='RAP';r.liquidacoes++;}
+    });
+  });
+  if(r.empenhos){
+    try{auditLog('UPDATE','EXERCICIO','VIRADA-'+ano,'Virada de exercício '+ano+': '+r.empenhos+' empenho(s) reclassificado(s) de EXE para RAP automaticamente',{ano,empenhos:r.numeros,lancEmpenho:r.lancEmpenho,lancMov:r.lancMov,liquidacoes:r.liquidacoes,regra:'número do empenho com ano anterior ao corrente'});}catch(_){}
+    console.info('[EXERCÍCIO '+ano+'] '+r.empenhos+' empenho(s) reclassificado(s) EXE→RAP:',r.numeros.join(', '));
+  }
+  if(r.semAno)console.warn('[EXERCÍCIO '+ano+'] '+r.semAno+' empenho(s) EXE sem ano no número — não reclassificados automaticamente.');
+  return r;
+}
+// Vigia a virada com o sistema aberto (ex.: aberto em 31/12 e ainda aberto em 01/01)
+let _vigiaAno=new Date().getFullYear();
+setInterval(()=>{
+  const a=new Date().getFullYear();
+  if(a===_vigiaAno)return;
+  _vigiaAno=a;
+  const r=viradaExercicio();
+  if(r.empenhos){salvar();try{init();}catch(_){}toast('Virada de exercício '+a+': '+r.empenhos+' empenho(s) passaram para RAP','info');}
+},600000);
 function empenhoCadAtivo(e){
   return e&&e.status!=='Excluído'&&e.status!=='ExcluÃ­do';
 }
@@ -4845,7 +4901,7 @@ function ctContratoAud(c,ex){
   if(!todosEmps.length)alerts.push({nivel:'erro',msg:nC?'O empenho informado no contrato ('+c.nEmpenho+') não foi localizado no módulo EMPENHO (EXE, categoria Contratos/Apoio ao Ensino).':'Contrato sem empenho vinculado.'});
   if(nC&&todosEmps.length&&!todosEmps.some(x=>ctNormEmp(x.num)===nC))alerts.push({nivel:'aviso',msg:'O Nº Empenho do contrato ('+c.nEmpenho+') não coincide com nenhum dos empenhos vinculados pelo cadastro do empenho.'});
   todosEmps.filter(x=>x.via==='numero').forEach(x=>alerts.push({nivel:'aviso',msg:'Empenho '+x.num+' sem contrato definido no cadastro do empenho: vínculo inferido pelo Nº Empenho do contrato (nenhum dado foi alterado).'}));
-  ign.forEach(e=>alerts.push({nivel:'aviso',msg:'Empenho '+e.numero+' vinculado ao contrato foi desconsiderado ('+((e.tipoEmp||'EXE')!=='EXE'?'RAP não compõe contratos continuados':'categoria fora de Contratos/Apoio ao Ensino')+').'}));
+  ign.forEach(e=>alerts.push({nivel:'aviso',msg:'Empenho '+e.numero+' vinculado ao contrato foi desconsiderado ('+((e.tipoEmp||'EXE')!=='EXE'?(e.rapAutoEm?'passou a RAP na virada do exercício '+e.rapAutoExercicio+' e não compõe contratos continuados':'RAP não compõe contratos continuados'):'categoria fora de Contratos/Apoio ao Ensino')+').'}));
   const outros=(state.contratos||[]).filter(x=>x.status!=='Excluído'&&x.id!==c.id&&nC&&ctNormEmp(x.nEmpenho)===nC);
   if(outros.length)alerts.push({nivel:'erro',msg:'O mesmo Nº Empenho está informado em outro contrato ('+outros.map(x=>x.nContrato||x.nome).join(', ')+').'});
   emps.forEach(x=>x.alerts.forEach(a=>alerts.push({nivel:a.nivel,msg:'Empenho '+x.num+': '+a.msg})));
@@ -8443,7 +8499,7 @@ function renderCadastroEmpenhos(){
     const saldoColor=t.saldo<=0?'var(--red)':t.saldo<t.totalEmp*0.2?'var(--amber)':'var(--green)';
     const isRAP=e.tipoEmp==='RAP';
     const tipoBadge=isRAP
-      ?`<span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);padding:3px 10px;border-radius:8px;font-size:10px;font-weight:800;letter-spacing:.06em;box-shadow:0 0 8px rgba(139,36,102,.18)">RAP</span>`
+      ?`<span style="background:var(--rap-bg);color:var(--rap-m);border:1px solid var(--rap-border);padding:3px 10px;border-radius:8px;font-size:10px;font-weight:800;letter-spacing:.06em;box-shadow:0 0 8px rgba(139,36,102,.18)">RAP</span>${e.rapAutoEm?`<span title="Reclassificado automaticamente de EXE para RAP na virada do exercício ${e.rapAutoExercicio} (1º de janeiro). Liquidações de exercícios anteriores permanecem EXE." style="font-size:9px;color:var(--rap-m);margin-left:4px;cursor:help">↻ ${e.rapAutoExercicio}</span>`:''}`
       :`<span style="background:var(--exe-bg);color:var(--exe);border:1px solid var(--exe-border);padding:3px 10px;border-radius:8px;font-size:10px;font-weight:800;letter-spacing:.06em;box-shadow:0 0 8px rgba(0,166,81,.18)">EXE</span>`;
     const compLabel=e.competencia?(()=>{const p=e.competencia.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:e.competencia;})():'—';
     const fornNome=e.fornNome||(e.acaoId&&state.acoes.find(a=>a.id===e.acaoId)?.nome)||'—';
@@ -8691,7 +8747,7 @@ function salvarEdicaoEmpenho(){
 
   // ★ ALTERAÇÃO 002 — Validação na edição: bloquear RAP para categorias restritas
   const CATS_APENAS_EXE_EDIT=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS','PASSAGENS','SUPRIMENTOS DE FUNDOS'];
-  if(CATS_APENAS_EXE_EDIT.includes(normalizarCategoria(categoria)) && tipoEmp==='RAP'){
+  if(CATS_APENAS_EXE_EDIT.includes(normalizarCategoria(categoria)) && tipoEmp==='RAP' && !((state.empenhosCad||[]).find(x=>x.id===id)||{}).rapAutoEm){
     toast('❌ Bloqueado: A categoria "'+categoria+'" não permite RAP. Utilize Exercício Corrente (EXE).','warn');
     return;
   }
@@ -11831,6 +11887,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     }
   });
   if(migCount > 0) console.info('[MIGRAÇÃO] Competência preenchida em '+migCount+' empenho(s) legado(s).');
+
+  // 5b) Virada de exercício: empenhos de anos anteriores → RAP (automático, 1x por empenho)
+  try{ viradaExercicio(); }catch(e){ console.error('[EXERCÍCIO] Falha na virada:',e); }
 
   // 6) Persiste estado final e renderiza
   _sbLastChecksum = ''; // força sync inicial para Supabase
