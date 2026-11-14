@@ -1104,7 +1104,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         </div>
       </div>
       <!-- Faixa de valor + Situação do saldo -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1.4fr 1.6fr;gap:10px">
         <div class="field" style="margin:0">
           <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Valor Mínimo (R$)</label>
           <input type="number" id="cemp-f-vmin" placeholder="0,00" oninput="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px" min="0" step="0.01">
@@ -1112,6 +1112,12 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         <div class="field" style="margin:0">
           <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Valor Máximo (R$)</label>
           <input type="number" id="cemp-f-vmax" placeholder="Sem limite" oninput="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px" min="0" step="0.01">
+        </div>
+        <div class="field" style="margin:0">
+          <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Ação Vinculada</label>
+          <select id="cemp-f-acao" onchange="renderCadastroEmpenhos()" style="padding:8px 10px;font-size:13px;width:100%">
+            <option value="">Todas</option>
+          </select>
         </div>
         <div class="field" style="margin:0">
           <label style="font-size:11px;color:var(--text3);margin-bottom:4px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Situação do Saldo</label>
@@ -1326,6 +1332,8 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
   <!-- Filtro global de competência (regra obrigatória AE) -->
   <div class="card" style="padding:10px 14px;margin-bottom:10px;border-color:var(--gold-border);background:var(--gold-bg)">
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.06em;text-transform:uppercase">📅 Exercício:</div>
+      <select id="ae-f-ano" onchange="aeSetExerc(this.value)" style="padding:6px 12px;font-size:12.5px;font-weight:600;background:var(--bg2);border:1px solid var(--gold-border);color:var(--text);border-radius:8px"></select>
       <div style="font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.06em;text-transform:uppercase">📅 Filtrar por Competência:</div>
       <select id="ae-f-comp" onchange="aeAtualizarFiltroComp()" style="padding:6px 12px;font-size:12.5px;font-weight:600;background:var(--bg2);border:1px solid var(--gold-border);color:var(--text);border-radius:8px;min-width:200px">
         <option value="">— Todas as competências —</option>
@@ -1772,6 +1780,7 @@ function _sbSetStatus(cor, texto, tempo){
   if(dot)  dot.style.background  = cores[cor] || cores.gray;
   if(msg)  msg.textContent       = texto;
   if(time) time.textContent      = tempo || '';
+  window._sbEstado = {cor, texto, tempo: tempo||'', ts: Date.now()};   // lido pela auditoria AE
 }
 
 // ─── Salvar no Supabase (upsert) ──────────────────────────
@@ -2728,65 +2737,13 @@ function aeLiquidacoesRegistros(acaoId, comp){
 //   Para empenhosCad: usa e.competencia (campo do módulo Empenho).
 //   Para lançamentos sem empenhosCad: usa l.competencia diretamente.
 // ═══════════════════════════════════════════════════════════════════════════
+// ★ Delegada à fonte única de auditoria (aeDados/ctEmpAud): empenhado = inicial + reforços − anulações.
+// Mantida com a mesma assinatura/retorno (em reais) para consumidores legados (ex.: Relatórios).
 function aeTotaisAcao(acaoId, comp){
-  // ── Fase 1: empenhos via empenhosCad (fonte autoritativa do módulo Empenho) ──
-  let inicialCad   = 0;
-  let reforcosCad  = 0;
-  // Rastreia ids de empenhosCad e números de empenho já contabilizados
-  const empCadIdsContab  = new Set();
-  const empCadNumsContab = new Set();
-
-  (state.empenhosCad||[]).forEach(e=>{
-    if(!empenhoCadAtivo(e)) return;
-    if((e.tipoEmp||'EXE')!=='EXE') return;          // somente EXE no módulo AE
-    if(!aeIsCat(e.categoria||'')) return;             // somente categoria AE
-    if(e.acaoId !== acaoId) return;                   // somente desta ação
-    if(comp && (e.competencia||'') !== comp) return;  // respeita mês de competência
-
-    // Valor inicial do empenho cadastrado (fonte do módulo Empenho)
-    inicialCad += (e.valorInicial||0);
-    empCadIdsContab.add(e.id);
-    if(e.numero) empCadNumsContab.add(e.numero);
-
-    // Reforços: lançamentos vinculados a este empenhosCad com tipoRegistro REFORCO
-    const reforcosDesteEmp = (state.lancamentos||[]).filter(l=>
-      l.status==='Ativo' &&
-      l.tipo==='Empenho' &&
-      (l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO') &&
-      (l.empenhoCadId===e.id || l.referencia===e.numero || l.numeroEmpenho===e.numero)
-    );
-    reforcosCad += reforcosDesteEmp.reduce((s,l)=>s+(l.valor||0),0);
-  });
-
-  // ── Fase 2: lançamentos INICIAIS SEM empenhosCad vinculado (saída direta) ──
-  // Cobre lançamentos criados antes do módulo Empenho ser implantado ou
-  // importados de sistemas externos sem cadastro de empenho.
-  let inicialLancs  = 0;
-  let reforcosLancs = 0;
-
-  (state.lancamentos||[]).forEach(l=>{
-    if(!aeIsEmpenhoLanc(l)) return;
-    if(aeAcaoIdFromLanc(l) !== acaoId) return;
-    if(comp && aeCompFromLanc(l) !== comp) return;
-    // Pular se já contabilizado via empenhosCad (evita double-count)
-    if(l.empenhoCadId && empCadIdsContab.has(l.empenhoCadId)) return;
-    const numEmp = l.referencia||l.numeroEmpenho||'';
-    if(numEmp && empCadNumsContab.has(numEmp)) return;
-    // Lançamento direto sem empenhosCad vinculado
-    if(l.tipoRegistro==='INICIAL') inicialLancs  += (l.valor||0);
-    if(l.tipoRegistro==='REFORCO'||l.tipoRegistro==='REFORÇO') reforcosLancs += (l.valor||0);
-  });
-
-  const inicial  = inicialCad  + inicialLancs;
-  const reforcos = reforcosCad + reforcosLancs;
-  const liqs = aeLiquidacoesRegistros(acaoId, comp);
-  return {
-    inicial,
-    reforcos,
-    empenhado : inicial + reforcos,
-    liquidado : liqs.reduce((s,l)=>s+l.liquidado, 0),
-    pago      : liqs.reduce((s,l)=>s+l.pago,      0)
-  };
+  const D=aeDados(comp?comp.slice(0,4):'todos',comp||'');
+  const l=D.linhas.find(x=>x.a.id===acaoId);
+  const t=l?l.tot:aeSoma([]);
+  return {inicial:t.inicial/100,reforcos:t.reforcos/100,anulacoes:t.anulacoes/100,empenhado:t.atualizado/100,liquidado:t.liquidado/100,pago:t.pago/100};
 }
 function aePrevistoAcao(a,comp){
   if(comp){
@@ -2796,17 +2753,8 @@ function aePrevistoAcao(a,comp){
   return a.previsto||0;
 }
 function aeTotaisGeral(comp){
-  const acoes=(state.acoes||[]).filter(a=>aeAtivo(a));
-  return acoes.reduce((acc,a)=>{
-    const t=aeTotaisAcao(a.id,comp);
-    acc.previsto+=aePrevistoAcao(a,comp);
-    acc.inicial+=t.inicial;
-    acc.reforcos+=t.reforcos;
-    acc.empenhado+=t.empenhado;
-    acc.liquidado+=t.liquidado;
-    acc.pago+=t.pago;
-    return acc;
-  },{previsto:0,inicial:0,reforcos:0,empenhado:0,liquidado:0,pago:0,recebido:sum(aeEntradas(comp))});
+  const D=aeDados(comp?comp.slice(0,4):'todos',comp||''),t=D.tot;
+  return {previsto:D.prevTot/100,inicial:t.inicial/100,reforcos:t.reforcos/100,anulacoes:t.anulacoes/100,empenhado:t.atualizado/100,liquidado:t.liquidado/100,pago:t.pago/100,recebido:D.recebido/100};
 }
 function sum(arr){return arr.reduce((s,l)=>s+(l.valor||0),0)}
 
@@ -4815,7 +4763,7 @@ function ctLiqDoEmp(q,e){
 }
 function ctDataBR(s){const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[3]+'/'+m[2]+'/'+m[1]:(s||'—');}
 // Auditoria de UM empenho cadastrado
-function ctEmpAud(e){
+function ctEmpAud(e,opt){
   const L=state.lancamentos||[],meu=l=>ctLancDoEmp(l,e);
   const lEmp=L.filter(l=>l.status==='Ativo'&&l.tipo==='Empenho'&&meu(l));
   const isIni=l=>l.tipoRegistro==='INICIAL';
@@ -4828,16 +4776,23 @@ function ctEmpAud(e){
   const inicial=iniCad>0?iniCad:iniLanc;
   const reforcos=S(lRef),anulacoes=S(lAnu);
   const liqV=q=>ctCents(valorLiquidacaoParaEmpenho(q,e.numero));
-  const liquidado=liqs.reduce((s,q)=>s+liqV(q),0);
-  const pago=liqs.filter(q=>q.pago==='Sim').reduce((s,q)=>s+liqV(q),0);
+  // Metodologia histórica do módulo AE: lançamento tipo 'Liquidação' SEM registro espelho em state.liquidacoes
+  // (saída direta/legado) é considerado quando o empenho não tem liquidação detalhada. Só com opt.legadoLiq.
+  const _todosIdsLiq=new Set((state.liquidacoes||[]).map(q=>q.id));
+  const fbLiq=(opt&&opt.legadoLiq&&!liqs.length)?L.filter(l=>l.status==='Ativo'&&l.tipo==='Liquidação'&&meu(l)&&!(l.liquidacaoId&&_todosIdsLiq.has(l.liquidacaoId))):[];
+  const fbV=S(fbLiq);
+  const liquidado=liqs.reduce((s,q)=>s+liqV(q),0)+fbV;
+  // Pago: por padrão o valor bruto da liquidação paga; com opt.pagoLiquido (metodologia do módulo AE/Dashboard) usa o valor líquido
+  const pagoV=q=>(opt&&opt.pagoLiquido&&q.valorLiquido!=null&&q.valorLiquido!=='')?ctCents(q.valorLiquido):liqV(q);
+  const pago=liqs.filter(q=>q.pago==='Sim').reduce((s,q)=>s+pagoV(q),0);
   const atualizado=inicial+reforcos-anulacoes;
   const saldo=atualizado-liquidado;
   // conferências cruzadas (outras fontes que o sistema grava)
   const mod=calcEmpenhoTotais(e.id,e.numero);               // o que o módulo EMPENHO exibe
   const saldoModulo=ctCents(mod.saldo);
   const ltLiq=L.filter(l=>l.status==='Ativo'&&(l.tipo==='Liquidação'||l.tipo==='Pagamento')&&l.liquidacaoId&&meu(l));
-  const ltSemLiq=L.filter(l=>l.status==='Ativo'&&(l.tipo==='Liquidação'||l.tipo==='Pagamento')&&!l.liquidacaoId&&meu(l));
-  const liqLanc=S(ltLiq);
+  const ltSemLiq=L.filter(l=>l.status==='Ativo'&&(l.tipo==='Liquidação'||l.tipo==='Pagamento')&&!l.liquidacaoId&&meu(l)&&!fbLiq.includes(l));
+  const liqLanc=S(ltLiq)+fbV;
   // alertas
   const alerts=[];
   if(saldo<0)alerts.push({cod:'SALDO_NEG',nivel:'erro',msg:'Saldo negativo: liquidado superior ao valor atualizado do empenho.',origem:'Liquidação superior ao valor atualizado, ou anulação lançada depois de liquidações.'});
@@ -4851,6 +4806,7 @@ function ctEmpAud(e){
   }
   if(liquidado!==liqLanc)alerts.push({cod:'DIV_LIQ',nivel:'aviso',msg:'Total liquidado ('+ctMoney(liquidado)+') difere dos lançamentos de liquidação/pagamento ('+ctMoney(liqLanc)+').',origem:'Lançamento fora de sincronia com a liquidação (edição/exclusão parcial).'});
   if(iniCad>0&&iniLanc!==iniCad)alerts.push({cod:'DIV_INI',nivel:'aviso',msg:'Valor inicial do cadastro ('+ctMoney(iniCad)+') difere do lançamento INICIAL ('+ctMoney(iniLanc)+').',origem:iniLanc===0?'Lançamento INICIAL ausente.':'Lançamento INICIAL não acompanhou edição do cadastro.'});
+  if(fbLiq.length)alerts.push({cod:'LIQ_LEGADO',nivel:'aviso',msg:fbLiq.length+' liquidação(ões) lançada(s) diretamente, sem registro no módulo Liquidação ('+ctMoney(fbV)+'): incluída(s) no liquidado, sem informação de pagamento.',origem:'Registro legado/saída direta — metodologia histórica do módulo AE.'});
   if(ltSemLiq.length)alerts.push({cod:'MOV_SEM_ORIGEM',nivel:'aviso',msg:ltSemLiq.length+' lançamento(s) de liquidação/pagamento sem liquidação de origem ('+ctMoney(S(ltSemLiq))+'). Não compõem o saldo do empenho.',origem:'Registro legado ou lançamento direto sem a liquidação detalhada.'});
   if(lOutros.length)alerts.push({cod:'TIPO_NAO_CLASSIF',nivel:'aviso',msg:lOutros.length+' lançamento(s) de empenho com tipo de registro não classificado ('+ctMoney(S(lOutros))+') — não somados.',origem:'tipoRegistro desconhecido.'});
   const dupK=new Map();let nDup=0;
@@ -4863,12 +4819,16 @@ function ctEmpAud(e){
   movs.push({t:'ini',tipo:'Valor inicial',sinal:1,v:inicial,data:e.data||'',comp:e.competencia||'',orig:iniCad>0?'Cadastro do empenho':'Lançamento INICIAL'});
   lRef.forEach(l=>movs.push({t:'ref',tipo:'Reforço',sinal:1,v:ctCents(l.valor),data:l.data||'',comp:l.competencia||e.competencia||'',orig:'Lançamento '+l.id}));
   lAnu.forEach(l=>movs.push({t:'anu',tipo:'Anulação',sinal:-1,v:ctCents(l.valor),data:l.data||'',comp:l.competencia||e.competencia||'',orig:'Lançamento '+l.id}));
+  fbLiq.forEach(l=>movs.push({t:'liq',tipo:'Liquidação (lançamento direto)',sinal:-1,v:ctCents(l.valor),data:l.data||'',comp:l.competencia||e.competencia||'',orig:'Lançamento '+l.id,pago:false}));
   liqs.forEach(q=>movs.push({t:'liq',tipo:q.pago==='Sim'?'Liquidação (paga)':'Liquidação',sinal:-1,v:liqV(q),data:q.data||'',comp:q.competencia||e.competencia||'',orig:'Liquidação '+q.id+(q.nf?' · NF '+q.nf:''),pago:q.pago==='Sim'}));
   const ord={ini:0,ref:1,anu:2,liq:3};
   movs.sort((a,b)=>String(a.data).localeCompare(String(b.data))||ord[a.t]-ord[b.t]);
   let acc=0;movs.forEach(m=>{acc+=m.sinal*m.v;m.saldoAcum=acc;});
   const ult=movs.map(m=>m.data).filter(Boolean).sort().pop()||'';
-  return{e,id:e.id,num:e.numero,ano:ctAnoEmp(e),inicial,reforcos,anulacoes,atualizado,liquidado,pago,saldo,saldoModulo,liqLanc,iniCad,iniLanc,
+  const _fk=q=>String(q.cnpj||'').replace(/\D/g,'')||String(q.fornNome||'').trim().toUpperCase();
+  const fav=[...new Set(liqs.map(_fk).filter(Boolean))];
+  const retencoes=liqs.filter(q=>q.pago==='Sim').reduce((s,q)=>s+Math.max(0,liqV(q)-pagoV(q)),0);
+  return{e,id:e.id,num:e.numero,ano:ctAnoEmp(e),qtdLiq:liqs.length+fbLiq.length,qtdPagas:liqs.filter(q=>q.pago==='Sim').length,fav,retencoes,inicial,reforcos,anulacoes,atualizado,liquidado,pago,saldo,saldoModulo,liqLanc,iniCad,iniLanc,
     alerts,nivel:alerts.some(a=>a.nivel==='erro')?'erro':(alerts.length?'aviso':'ok'),movs,ultimaMov:ult,tsModif:e.tsModif||e.ts||''};
 }
 // Empenhos de um contrato: vínculo oficial = empenho.contratoId; na ausência dele, o Nº Empenho informado no contrato
@@ -5832,43 +5792,31 @@ let _aeFiltroComp=''; // '' = todas, 'YYYY-MM' = competência específica
 function aeAtualizarFiltroComp(){
   const sel=document.getElementById('ae-f-comp');
   _aeFiltroComp=sel?.value||'';
-  // Re-renderiza a aba ativa
-  const tabs=['acoes','gerenciar','detalhe','mensal','dashboard'];
-  for(const t of tabs){
-    const pane=document.getElementById('ae-'+t);
-    if(pane&&pane.style.display==='block'){
-      if(t==='acoes')renderAeAcoes();
-      else if(t==='detalhe')renderAeDetalhe();
-      else if(t==='mensal')renderAeMensal();
-      else if(t==='dashboard')renderAeDash();
-      break;
-    }
-  }
+  if(_aeFiltroComp)_aeExerc=_aeFiltroComp.slice(0,4);   // competência escolhida define o exercício
+  aePopularFiltroComp();
+  aeRefreshAtivo();
 }
-
+function aeSetExerc(v){
+  _aeExerc=v||'todos';
+  if(_aeFiltroComp&&_aeExerc!=='todos'&&_aeFiltroComp.slice(0,4)!==_aeExerc)_aeFiltroComp='';
+  aePopularFiltroComp();
+  aeRefreshAtivo();
+}
 function aePopularFiltroComp(){
-  const sel=document.getElementById('ae-f-comp');
+  const sel=document.getElementById('ae-f-comp'),selA=document.getElementById('ae-f-ano');
   if(!sel)return;
-  const cur=sel.value;
-  const comps=new Set();
-  // Coleta competências dos créditos, empenhos e liquidações AE.
-  (state.empenhosCad||[]).forEach(e=>{
-    if(aeAtivo(e)&&aeIsCat(e.categoria)&&e.competencia)comps.add(e.competencia);
-  });
-  (state.lancamentos||[]).forEach(l=>{
-    if(l.status==='Ativo'&&aeIsCat(l.categoria)&&l.competencia)comps.add(l.competencia);
-  });
-  (state.liquidacoes||[]).forEach(l=>{
-    const c=aeCompFromLiq(l);
-    if(aeAtivo(l)&&c&&(aeIsCat(l.categoria)||aeIsCat(aeEmpCadFromLiq(l)?.categoria)))comps.add(c);
-  });
-  const compsSorted=[...comps].sort().reverse();
-  sel.innerHTML='<option value="">— Todas as competências —</option>'+compsSorted.map(c=>{
-    const p=c.split('-');
-    const label=p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:c;
-    return`<option value="${c}" ${c===cur?'selected':''}>${label}</option>`;
-  }).join('');
-  if(cur)sel.value=cur;
+  const cur=_aeFiltroComp,comps=new Set(),anos=new Set([String(new Date().getFullYear())]);
+  aeEmpsEscopo().forEach(e=>{if(aeCompValida(e.competencia))comps.add(e.competencia);const m=String(e.competencia||e.data||e.numero||'').match(/^(\d{4})/);if(m)anos.add(m[1]);});
+  (state.lancamentos||[]).forEach(l=>{if(l.status==='Ativo'&&l.tipo==='Entrada'&&aeIsCat(l.categoria)){const c=aeEntComp(l);if(aeCompValida(c)){comps.add(c);anos.add(c.slice(0,4));}}});
+  if(selA){
+    const ys=[...anos].sort().reverse();
+    if(_aeExerc!=='todos'&&!ys.includes(_aeExerc))ys.unshift(_aeExerc);
+    selA.innerHTML='<option value="todos">Todos</option>'+ys.map(y=>`<option value="${y}" ${y===_aeExerc?'selected':''}>${y}</option>`).join('');
+    selA.value=_aeExerc;
+  }
+  const lista=[...comps].filter(c=>_aeExerc==='todos'||c.slice(0,4)===_aeExerc).sort().reverse();
+  sel.innerHTML='<option value="">— Todas as competências —</option>'+lista.map(c=>{const p=c.split('-');return`<option value="${c}" ${c===cur?'selected':''}>${MESES_FULL[parseInt(p[1])-1]}/${p[0]}</option>`;}).join('');
+  if(cur&&lista.includes(cur))sel.value=cur;else _aeFiltroComp='';
 }
 
 function setAeTab(t){
@@ -5893,22 +5841,23 @@ function renderAeGerenciar(){
   const el=document.getElementById('ae-gerenciar');
   if(!el)return;
   const acoes=state.acoes.filter(a=>aeAtivo(a));
+  const _D=aeDados();
   const editando=_aeEditId?state.acoes.find(a=>a.id===_aeEditId):null;
   const pm=Array.isArray(editando?.previstoMensalArr)?editando.previstoMensalArr:Array(12).fill(0);
   const MESES_FORM=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const tiposAe=['Benefício','Monitoria','Eventos/Outros'];
 
-  el.innerHTML=`
+  el.innerHTML=aeTopoHtml(_D)+`
     <!-- FORMULÁRIO -->
     <div class="card" style="border-color:${_aeEditId?'var(--amber-border)':'var(--green-border)'}">
       <div class="card-title">
         <span class="card-title-dot" style="background:${_aeEditId?'var(--amber)':'var(--green)'}"></span>
-        ${_aeEditId?'✎ Editando Ação — <span style="color:var(--amber)">'+(editando?editando.nome:'')+'</span>':'+ Nova Ação de Assistência Estudantil'}
+        ${_aeEditId?'✎ Editando Ação — <span style="color:var(--amber)">'+ctEsc(editando?editando.nome:'')+'</span>':'+ Nova Ação de Assistência Estudantil'}
       </div>
       <div class="form-grid cols2">
         <div class="field">
           <label>Nome da Ação<span class="required-mark">*</span></label>
-          <input id="gae-nome" value="${editando?editando.nome||'':''}" placeholder="Ex: Auxílio Moradia">
+          <input id="gae-nome" value="${ctEsc(editando?editando.nome||'':'')}" placeholder="Ex: Auxílio Moradia">
         </div>
         <div class="field">
           <label>Tipo</label>
@@ -5932,7 +5881,7 @@ function renderAeGerenciar(){
       </div>
       <div class="field" style="margin-top:6px">
         <label>Descrição</label>
-        <textarea id="gae-descricao" rows="2" placeholder="Descrição opcional da ação">${editando?editando.descricao||'':''}</textarea>
+        <textarea id="gae-descricao" rows="2" placeholder="Descrição opcional da ação">${ctEsc(editando?editando.descricao||'':'')}</textarea>
       </div>
       <div class="btn-row" style="margin-top:12px">
         <button class="btn ${_aeEditId?'btn-amber':'btn-primary'}" onclick="gae_salvar()">
@@ -5955,36 +5904,37 @@ function renderAeGerenciar(){
             <th>ID</th>
             <th>Nome da Ação</th>
             <th>Tipo</th>
-            <th class="r">Previsto Anual</th>
+            <th class="r">Previsto</th>
             <th class="r">Empenhado</th>
+            <th class="r">Liquidado</th>
             <th class="r">Pago</th>
             <th>Status</th>
+            <th>Integridade</th>
             <th style="text-align:center;min-width:120px">Ações</th>
           </tr>
         </thead>
         <tbody>
           ${acoes.length?acoes.map(a=>{
-            const t=aeTotaisAcao(a.id,'');
-            const emp=t.empenhado;
-            const pag=t.pago;
-            const prev=a.previsto||0;
-            const pct=prev>0?Math.round(emp/prev*100):0;
+            const L=_D.linhas.find(x=>x.a.id===a.id),t=L.tot,pv=L.pv;
+            const pct=pv.aplica&&pv.v>0?aePctN(t.atualizado,pv.v):0;
             const isEditing=_aeEditId===a.id;
             return`<tr style="${isEditing?'background:rgba(255,171,64,0.06);border-left:2px solid var(--amber)':''}">
-              <td><code style="font-size:10px;color:var(--text3)">${a.id}</code></td>
-              <td><strong>${a.nome}</strong>${a.descricao?`<div style="font-size:10.5px;color:var(--text3);margin-top:1px">${a.descricao}</div>`:''}
-              </td>
-              <td><span class="kpi-badge badge-blue">${a.tipo||'—'}</span></td>
-              <td class="r text-green">${fmtBR(prev)}</td>
-              <td class="r text-blue">${fmtBR(emp)}</td>
-              <td class="r text-green">${fmtBR(pag)}</td>
-              <td>${prev>0?semaforo(pct):'<span class="kpi-badge badge-gold">S/ previsto</span>'}</td>
+              <td><code style="font-size:10px;color:var(--text3)">${ctEsc(a.id)}</code></td>
+              <td><strong>${ctEsc(a.nome)}</strong>${a.descricao?`<div style="font-size:10.5px;color:var(--text3);margin-top:1px">${ctEsc(a.descricao)}</div>`:''}</td>
+              <td><span class="kpi-badge badge-blue">${ctEsc(a.tipo||'—')}</span></td>
+              <td class="r text-green">${pv.aplica?ctMoney(pv.v):(ctCents(a.previsto)?ctMoney(ctCents(a.previsto))+'<div style="font-size:9px;color:var(--text3)">anual</div>':'—')}</td>
+              <td class="r text-blue">${ctMoney(t.atualizado)}</td>
+              <td class="r" style="color:var(--amber)">${ctMoney(t.liquidado)}</td>
+              <td class="r text-green">${ctMoney(t.pago)}</td>
+              <td>${pv.aplica&&pv.v>0?semaforo(pct):'<span class="kpi-badge badge-gold">S/ previsto</span>'}</td>
+              <td>${ctSelo(L.nivel,L.alerts.map(z=>z.msg).join(' | '))}<div style="font-size:9px;color:var(--text3)">${ctDataBR(L.ult)}</div></td>
               <td style="text-align:center;white-space:nowrap">
                 <button class="btn btn-amber btn-xs" onclick="gae_editar('${a.id}')" title="Editar ação" style="margin-right:4px">✎ Editar</button>
-                <button class="btn btn-red btn-xs" onclick="gae_excluir('${a.id}','${a.nome.replace(/'/g,"\\'")}')" title="Excluir ação">✕ Excluir</button>
+                <button class="btn btn-red btn-xs" onclick="gae_excluir('${a.id}')" title="Excluir ação">✕ Excluir</button>
               </td>
             </tr>`;
-          }).join(''):`<tr class="empty-row"><td colspan="8">Nenhuma ação cadastrada. Use o formulário acima para incluir.</td></tr>`}
+          }).join(''):`<tr class="empty-row"><td colspan="10">Nenhuma ação cadastrada. Use o formulário acima para incluir.</td></tr>`}
+          ${acoes.length?`<tr style="font-weight:700;background:var(--bg4);border-top:2px solid var(--gold-border)"><td colspan="3" style="color:var(--gold)">TOTAIS (${acoes.length} ação(ões) · ${ctEsc(aeEscopoTxt(_D))})</td><td class="r">${aePv(_D,_D.prevTot)}</td><td class="r text-blue">${ctMoney(_D.tot.atualizado)}</td><td class="r" style="color:var(--amber)">${ctMoney(_D.tot.liquidado)}</td><td class="r text-green">${ctMoney(_D.tot.pago)}</td><td colspan="3"></td></tr>`:''}
         </tbody>
       </table>
     </div>
@@ -6023,8 +5973,12 @@ function gae_salvar(){
   if(!nome){toast('Nome da ação é obrigatório','warn');return;}
   const tipo=document.getElementById('gae-tipo')?.value||'Benefício';
   const desc=(document.getElementById('gae-descricao')?.value||'').trim();
-  const pm=Array.from({length:12},(_,i)=>parseFloat(document.getElementById('gae-m'+i)?.value)||0);
-  const prevAnual=pm.reduce((s,v)=>s+v,0);
+  const pmRaw=Array.from({length:12},(_,i)=>parseFloat(document.getElementById('gae-m'+i)?.value)||0);
+  if(pmRaw.some(v=>v<0)){toast('Valores previstos não podem ser negativos','warn');return;}
+  const pm=pmRaw.map(v=>ctCents(v)/100);                       // centavos exatos
+  const prevAnual=pm.reduce((s,v)=>s+ctCents(v),0)/100;
+  const nomeN=x=>String(x||'').trim().toUpperCase().replace(/\s+/g,' ');
+  if(state.acoes.some(a=>aeAtivo(a)&&a.id!==_aeEditId&&nomeN(a.nome)===nomeN(nome)))toast('Atenção: já existe outra ação ativa com este nome (o vínculo é feito pelo ID).','warn');
   if(_aeEditId){
     const idx=state.acoes.findIndex(a=>a.id===_aeEditId);
     if(idx>=0){
@@ -6064,8 +6018,10 @@ function gae_limpar(){
 
 function gae_excluir(id,nome){
   _gaePendingDeleteId=id;
+  const ac=state.acoes.find(a=>a.id===id);nome=nome||(ac&&ac.nome)||'';
+  const nEmp=(state.empenhosCad||[]).filter(e=>empenhoCadAtivo(e)&&e.acaoId===id).length;
   const msg=document.getElementById('gae-confirm-msg');
-  if(msg)msg.innerHTML=`A ação <strong style="color:var(--text)">${nome}</strong> será marcada como excluída.<br>Os lançamentos vinculados serão preservados.`;
+  if(msg)msg.innerHTML=`A ação <strong style="color:var(--text)">${ctEsc(nome)}</strong> será marcada como excluída.<br>Os lançamentos vinculados serão preservados.${nEmp?`<br><span style="color:var(--amber)">${nEmp} empenho(s) ficarão sem ação ativa e passarão a ser sinalizados na auditoria.</span>`:''}`;
   const overlay=document.getElementById('gae-confirm-overlay');
   if(overlay){overlay.style.display='flex';}
 }
@@ -6094,177 +6050,343 @@ function gae_confirmarExclusao(){
   renderAeAcoes();
   toast('Ação "'+nomeAcao+'" excluída','warn');
 }
+// ═══════════════════════════════════════════════════════════════════════════
+//  ASSISTÊNCIA ESTUDANTIL — AUDITORIA · FONTE ÚNICA DE CÁLCULO (centavos inteiros)
+//  Todas as 5 abas consomem aeDados(): um único conjunto de empenhos auditados por ctEmpAud().
+//    Empenhado (atualizado) = Valor inicial + Reforços − Anulações
+//    Saldo a liquidar       = Empenhado atualizado − Liquidado        (pode ser negativo: é sinalizado)
+//    Saldo a pagar          = Liquidado − Pago
+//    % execução             = Liquidado ÷ Empenhado atualizado        % pagamento = Pago ÷ Liquidado
+//    Saldo não empenhado    = Previsto − Empenhado atualizado
+//  Mapeamento (o módulo não tem campo "disponibilizado" por ação): disponibilizado = valor empenhado atualizado.
+//  Competência: todo valor do empenho (inicial, reforços, anulações, liquidações, pagos) é apurado no mês de
+//  competência do EMPENHO cadastrado — regra funcional já vigente no módulo e mantida.
+//  Previsto: a ação não possui campo de exercício; o previsto é aplicado apenas ao exercício corrente.
+//  Beneficiários: o módulo não registra beneficiários; são exibidos "favorecidos distintos" (CNPJ/CPF das liquidações).
+// ═══════════════════════════════════════════════════════════════════════════
+let _aeExerc=String(new Date().getFullYear());
+const AE_OPT={legadoLiq:true,pagoLiquido:true};
+const AE_MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function aeCompValida(c){return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(c||''));}
+function aeEmpsEscopo(){
+  return (state.empenhosCad||[]).filter(e=>empenhoCadAtivo(e)&&aeIsCat(e.categoria||'')&&((e.tipoEmp||'EXE')==='EXE'||(e.tipoEmp==='RAP'&&e.rapAutoEm)));
+}
+function aeSoma(a){
+  const t=ctSomaAud(a);t.qtdLiq=0;t.qtdPagas=0;t.retencoes=0;const f=new Set();
+  a.forEach(x=>{t.qtdLiq+=x.qtdLiq;t.qtdPagas+=x.qtdPagas;t.retencoes+=x.retencoes;x.fav.forEach(k=>f.add(k));});
+  t.fav=f.size;t.aPagar=t.liquidado-t.pago;return t;
+}
+function aePrevInfo(a,ex,comp){
+  const cur=new Date().getFullYear();
+  const pm=(Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0)).map(ctCents);
+  const soma=pm.reduce((s,v)=>s+v,0),anual=soma||ctCents(a.previsto);
+  if(comp){if(+comp.slice(0,4)!==cur)return{aplica:false,v:0,pm};return{aplica:true,v:pm[+comp.slice(5)-1]||0,pm};}
+  if(ex==='todos'||+ex!==cur)return{aplica:false,v:0,pm};
+  return{aplica:true,v:anual,pm};
+}
+function aeBuckets(emps,ano){
+  const mk=()=>({ini:0,ref:0,anu:0,liq:0,pago:0,n:0});
+  const m=Array.from({length:12},mk),outros=mk(),sem=mk();
+  emps.forEach(x=>{const c=x.e.competencia;
+    const b=!aeCompValida(c)?sem:(c.slice(0,4)===String(ano)?m[+c.slice(5)-1]:outros);
+    b.ini+=x.inicial;b.ref+=x.reforcos;b.anu+=x.anulacoes;b.liq+=x.liquidado;b.pago+=x.pago;b.n++;});
+  return{m,outros,sem};
+}
+function aeBSum(B){const t={ini:0,ref:0,anu:0,liq:0,pago:0,n:0};[...B.m,B.outros,B.sem].forEach(b=>{for(const k in t)t[k]+=b[k];});return t;}
+function aeAnoGrade(D){return D.comp?D.comp.slice(0,4):(D.ex!=='todos'?String(D.ex):String(new Date().getFullYear()));}
+function aeEntComp(l){const c=l.competencia||'';return aeCompValida(c)?c:String(l.data||'').slice(0,7);}
+function aeEntradasEsc(ex,comp){return aeEntradas('').filter(l=>{const c=aeEntComp(l);return comp?c===comp:(ex==='todos'||c.slice(0,4)===String(ex));});}
+function aeAcaoAud(a,sel,todosAll,ex,comp,acoes){
+  const emps=sel.filter(x=>x.e.acaoId===a.id),tot=aeSoma(emps),pv=aePrevInfo(a,ex,comp),alerts=[];
+  const nomeN=s=>String(s||'').trim().toUpperCase().replace(/\s+/g,' ');
+  if(acoes.filter(o=>nomeN(o.nome)===nomeN(a.nome)).length>1)alerts.push({nivel:'aviso',msg:'Nome de ação repetido em outra ação ativa (a identificação é feita pelo ID, não pelo nome).'});
+  if(!todosAll.some(x=>x.e.acaoId===a.id))alerts.push({nivel:'aviso',msg:'Ação sem empenhos vinculados.'});
+  if(pv.aplica&&!pv.v&&tot.atualizado>0)alerts.push({nivel:'aviso',msg:'Há empenho no período, mas a ação não tem valor previsto cadastrado para ele.'});
+  if(tot.pago>tot.liquidado)alerts.push({nivel:'erro',msg:'Pago ('+ctMoney(tot.pago)+') superior ao liquidado ('+ctMoney(tot.liquidado)+').'});
+  if(tot.retencoes>0)alerts.push({nivel:'info',msg:'Pago considera o valor líquido das liquidações pagas; '+ctMoney(tot.retencoes)+' de retenções permanecem em "saldo a pagar".'});
+  emps.forEach(x=>{
+    if(!aeCompValida(x.e.competencia))alerts.push({nivel:'aviso',msg:'Empenho '+x.num+': competência ausente ou inválida — fora da grade mensal.'});
+    x.alerts.forEach(z=>alerts.push({nivel:z.nivel,msg:'Empenho '+x.num+': '+z.msg,origem:z.origem,cod:z.cod}));
+  });
+  const nivel=alerts.some(z=>z.nivel==='erro')?'erro':(alerts.some(z=>z.nivel==='aviso')?'aviso':'ok');
+  const ult=emps.map(x=>x.ultimaMov).concat([String(a.tsModif||'').slice(0,10)]).filter(Boolean).sort().pop()||'';
+  return{a,emps,tot,pv,alerts,nivel,ult};
+}
+function aeDados(ex,comp){
+  ex=ex===undefined?_aeExerc:ex;comp=comp===undefined?_aeFiltroComp:comp;
+  const todosAll=aeEmpsEscopo().map(e=>ctEmpAud(e,AE_OPT));
+  const sel=todosAll.filter(x=>comp?(x.e.competencia||'')===comp:(ex==='todos'||x.ano===String(ex)));
+  const acoes=(state.acoes||[]).filter(aeAtivo),ids=new Set(acoes.map(a=>a.id));
+  const linhas=acoes.map(a=>aeAcaoAud(a,sel,todosAll,ex,comp,acoes));
+  const semAcao=sel.filter(x=>!ids.has(x.e.acaoId));
+  const comAcao=sel.filter(x=>ids.has(x.e.acaoId));
+  const ent=aeEntradasEsc(ex,comp),recebido=ent.reduce((s,l)=>s+ctCents(l.valor),0);
+  const entSemComp=ent.filter(l=>!aeCompValida(l.competencia)).length;
+  const prevTot=linhas.reduce((s,l)=>s+l.pv.v,0),prevAplica=linhas.some(l=>l.pv.aplica);
+  const nExcl=(state.acoes||[]).filter(a=>!aeAtivo(a)).length;
+  return{ex,comp,todosAll,sel,acoes,ids,linhas,semAcao,comAcao,tot:aeSoma(comAcao),totSemAcao:aeSoma(semAcao),recebido,entSemComp,prevTot,prevAplica,nExcl};
+}
+// ── matriz de conferência: mesmo indicador obtido por 5 caminhos de agregação distintos ──
+function aeMatriz(D){
+  const keys=['inicial','reforcos','anulacoes','atualizado','liquidado','pago'];
+  const nomes={prev:'Valor previsto',n:'Empenhos',inicial:'Valor inicial',reforcos:'Reforços',anulacoes:'Anulações',atualizado:'Empenhado (atualizado)',liquidado:'Liquidado',pago:'Pago',saldo:'Saldo a liquidar',aPagar:'Saldo a pagar'};
+  const z=()=>({prev:0,n:0,inicial:0,reforcos:0,anulacoes:0,atualizado:0,liquidado:0,pago:0});
+  const fin=o=>{o.saldo=o.atualizado-o.liquidado;o.aPagar=o.liquidado-o.pago;return o;};
+  const add=(o,t)=>{keys.concat(['n']).forEach(k=>o[k]+=t[k]||0);};
+  const vg=z(),ger=z(),det=z(),men=z(),dash=z();
+  D.linhas.forEach(l=>{add(vg,l.tot);vg.prev+=l.pv.v;});
+  const g=new Map();D.comAcao.forEach(x=>{const o=g.get(x.e.acaoId)||[];o.push(x);g.set(x.e.acaoId,o);});
+  g.forEach((emps,id)=>{add(ger,aeSoma(emps));const a=D.acoes.find(y=>y.id===id);ger.prev+=aePrevInfo(a,D.ex,D.comp).v;});
+  const ano=aeAnoGrade(D);
+  D.linhas.forEach(l=>{const t=aeBSum(aeBuckets(l.emps,ano));det.n+=t.n;det.inicial+=t.ini;det.reforcos+=t.ref;det.anulacoes+=t.anu;det.liquidado+=t.liq;det.pago+=t.pago;det.atualizado+=t.ini+t.ref-t.anu;
+    if(l.pv.aplica){if(D.comp)det.prev+=l.pv.v;else det.prev+=l.pv.pm.reduce((s,v)=>s+v,0)||ctCents(l.a.previsto);}});
+  const tm=aeBSum(aeBuckets(D.comAcao,ano));men.n=tm.n;men.inicial=tm.ini;men.reforcos=tm.ref;men.anulacoes=tm.anu;men.liquidado=tm.liq;men.pago=tm.pago;men.atualizado=tm.ini+tm.ref-tm.anu;
+  men.prev=D.linhas.reduce((s,l)=>s+(l.pv.aplica?(D.comp?l.pv.v:(l.pv.pm.reduce((q,v)=>q+v,0)||ctCents(l.a.previsto))):0),0);
+  const porTipo=new Map();D.linhas.forEach(l=>{const k=l.a.tipo||'—';const o=porTipo.get(k)||{emps:[],prev:0};o.emps=o.emps.concat(l.emps);o.prev+=l.pv.v;porTipo.set(k,o);});
+  porTipo.forEach(o=>{add(dash,aeSoma(o.emps));dash.prev+=o.prev;});
+  [vg,ger,det,men,dash].forEach(fin);
+  const linhas=['prev','n'].concat(keys,['saldo','aPagar']).map(k=>({k,nome:nomes[k],vg:vg[k],ger:ger[k],det:det[k],men:men[k],dash:dash[k],
+    ok:vg[k]===ger[k]&&ger[k]===det[k]&&det[k]===men[k]&&men[k]===dash[k],cnt:k==='n'}));
+  return{linhas,ok:linhas.every(l=>l.ok),nDiv:linhas.filter(l=>!l.ok).length};
+}
+function aeAuditoriaLinhas(D){
+  const out=[];
+  D.linhas.forEach(l=>{
+    if(!l.emps.length)out.push({acao:l.a.nome,aid:l.a.id,emp:'—',sem:true,alerts:l.alerts});
+    l.emps.forEach(x=>out.push({acao:l.a.nome,aid:l.a.id,emp:x.num,x,alerts:x.alerts}));
+  });
+  D.semAcao.forEach(x=>out.push({acao:'(sem ação válida)',aid:'',emp:x.num,x,alerts:x.alerts.concat([{nivel:'erro',cod:'SEM_ACAO',msg:'Empenho de Assistência Estudantil sem ação válida ('+(x.e.acaoId?'ação excluída ou inexistente':'acaoId ausente')+').',origem:'O empenho não está vinculado a uma ação ativa; fica fora dos totais por ação.'}])}));
+  return out;
+}
+const AE_PROV={SALDO_NEG:'Conferir liquidações e anulações do empenho; regularizar junto à unidade responsável.',DIV_MODULO:'Conferir o vínculo (ID × número) das liquidações e lançamentos do empenho.',DIV_LIQ:'Reconciliar lançamento e liquidação (edição/exclusão parcial).',DIV_INI:'Conferir valor inicial do cadastro × lançamento INICIAL.',LIQ_LEGADO:'Registrar a liquidação no módulo Liquidação.',MOV_SEM_ORIGEM:'Identificar a liquidação de origem do lançamento.',SEM_ACAO:'Vincular o empenho a uma ação ativa (edição do empenho).',DUP_MOV:'Verificar e excluir a duplicidade, se confirmada.'};
+function aeSyncHtml(){
+  const s=window._sbEstado;
+  if(!s)return'<span class="ctx-badge-na">Nuvem: sem informação</span>';
+  const m={green:['ctx-badge-ok','☁ Salvo'+(s.tempo?' às '+s.tempo:'')],red:['ctx-badge-err','☁ Falha de sincronização'],amber:['ctx-badge-pend','☁ Sincronizando…'],blue:['ctx-badge-pend','☁ Conectando…']}[s.cor]||['ctx-badge-na','☁ '+s.texto];
+  return`<span class="${m[0]}" title="${ctEsc(s.texto)}">${m[1]}</span>`;
+}
+function aeAlertasHtml(alerts,vazio){
+  if(!alerts.length)return vazio===false?'':'<div class="info-box info" style="margin:0 0 10px"><span class="info-icon">✓</span><div>Nenhuma inconsistência identificada.</div></div>';
+  const cls=alerts.some(a=>a.nivel==='erro')?'danger':(alerts.some(a=>a.nivel==='aviso')?'warn':'info');
+  return`<div class="info-box ${cls}" style="margin:0 0 10px"><span class="info-icon">${cls==='info'?'ℹ':'⚠'}</span><div><strong>Conferência de integridade — ${alerts.length} ocorrência(s):</strong><ul style="margin:6px 0 0 18px;padding:0">${alerts.map(a=>`<li>${a.nivel==='erro'?'✕':a.nivel==='info'?'ℹ':'⚠'} ${ctEsc(a.msg)}${a.origem?` <em style="color:var(--text3)">Possível origem: ${ctEsc(a.origem)}</em>`:''}</li>`).join('')}</ul></div></div>`;
+}
+function aePct2(a,b){return b>0?(Math.round(a*10000/b)/100).toLocaleString('pt-BR',{maximumFractionDigits:2})+'%':'—';}
+function aePctN(a,b){return b>0?Math.round(a*100/b):0;}
+function aeEscopoTxt(D){return D.comp?(()=>{const p=D.comp.split('-');return MESES_FULL[+p[1]-1]+'/'+p[0];})():(D.ex==='todos'?'todos os exercícios':'exercício '+D.ex);}
+// Cabeçalho comum das abas: escopo + validação automática (rotina E) + sincronização
+function aeTopoHtml(D){
+  const M=aeMatriz(D);D._M=M;
+  let h=`<div class="ctx-bar-info" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:0"><span>Escopo: <strong>${ctEsc(aeEscopoTxt(D))}</strong></span><span>· Validação automática das 5 abas: ${M.ok?'<span class="ctx-badge-ok">✓ coerente</span>':'<span class="ctx-badge-err">✕ '+M.nDiv+' divergência(s)</span>'}</span>${aeSyncHtml()}</div>`;
+  if(!M.ok)h+=`<div class="info-box danger"><span class="info-icon">✕</span><div><strong>Divergência entre abas detectada pela validação automática.</strong> Veja Dashboard › Auditoria de consistência: ${M.linhas.filter(l=>!l.ok).map(l=>l.nome).join(', ')}.</div></div>`;
+  if(D.semAcao.length)h+=`<div class="info-box warn"><span class="info-icon">⚠</span><div><strong>${D.semAcao.length} empenho(s) de Assistência Estudantil sem ação ativa vinculada</strong> (fora dos totais por ação): ${D.semAcao.map(x=>ctEsc(x.num)+' ('+ctMoney(x.atualizado)+')').join('; ')}. Total sem ação: empenhado ${ctMoney(D.totSemAcao.atualizado)}, liquidado ${ctMoney(D.totSemAcao.liquidado)}.</div></div>`;
+  if(D.entSemComp)h+=`<div class="info-box info"><span class="info-icon">ℹ</span><div>${D.entSemComp} entrada(s) de crédito sem competência: o mês foi obtido pela data do lançamento.</div></div>`;
+  return h;
+}
+function aeEmpTabelaHtml(emps){
+  if(!emps.length)return`<div style="padding:10px 14px;font-size:12px;color:var(--text3)">Nenhum empenho no escopo selecionado.</div>`;
+  const t=aeSoma(emps);
+  return`<div class="scroll-h"><table style="min-width:1000px"><thead><tr>${['Empenho','Exerc.','Competência','Inicial','+ Reforços','− Anulações','= Empenhado','− Liquidado','Pago','= Saldo a liquidar','Situação','Últ. mov.'].map((h,i)=>`<th style="${_TH}text-align:${(i>=3&&i<=9)?'right':'left'}">${h}</th>`).join('')}</tr></thead><tbody>
+  ${emps.map(x=>`<tr><td style="${_TD}font-weight:700;font-family:'IBM Plex Mono',monospace">${ctEsc(x.num)}${x.e.rapAutoEm?` <span title="Passou a RAP na virada do exercício ${x.e.rapAutoExercicio}" style="font-size:9px;color:var(--rap-m)">↻ RAP</span>`:''}</td><td style="${_TD}">${x.ano}</td><td style="${_TD}">${aeCompValida(x.e.competencia)?AE_MESES_ABR[+x.e.competencia.slice(5)-1]+'/'+x.e.competencia.slice(0,4):'<span class="ctx-badge-na">sem competência</span>'}</td>
+    <td style="${_TD}${_NUM}color:var(--blue2)">${ctMoney(x.inicial)}</td><td style="${_TD}${_NUM}color:var(--green)">${x.reforcos?'+ '+ctMoney(x.reforcos):'—'}</td><td style="${_TD}${_NUM}color:var(--red2)">${x.anulacoes?'− '+ctMoney(x.anulacoes):'—'}</td><td style="${_TD}${_NUM}font-weight:700;color:var(--blue)">${ctMoney(x.atualizado)}</td><td style="${_TD}${_NUM}color:var(--amber)">${x.liquidado?'− '+ctMoney(x.liquidado):'—'}</td><td style="${_TD}${_NUM}color:var(--green)">${x.pago?ctMoney(x.pago):'—'}</td><td style="${_TD}${_NUM}font-weight:800">${ctSaldoHtml(x.saldo)}</td><td style="${_TD}">${ctSelo(x.nivel,x.alerts.map(a=>a.msg).join(' | '))}</td><td style="${_TD}font-size:10.5px;color:var(--text3);white-space:nowrap">${ctDataBR(x.ultimaMov)}</td></tr>
+    <tr><td colspan="12" style="padding:0 10px 6px;border-bottom:1px solid var(--border2)"><details><summary style="cursor:pointer;font-size:11px;color:var(--text3);padding:3px 0">Memória de cálculo — empenho ${ctEsc(x.num)} (${x.movs.length} movimentação(ões))</summary>
+      <table style="width:100%;margin:6px 0"><thead><tr><th style="${_TH}text-align:left">Data</th><th style="${_TH}text-align:left">Operação</th><th style="${_TH}text-align:left">Origem do registro</th><th style="${_TH}text-align:right">Valor</th><th style="${_TH}text-align:right">Saldo resultante</th></tr></thead><tbody>
+      ${x.movs.map(m=>`<tr><td style="${_TD}">${ctDataBR(m.data)}</td><td style="${_TD}">${m.tipo}</td><td style="${_TD}font-size:10.5px;color:var(--text3)">${ctEsc(m.orig)}</td><td style="${_TD}${_NUM}color:${m.sinal>0?'var(--green)':'var(--red2)'}">${m.sinal>0?'+':'−'} ${ctMoney(m.v)}</td><td style="${_TD}${_NUM}">${ctMoney(m.saldoAcum)}</td></tr>`).join('')}</tbody></table>
+      ${x.alerts.length?`<div style="font-size:11px;color:var(--amber);padding:2px 0 4px">${x.alerts.map(a=>'⚠ '+ctEsc(a.msg)+' <em style="color:var(--text3)">Possível origem: '+ctEsc(a.origem||'—')+'</em>').join('<br>')}</div>`:''}</details></td></tr>`).join('')}
+  <tr style="background:var(--gold-bg);font-weight:800"><td style="${_TD}color:var(--gold)" colspan="3">TOTAL — ${t.n} empenho(s)</td><td style="${_TD}${_NUM}">${ctMoney(t.inicial)}</td><td style="${_TD}${_NUM}">${ctMoney(t.reforcos)}</td><td style="${_TD}${_NUM}">${ctMoney(t.anulacoes)}</td><td style="${_TD}${_NUM}color:var(--blue)">${ctMoney(t.atualizado)}</td><td style="${_TD}${_NUM}">${ctMoney(t.liquidado)}</td><td style="${_TD}${_NUM}">${ctMoney(t.pago)}</td><td style="${_TD}${_NUM}">${ctSaldoHtml(t.saldo)}</td><td colspan="2"></td></tr></tbody></table></div>`;
+}
+function aeKpi(cls,lbl,val,sub){return`<div class="kpi ${cls}"><div class="kpi-label">${lbl}</div><div class="kpi-value" style="font-size:clamp(13px,1.5vw,20px)">${val}</div>${sub?`<div class="kpi-sub">${sub}</div>`:''}</div>`;}
+const aePv=(D,v)=>D.prevAplica?ctMoney(v):'—';
+
+// ═══════════════════════════ VISÃO GERAL ═══════════════════════════
 function renderAeAcoes(){
-  const el=document.getElementById('ae-acoes');
-  if(!el)return; // guarda: elemento pode não estar no DOM
-  const acoes=state.acoes.filter(a=>aeAtivo(a));
-  const comp=_aeFiltroComp; // '' = todas
-  const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
-  const headerFiltro=comp?`<div class="info-box info" style="margin-bottom:10px"><span class="info-icon">📅</span><div>Mostrando dados da competência: <strong>${labelFiltro}</strong> · Apuração por <strong>mês de competência</strong> do empenho.</div></div>`:'';
-  el.innerHTML=headerFiltro+(acoes.length?acoes.map(a=>{
-    // ★ REGRA AE: usar competência (não data de cadastro/pagamento/liquidação)
-    const t=aeTotaisAcao(a.id,comp);
-    const emp=t.empenhado;
-    const liq=t.liquidado;
-    const pag=t.pago;
-    // Previsto: se filtro de competência, usa valor mensal específico; senão, anual
-    let prev=a.previsto||0;
-    if(comp){
-      const p=comp.split('-');
-      if(p.length===2&&Array.isArray(a.previstoMensalArr)){
-        const mIdx=parseInt(p[1])-1;
-        prev=a.previstoMensalArr[mIdx]||0;
-      }
-    }
-    const pEmp=prev>0?Math.round(emp/prev*100):0;
-    const pExec=emp>0?Math.round((liq+pag)/emp*100):0;
-    const saldoNaoEmp=prev-emp;
+  const el=document.getElementById('ae-acoes');if(!el)return;
+  const D=aeDados(),T=D.tot,M=D._M||null;
+  const topo=aeTopoHtml(D);
+  const nOk=D.linhas.filter(l=>l.nivel==='ok').length,nAv=D.linhas.filter(l=>l.nivel==='aviso').length,nEr=D.linhas.filter(l=>l.nivel==='erro').length;
+  const resumo=`<div class="kpi-grid" style="margin-bottom:14px">
+    ${aeKpi('accent-blue','Ações ativas',D.acoes.length,D.nExcl+' excluída(s) preservada(s) · '+D.acoes.filter(a=>!D.todosAll.some(x=>x.e.acaoId===a.id)).length+' sem empenho')}
+    ${aeKpi('accent-gold','Previsto',aePv(D,D.prevTot),D.prevAplica?'ações ativas':'previsto aplicado só ao exercício corrente')}
+    ${aeKpi('accent-blue','Empenhado (atualizado)',ctMoney(T.atualizado),'inicial '+ctMoney(T.inicial)+' + reforços '+ctMoney(T.reforcos)+' − anulações '+ctMoney(T.anulacoes))}
+    ${aeKpi('accent-amber','Liquidado',ctMoney(T.liquidado),aePct2(T.liquidado,T.atualizado)+' do empenhado')}
+    ${aeKpi('accent-green','Pago',ctMoney(T.pago),aePct2(T.pago,T.liquidado)+' do liquidado')}
+    ${aeKpi(T.saldo<0?'accent-red':'accent-green','Saldo a liquidar',ctSaldoHtml(T.saldo),'empenhado − liquidado')}
+    ${aeKpi('accent-teal','Saldo a pagar',ctMoney(T.aPagar),'liquidado − pago')}
+    ${aeKpi(nEr?'accent-red':(nAv?'accent-amber':'accent-green'),'Integridade das ações',nOk+' regular(es)',nAv+' atenção · '+nEr+' divergência')}
+  </div>`;
+  const cards=D.linhas.map(l=>{
+    const a=l.a,t=l.tot,pv=l.pv,saldoNE=pv.v-t.atualizado;
+    const pEmp=pv.aplica&&pv.v>0?aePctN(t.atualizado,pv.v):aePctN(t.liquidado,t.atualizado);
+    const rot=pv.aplica&&pv.v>0?'empenhado/previsto':'liquidado/empenhado';
     return`<div class="ae-card">
-      <div class="ae-header">
-        <div><div class="ae-nome">${a.nome}</div><div class="ae-meta">${a.tipo} · ${comp?'Previsto '+labelFiltro:'Previsto anual'}: ${fmtBR(prev)}</div></div>
-        <div class="ct-actions"><button class="btn btn-sec btn-xs" onclick="editarAcao('${a.id}')">✎</button><button class="btn btn-red btn-xs" onclick="excluirAcao('${a.id}')">✕</button></div>
-      </div>
+      <div class="ae-header"><div><div class="ae-nome">${ctEsc(a.nome)}</div><div class="ae-meta">${ctEsc(a.tipo||'—')} · ID ${ctEsc(a.id)} · ${D.comp?'Previsto '+ctEsc(aeEscopoTxt(D)):'Previsto anual'}: ${pv.aplica?ctMoney(pv.v):'—'} · últ. atualização ${ctDataBR(l.ult)}</div></div>
+        <div class="ct-actions">${ctSelo(l.nivel,l.alerts.map(z=>z.msg).join(' | '))} <button class="btn btn-sec btn-xs" onclick="editarAcao('${a.id}')">✎</button><button class="btn btn-red btn-xs" onclick="excluirAcao('${a.id}')">✕</button></div></div>
       <div class="ae-kpi">
-        <div class="ae-kpi-item"><div class="ae-kpi-val text-green">${fmtBR(prev)}</div><div class="ae-kpi-lbl">Previsto</div></div>
-        <div class="ae-kpi-item"><div class="ae-kpi-val text-blue">${fmtBR(emp)}</div><div class="ae-kpi-lbl">Empenhado</div></div>
-        <div class="ae-kpi-item"><div class="ae-kpi-val" style="color:var(--amber)">${fmtBR(liq)}</div><div class="ae-kpi-lbl">Liquidado</div></div>
-        <div class="ae-kpi-item"><div class="ae-kpi-val text-green">${fmtBR(pag)}</div><div class="ae-kpi-lbl">Pago</div></div>
-        <div class="ae-kpi-item"><div class="ae-kpi-val ${saldoNaoEmp<0?'text-red':'text-gold'}">${fmtBR(saldoNaoEmp)}</div><div class="ae-kpi-lbl">Saldo n/emp.</div></div>
+        <div class="ae-kpi-item"><div class="ae-kpi-val text-green">${pv.aplica?ctMoney(pv.v):'—'}</div><div class="ae-kpi-lbl">Previsto</div></div>
+        <div class="ae-kpi-item"><div class="ae-kpi-val text-blue">${ctMoney(t.atualizado)}</div><div class="ae-kpi-lbl">Empenhado</div></div>
+        <div class="ae-kpi-item"><div class="ae-kpi-val" style="color:var(--amber)">${ctMoney(t.liquidado)}</div><div class="ae-kpi-lbl">Liquidado</div></div>
+        <div class="ae-kpi-item"><div class="ae-kpi-val text-green">${ctMoney(t.pago)}</div><div class="ae-kpi-lbl">Pago</div></div>
+        <div class="ae-kpi-item"><div class="ae-kpi-val ${pv.aplica&&saldoNE<0?'text-red':'text-gold'}">${pv.aplica?ctMoney(saldoNE):'—'}</div><div class="ae-kpi-lbl">Saldo n/emp.</div></div>
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="sb-bar" style="flex:1;margin:0"><div class="sb-fill ${pEmp>=80?'ok':pEmp>=50?'warn':'danger'}" style="width:${clamp(pEmp,0,100)}%"></div></div>
-        ${semaforo(pEmp)}
-      </div>
-    </div>`;
-  }).join(''):'<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhuma ação cadastrada. Clique em "+ Nova Ação" para começar.</div></div>');
+      <div style="font-size:11px;color:var(--text3);margin:2px 0 8px;display:flex;gap:14px;flex-wrap:wrap"><span>Saldo a liquidar: <strong>${ctSaldoHtml(t.saldo)}</strong></span><span>Saldo a pagar: <strong>${ctMoney(t.aPagar)}</strong></span><span>% execução: <strong>${aePct2(t.liquidado,t.atualizado)}</strong></span><span>% pagamento: <strong>${aePct2(t.pago,t.liquidado)}</strong></span><span>Liquidações: <strong>${t.qtdLiq}</strong> (${t.qtdPagas} paga(s))</span><span>Favorecidos distintos: <strong>${t.fav}</strong></span></div>
+      <div style="display:flex;align-items:center;gap:10px"><div class="sb-bar" style="flex:1;margin:0"><div class="sb-fill ${pEmp>=80?'ok':pEmp>=50?'warn':'danger'}" style="width:${clamp(pEmp,0,100)}%"></div></div>${semaforo(pEmp)}<span style="font-size:10px;color:var(--text3)">${rot}</span></div>
+      ${l.alerts.length?`<div style="margin-top:8px">${aeAlertasHtml(l.alerts,false)}</div>`:''}
+      <details style="margin-top:6px"><summary style="cursor:pointer;font-size:11.5px;color:var(--gold);padding:3px 0">Memória de cálculo e empenhos da ação (${l.emps.length})</summary>${aeEmpTabelaHtml(l.emps)}</details>
+    </div>`;}).join('');
+  el.innerHTML=topo+resumo+(D.acoes.length?cards:'<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhuma ação cadastrada. Clique em "+ Nova Ação" para começar.</div></div>');
 }
-function renderAeMensal(){
-  const elMensal=document.getElementById('ae-mensal');
-  if(!elMensal)return;
-  const acoes=state.acoes.filter(a=>aeAtivo(a));
-  const comp=_aeFiltroComp;
-  const anoAtual=new Date().getFullYear();
-  // Resumo mensal consolidado (todas as ações)
-  const dadosMensais=MESES.map((_,mi)=>{
-    const mesIdx=mi+1;
-    const prefixo=anoAtual+'-'+String(mesIdx).padStart(2,'0');
-    if(comp&&prefixo!==comp)return{prev:0,rec:0,emp:0,liq:0,pag:0};
-    const prev=acoes.reduce((s,a)=>{
-      const arr=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
-      return s+(arr[mi]||0);
-    },0);
-    const t=aeTotaisGeral(prefixo);
-    return{prev,rec:t.recebido,emp:t.empenhado,liq:t.liquidado,pag:t.pago};
-  });
-  const totPrev=dadosMensais.reduce((s,d)=>s+d.prev,0);
-  const totRec=dadosMensais.reduce((s,d)=>s+d.rec,0);
-  const totEmp=dadosMensais.reduce((s,d)=>s+d.emp,0);
-  const totLiq=dadosMensais.reduce((s,d)=>s+d.liq,0);
-  const totPag=dadosMensais.reduce((s,d)=>s+d.pag,0);
-  const fmtC=(v)=>v>0?`<td class="r" style="font-size:10.5px">${fmtBR(v)}</td>`:`<td class="r" style="color:var(--text4);font-size:10.5px">—</td>`;
-  const mensalHtml=`
-    <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Previsto</td>${dadosMensais.map(d=>fmtC(d.prev)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPrev)}</td></tr>
-    <tr><td style="font-size:11px;font-weight:600;color:var(--teal)">Recebido</td>${dadosMensais.map(d=>fmtC(d.rec)).join('')}<td class="r fw7" style="font-size:10.5px;color:var(--teal)">${fmtBR(totRec)}</td></tr>
-    <tr><td style="font-size:11px;font-weight:600;color:var(--blue)">Empenhado</td>${dadosMensais.map(d=>fmtC(d.emp)).join('')}<td class="r text-blue fw7" style="font-size:10.5px">${fmtBR(totEmp)}</td></tr>
-    <tr><td style="font-size:11px;font-weight:600;color:var(--amber)">Liquidado</td>${dadosMensais.map(d=>fmtC(d.liq)).join('')}<td class="r text-amber fw7" style="font-size:10.5px">${fmtBR(totLiq)}</td></tr>
-    <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Pago</td>${dadosMensais.map(d=>fmtC(d.pag)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPag)}</td></tr>
-    <tr class="total-row"><td style="font-size:11px">Saldo Previsto−Emp.</td>${dadosMensais.map(d=>{const s=d.prev-d.emp;return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:10.5px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${(totPrev-totEmp)<0?'text-red':'text-gold'} fw7" style="font-size:10.5px">${fmtBR(totPrev-totEmp)}</td></tr>
-  `;
-  // Resumo por ação
-  const porAcaoRows=acoes.map(a=>{
-    const t=aeTotaisAcao(a.id,comp);
-    const emp2=t.empenhado;
-    const liq2=t.liquidado;
-    const pag2=t.pago;
-    const prev2=aePrevistoAcao(a,comp);
-    const pEmp=prev2>0?Math.round(emp2/prev2*100):0;
-    const pPag=emp2>0?Math.round(pag2/emp2*100):0;
-    return`<tr><td>${a.nome}</td><td class="r text-green">${fmtBR(prev2)}</td><td class="r text-blue">${fmtBR(emp2)}</td><td class="r" style="color:var(--amber)">${fmtBR(liq2)}</td><td class="r text-green">${fmtBR(pag2)}</td><td class="r">${prev2>0?semaforo(pEmp):'—'}</td><td class="r">${emp2>0?semaforo(pPag):'—'}</td></tr>`;
-  });
-  elMensal.innerHTML=`
-    <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>As linhas <strong>Recebido</strong>, <strong>Empenhado</strong>, <strong>Liquidado</strong> e <strong>Pago</strong> exibem o valor pelo <strong>mês de competência do registro original</strong>${comp?' · filtro aplicado: <strong>'+(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})()+'</strong>':''}.</div></div>
-    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo Mensal Consolidado — ${anoAtual}</div></div>
-    <div class="scroll-h"><table class="month-table"><thead><tr><th>Fase</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead><tbody>${mensalHtml}</tbody></table></div></div>
-    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Valores Mensais Previstos vs Executados</div></div>
-    <div class="scroll-h"><table class="month-table"><thead><tr><th>Indicador</th>${MESES.map(m=>`<th>${m}</th>`).join('')}<th>Total</th></tr></thead>
-    <tbody>
-      <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Previsto</td>${dadosMensais.map(d=>fmtC(d.prev)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPrev)}</td></tr>
-      <tr><td style="font-size:11px;font-weight:600;color:var(--teal)">Recebido</td>${dadosMensais.map(d=>fmtC(d.rec)).join('')}<td class="r fw7" style="font-size:10.5px;color:var(--teal)">${fmtBR(totRec)}</td></tr>
-      <tr><td style="font-size:11px;font-weight:600;color:var(--blue)">Empenhado <span style="font-size:9px;color:var(--text3)">(competência)</span></td>${dadosMensais.map(d=>fmtC(d.emp)).join('')}<td class="r text-blue fw7" style="font-size:10.5px">${fmtBR(totEmp)}</td></tr>
-      <tr><td style="font-size:11px;font-weight:600;color:var(--amber)">Liquidado</td>${dadosMensais.map(d=>fmtC(d.liq)).join('')}<td class="r text-amber fw7" style="font-size:10.5px">${fmtBR(totLiq)}</td></tr>
-      <tr><td style="font-size:11px;font-weight:600;color:var(--green)">Pago</td>${dadosMensais.map(d=>fmtC(d.pag)).join('')}<td class="r text-green fw7" style="font-size:10.5px">${fmtBR(totPag)}</td></tr>
-      <tr class="total-row"><td style="font-size:11px">Saldo Previsto−Emp.</td>${dadosMensais.map(d=>{const s=d.prev-d.emp;return`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:10.5px">${s!==0?fmtBR(s):'—'}</td>`;}).join('')}<td class="r ${(totPrev-totEmp)<0?'text-red':'text-gold'} fw7" style="font-size:10.5px">${fmtBR(totPrev-totEmp)}</td></tr>
-    </tbody></table></div></div>
-    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo por Ação</div></div>
-    <table><thead><tr><th>Ação</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Liquidado</th><th class="r">Pago</th><th class="r">% Emp.</th><th class="r">% Pago</th></tr></thead>
-    <tbody>${porAcaoRows.length?porAcaoRows.join(''):'<tr class="empty-row"><td colspan="7">Nenhuma ação</td></tr>'}</tbody></table></div>
-  `;
-}
-function renderAeDash(){
-  const elDash=document.getElementById('ae-dashboard');
-  if(!elDash)return;
-  const acoes=state.acoes.filter(a=>aeAtivo(a));
-  const comp=_aeFiltroComp; // '' = todas
-  const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
 
-  const totais=aeTotaisGeral(comp);
-  const totPrev=totais.previsto;
-  const totRecebido=totais.recebido;
-  const totEmpenhado=totais.empenhado;
-  const totLiquidado=totais.liquidado;
-  const totPago=totais.pago;
-
-  // % Execução Geral = (Pago / Recebido) × 100
-  const pExecGeral=totRecebido>0?Math.round(totPago/totRecebido*100):0;
-
-  // Tabela Ações — Indicadores com totalização (filtrada por competência)
-  const linhasAcoes=acoes.map(a=>{
-    const t=aeTotaisAcao(a.id,comp);
-    const emp=t.empenhado;
-    const liq=t.liquidado;
-    const pag=t.pago;
-    const prev=aePrevistoAcao(a,comp);
-    const pct=prev>0?Math.round(emp/prev*100):0;
-    return{a,emp,liq,pag,prev,pct};
-  });
-
-  const totTabelaPrev=linhasAcoes.reduce((s,r)=>s+r.prev,0);
-  const totTabelaEmp=linhasAcoes.reduce((s,r)=>s+r.emp,0);
-  const totTabelaLiq=linhasAcoes.reduce((s,r)=>s+r.liq,0);
-  const totTabelaPag=linhasAcoes.reduce((s,r)=>s+r.pag,0);
-  const totTabelaSaldo=linhasAcoes.reduce((s,r)=>s+(r.prev-r.emp),0);
-  const headerFiltro=comp?`<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📅</span><div>Apuração por <strong>mês de competência</strong> · Filtrando: <strong>${labelFiltro}</strong></div></div>`:'<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>Empenhado, Liquidado e Pago apurados pelo <strong>mês de competência</strong> do empenho — conforme regra do módulo Assistência Estudantil.</div></div>';
-
-  elDash.innerHTML=`
-    ${headerFiltro}
-    <div class="kpi-grid">
-      <div class="kpi accent-gold"><div class="kpi-label">Total Previsto${comp?' · '+labelFiltro:' (anual)'}</div><div class="kpi-value text-gold">${fmtBR(totPrev)}</div><div class="kpi-sub">${acoes.length} ações cadastradas</div></div>
-      <div class="kpi accent-green"><div class="kpi-label">Total Recebido</div><div class="kpi-value text-green">${fmtBR(totRecebido)}</div><div class="kpi-sub">Entradas — Assistência Estudantil</div></div>
-      <div class="kpi accent-blue"><div class="kpi-label">Total Empenhado <span class="kpi-badge badge-blue" style="font-size:8px">competência</span></div><div class="kpi-value text-blue">${fmtBR(totEmpenhado)}</div><div class="kpi-sub">Empenhos AE${comp?' em '+labelFiltro:''}</div></div>
-      <div class="kpi accent-amber"><div class="kpi-label">Total Liquidado <span class="kpi-badge badge-blue" style="font-size:8px">competência</span></div><div class="kpi-value" style="color:var(--amber)">${fmtBR(totLiquidado)}</div><div class="kpi-sub">Liquidações AE${comp?' em '+labelFiltro:''}</div></div>
-      <div class="kpi accent-green"><div class="kpi-label">Total Pago <span class="kpi-badge badge-blue" style="font-size:8px">competência</span></div><div class="kpi-value text-green">${fmtBR(totPago)}</div><div class="kpi-sub">Pagamentos AE${comp?' em '+labelFiltro:''}</div></div>
-      <div class="kpi ${pExecGeral>=80?'accent-green':pExecGeral>=50?'accent-amber':'accent-red'}">
-        <div class="kpi-label">% Execução Geral</div>
-        <div class="kpi-value ${pExecGeral>=80?'text-green':pExecGeral>=50?'text-amber':'text-red'}">${pExecGeral}%</div>
-        <div class="kpi-sub">${semaforo(pExecGeral)} · Pago / Recebido</div>
-      </div>
+// ═══════════════════════════ DETALHE POR AÇÃO ═══════════════════════════
+function renderAeDetalhe(){
+  const el=document.getElementById('ae-detalhe');if(!el)return;
+  const acoes=(state.acoes||[]).filter(aeAtivo);
+  if(!acoes.length){el.innerHTML='<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhuma ação cadastrada.</div></div>';return;}
+  const selId='ae-detalhe-sel',prevSel=el.querySelector('#'+selId);
+  const curSel=(prevSel&&prevSel.value&&acoes.some(a=>a.id===prevSel.value))?prevSel.value:acoes[0].id;
+  const D=aeDados(),L=D.linhas.find(l=>l.a.id===curSel)||D.linhas[0],a=L.a,t=L.tot,pv=L.pv;
+  const ano=aeAnoGrade(D),B=aeBuckets(L.emps,ano),BT=aeBSum(B);
+  const pm=pv.pm;
+  const cell=(v,c)=>v?`<span style="font-size:12px;font-weight:700;color:${c};font-family:'IBM Plex Mono',monospace">${ctMoney(v)}</span>`:'<span style="color:var(--text4);font-size:11px">—</span>';
+  const linha=(b,rot,prev,dim)=>{const atu=b.ini+b.ref-b.anu,saldo=atu-b.liq,tem=prev>0||b.n||atu||b.liq;
+    return`<tr style="opacity:${tem?1:.35}"><td style="${_TD}font-weight:700;color:${tem?'var(--gold)':'var(--text4)'}">${rot}</td>
+      <td style="${_TD}${_NUM}">${prev?ctMoney(prev):'—'}</td><td style="${_TD}${_NUM}">${cell(b.ini,'var(--blue2)')}</td><td style="${_TD}${_NUM}">${cell(b.ref,'var(--green)')}</td><td style="${_TD}${_NUM}">${cell(b.anu,'var(--red2)')}</td>
+      <td style="${_TD}${_NUM}font-weight:700">${cell(atu,'var(--blue)')}</td><td style="${_TD}${_NUM}">${cell(b.liq,'var(--amber)')}</td><td style="${_TD}${_NUM}">${cell(b.pago,'var(--teal)')}</td>
+      <td style="${_TD}${_NUM}font-weight:800;color:${saldo<0?'var(--red)':'var(--gold)'}">${(atu||b.liq)?ctMoney(saldo):'—'}</td></tr>`;};
+  const prevMes=i=>pv.aplica?(D.comp?(D.comp.slice(5)-1===i?pv.v:0):(pm[i]||0)):0;
+  const prevTotal=pv.aplica?(D.comp?pv.v:(pm.reduce((s,v)=>s+v,0)||ctCents(a.previsto))):0;
+  const saldoNE=prevTotal-t.atualizado;
+  el.innerHTML=aeTopoHtml(D)+`
+    <div class="card"><div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Selecionar Ação</div>
+      <div class="field" style="max-width:420px"><select id="${selId}" onchange="renderAeDetalhe()">${acoes.map(x=>`<option value="${x.id}" ${x.id===curSel?'selected':''}>${ctEsc(x.nome)} — ${ctEsc(x.tipo||'Benefício')}</option>`).join('')}</select></div></div>
+    <div class="card" style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div style="font-size:15px;font-weight:600">${ctEsc(a.nome)}</div>${ctSelo(L.nivel)}</div>
+      <div style="font-size:12px;color:var(--text3)">${ctEsc(a.tipo||'—')} · ID ${ctEsc(a.id)} · situação: ${ctEsc(a.status||'Ativo')} · última atualização: ${ctDataBR(L.ult)}</div>${a.descricao?`<div style="font-size:12px;color:var(--text2);margin-top:6px">${ctEsc(a.descricao)}</div>`:''}</div>
+    ${aeAlertasHtml(L.alerts)}
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px">
+      ${aeKpi('accent-gold','Previsto',pv.aplica?ctMoney(prevTotal):'—',pv.aplica?'valor previsto da ação':'previsto aplicado só ao exercício corrente')}
+      ${aeKpi('accent-blue','Empenhado (atualizado)',ctMoney(t.atualizado),'inicial '+ctMoney(t.inicial)+' + reforços '+ctMoney(t.reforcos)+' − anulações '+ctMoney(t.anulacoes))}
+      ${aeKpi('accent-amber','Liquidado',ctMoney(t.liquidado),aePct2(t.liquidado,t.atualizado)+' do empenhado')}
+      ${aeKpi('accent-teal','Pago',ctMoney(t.pago),aePct2(t.pago,t.liquidado)+' do liquidado')}
+      ${aeKpi(t.saldo<0?'accent-red':'accent-green','Saldo a liquidar',ctSaldoHtml(t.saldo),'empenhado − liquidado')}
+      ${aeKpi('accent-teal','Saldo a pagar',ctMoney(t.aPagar),'liquidado − pago')}
+      ${aeKpi('accent-gold','Saldo não empenhado',pv.aplica?ctSaldoHtml(saldoNE):'—','previsto − empenhado')}
+      ${aeKpi('accent-purple','Liquidações / favorecidos',t.qtdLiq+' / '+t.fav,t.qtdPagas+' paga(s) · favorecidos distintos pelo CNPJ/CPF informado')}
     </div>
-    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Ações — Indicadores${comp?' · '+labelFiltro:''}</div></div>
-    <table><thead><tr><th>Ação</th><th>Tipo</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Liquidado</th><th class="r">Pago</th><th class="r">Saldo Não Emp.</th><th class="r">% Emp.</th></tr></thead>
-    <tbody>
-      ${linhasAcoes.map(({a,emp,liq,pag,prev,pct})=>`<tr><td><strong>${a.nome}</strong></td><td><span class="kpi-badge badge-blue">${a.tipo}</span></td><td class="r text-green">${fmtBR(prev)}</td><td class="r text-blue">${fmtBR(emp)}</td><td class="r" style="color:var(--amber)">${fmtBR(liq)}</td><td class="r text-green">${fmtBR(pag)}</td><td class="r ${(prev-emp)<0?'text-red':'text-gold'}">${fmtBR(prev-emp)}</td><td class="r">${prev>0?semaforo(pct):'—'}</td></tr>`).join('')||'<tr class="empty-row"><td colspan="8">Nenhuma ação</td></tr>'}
-      ${linhasAcoes.length?`<tr style="font-weight:700;background:var(--bg4);border-top:2px solid var(--gold-border)">
-        <td colspan="2" style="color:var(--gold)">TOTAIS</td>
-        <td class="r text-green fw7">${fmtBR(totTabelaPrev)}</td>
-        <td class="r text-blue fw7">${fmtBR(totTabelaEmp)}</td>
-        <td class="r fw7" style="color:var(--amber)">${fmtBR(totTabelaLiq)}</td>
-        <td class="r text-green fw7">${fmtBR(totTabelaPag)}</td>
-        <td class="r ${totTabelaSaldo<0?'text-red':'text-gold'} fw7">${fmtBR(totTabelaSaldo)}</td>
-        <td class="r">${totTabelaPrev>0?semaforo(Math.round(totTabelaEmp/totTabelaPrev*100)):'—'}</td>
-      </tr>`:''}
-    </tbody></table></div>
-  `;
+    <div style="font-size:10.5px;color:var(--text3);margin:0 2px 14px">Beneficiários não são registrados no módulo; "favorecidos distintos" usa o CNPJ/CPF das liquidações e não equivale a quantidade de atendimentos ou pagamentos. Todos os valores de um empenho são apurados no mês de competência do empenho.</div>
+    <div class="card" style="padding:0;overflow:hidden;border:1px solid var(--border2);margin-bottom:14px"><div style="padding:12px 16px;background:linear-gradient(135deg,rgba(245,200,66,.10),rgba(245,200,66,.03));border-bottom:1px solid var(--gold-border);font-size:13px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.04em">Composição por empenho — memória de cálculo <span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none">(${ctEsc(aeEscopoTxt(D))})</span></div>${aeEmpTabelaHtml(L.emps)}</div>
+    <div class="card" style="padding:0;overflow:hidden;border:1px solid var(--border2)"><div style="padding:12px 16px;background:linear-gradient(135deg,rgba(68,138,255,.10),rgba(68,138,255,.03));border-bottom:1px solid var(--blue-border);font-size:13px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.04em">${ctEsc(a.nome)} — Competência mensal ${ano}</div>
+      <div class="scroll-h"><table style="min-width:860px"><thead><tr>${['Mês','Previsto','Inicial','Reforços','Anulações','Empenhado','Liquidado','Pago','Saldo a liquidar'].map((h,i)=>`<th style="${_TH}text-align:${i?'right':'left'}">${h}</th>`).join('')}</tr></thead><tbody>
+        ${B.m.map((b,i)=>linha(b,AE_MESES_ABR[i]+'/'+ano,prevMes(i))).join('')}
+        ${B.outros.n?linha(B.outros,'Outros exercícios',0):''}${B.sem.n?linha(B.sem,'Sem competência',0):''}
+        <tr style="background:var(--gold-bg);border-top:2px solid var(--gold-border);font-weight:800"><td style="${_TD}color:var(--gold)">TOTAL</td><td style="${_TD}${_NUM}">${prevTotal?ctMoney(prevTotal):'—'}</td><td style="${_TD}${_NUM}">${ctMoney(BT.ini)}</td><td style="${_TD}${_NUM}">${ctMoney(BT.ref)}</td><td style="${_TD}${_NUM}">${ctMoney(BT.anu)}</td><td style="${_TD}${_NUM}color:var(--blue)">${ctMoney(BT.ini+BT.ref-BT.anu)}</td><td style="${_TD}${_NUM}">${ctMoney(BT.liq)}</td><td style="${_TD}${_NUM}">${ctMoney(BT.pago)}</td><td style="${_TD}${_NUM}">${ctSaldoHtml(BT.ini+BT.ref-BT.anu-BT.liq)}</td></tr></tbody></table></div>
+      <div style="padding:8px 16px;font-size:10.5px;color:var(--text3)">O total da grade (meses + outros exercícios + sem competência) coincide com os indicadores acima.</div></div>`;
 }
+
+// ═══════════════════════════ RESUMO MENSAL ═══════════════════════════
+function renderAeMensal(){
+  const el=document.getElementById('ae-mensal');if(!el)return;
+  const D=aeDados(),ano=aeAnoGrade(D),B=aeBuckets(D.comAcao,ano),BT=aeBSum(B);
+  const prevM=Array.from({length:12},(_,i)=>D.linhas.reduce((s,l)=>s+(l.pv.aplica?(D.comp?(+D.comp.slice(5)-1===i?l.pv.v:0):(l.pv.pm[i]||0)):0),0));
+  const ent=Array(12).fill(0);let entFora=0;
+  aeEntradasEsc(D.ex,D.comp).forEach(l=>{const c=aeEntComp(l),v=ctCents(l.valor);if(aeCompValida(c)&&c.slice(0,4)===ano)ent[+c.slice(5)-1]+=v;else entFora+=v;});
+  const atu=b=>b.ini+b.ref-b.anu;
+  const fora=B.outros.n||B.sem.n||entFora;
+  const foraB=[B.outros,B.sem].reduce((o,b)=>{for(const k in o)o[k]+=b[k];return o;},{ini:0,ref:0,anu:0,liq:0,pago:0,n:0});
+  const td=v=>v?`<td class="r" style="font-size:10.5px">${ctMoney(v)}</td>`:`<td class="r" style="color:var(--text4);font-size:10.5px">—</td>`;
+  const rowF=(nome,cor,vals,fo,tot,cls)=>`<tr${cls?` class="${cls}"`:''}><td style="font-size:11px;font-weight:600;color:${cor}">${nome}</td>${vals.map(td).join('')}${fora?td(fo):''}<td class="r fw7" style="font-size:10.5px;color:${cor}">${ctMoney(tot)}</td></tr>`;
+  const sum=a=>a.reduce((s,v)=>s+v,0);
+  const arr=f=>B.m.map(f);
+  const emp=arr(atu),liq=arr(b=>b.liq),pag=arr(b=>b.pago),ini=arr(b=>b.ini),ref=arr(b=>b.ref),anu=arr(b=>b.anu);
+  const acum=a=>{let c=0;return a.map(v=>c+=v);};
+  const saldoLiq=emp.map((v,i)=>v-liq[i]),saldoPag=liq.map((v,i)=>v-pag[i]);
+  const prevTot=sum(prevM);
+  const head=`<thead><tr><th>Indicador</th>${MESES.map(m=>`<th>${m}</th>`).join('')}${fora?'<th>Outros exerc. / s/ comp.</th>':''}<th>Total</th></tr></thead>`;
+  const sPrevEmp=prevM.map((p,i)=>p-emp[i]);
+  const t1=`<tbody>
+    ${rowF('Previsto','var(--green)',prevM,0,prevTot)}
+    ${rowF('Recebido (créditos)','var(--teal)',ent,entFora,sum(ent)+entFora)}
+    ${rowF('Empenhado (atualizado)','var(--blue)',emp,atu(foraB),atu(BT))}
+    ${rowF('Liquidado','var(--amber)',liq,foraB.liq,BT.liq)}
+    ${rowF('Pago','var(--green)',pag,foraB.pago,BT.pago)}
+    <tr class="total-row"><td style="font-size:11px">Saldo Previsto−Emp.</td>${sPrevEmp.map(s=>`<td class="r ${s<0?'text-red':'text-gold'}" style="font-size:10.5px">${s?ctMoney(s):'—'}</td>`).join('')}${fora?'<td class="r">—</td>':''}<td class="r fw7" style="font-size:10.5px">${D.prevAplica?ctMoney(prevTot-atu(BT)):'—'}</td></tr></tbody>`;
+  const t2=`<tbody>
+    ${rowF('Empenho inicial','var(--blue2)',ini,foraB.ini,BT.ini)}
+    ${rowF('+ Reforços','var(--green)',ref,foraB.ref,BT.ref)}
+    ${rowF('− Anulações','var(--red2)',anu,foraB.anu,BT.anu)}
+    ${rowF('Saldo a liquidar','var(--gold)',saldoLiq,atu(foraB)-foraB.liq,atu(BT)-BT.liq)}
+    ${rowF('Saldo a pagar','var(--teal)',saldoPag,foraB.liq-foraB.pago,BT.liq-BT.pago)}
+    ${rowF('Acumulado — Empenhado','var(--blue)',acum(emp),0,sum(emp))}
+    ${rowF('Acumulado — Liquidado','var(--amber)',acum(liq),0,sum(liq))}
+    ${rowF('Acumulado — Pago','var(--green)',acum(pag),0,sum(pag))}</tbody>`;
+  const semMov=MESES.filter((_,i)=>!(prevM[i]||emp[i]||liq[i]||pag[i]||ent[i]));
+  const porAcao=D.linhas.map(l=>{const t=l.tot;return`<tr><td>${ctEsc(l.a.nome)}</td><td class="r text-green">${l.pv.aplica?ctMoney(l.pv.v):'—'}</td><td class="r text-blue">${ctMoney(t.atualizado)}</td><td class="r" style="color:var(--amber)">${ctMoney(t.liquidado)}</td><td class="r text-green">${ctMoney(t.pago)}</td><td class="r">${ctSaldoHtml(t.saldo)}</td><td class="r">${l.pv.aplica&&l.pv.v>0?semaforo(aePctN(t.atualizado,l.pv.v)):'—'}</td><td class="r">${aePct2(t.pago,t.liquidado)}</td></tr>`;}).join('');
+  const T=D.tot;
+  el.innerHTML=aeTopoHtml(D)+`
+    <div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📌</span><div>Todos os valores de um empenho (inicial, reforços, anulações, liquidações e pagamentos) aparecem no <strong>mês de competência do empenho</strong>. Exercícios diferentes ficam identificados: grade de ${ano}${fora?'; valores de outros exercícios ou sem competência válida aparecem na coluna própria':''}.${semMov.length&&semMov.length<12?' Meses sem movimentação: '+semMov.join(', ')+'.':''}</div></div>
+    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo Mensal Consolidado — ${ano}</div></div><div class="scroll-h"><table class="month-table">${head}${t1}</table></div></div>
+    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Composição do empenhado, saldos e acumulados — ${ano}</div></div><div class="scroll-h"><table class="month-table">${head}${t2}</table></div></div>
+    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Resumo por Ação — ${ctEsc(aeEscopoTxt(D))}</div></div><table><thead><tr><th>Ação</th><th class="r">Previsto</th><th class="r">Empenhado</th><th class="r">Liquidado</th><th class="r">Pago</th><th class="r">Saldo a liquidar</th><th class="r">% Emp.</th><th class="r">% Pago</th></tr></thead>
+      <tbody>${porAcao||'<tr class="empty-row"><td colspan="8">Nenhuma ação</td></tr>'}${D.linhas.length?`<tr style="font-weight:700;background:var(--bg4);border-top:2px solid var(--gold-border)"><td style="color:var(--gold)">TOTAL</td><td class="r">${aePv(D,D.prevTot)}</td><td class="r">${ctMoney(T.atualizado)}</td><td class="r">${ctMoney(T.liquidado)}</td><td class="r">${ctMoney(T.pago)}</td><td class="r">${ctSaldoHtml(T.saldo)}</td><td class="r">—</td><td class="r">${aePct2(T.pago,T.liquidado)}</td></tr>`:''}</tbody></table></div>`;
+}
+
+// ═══════════════════════════ DASHBOARD ═══════════════════════════
+function renderAeDash(){
+  const el=document.getElementById('ae-dashboard');if(!el)return;
+  const D=aeDados(),T=D.tot,topo=aeTopoHtml(D),M=D._M;
+  const ano=aeAnoGrade(D),B=aeBuckets(D.comAcao,ano);
+  const pExecGeral=aePctN(T.pago,D.recebido);
+  const porTipo={};D.linhas.forEach(l=>{const k=l.a.tipo||'—';(porTipo[k]=porTipo[k]||{emps:[],prev:0,n:0});porTipo[k].emps=porTipo[k].emps.concat(l.emps);porTipo[k].prev+=l.pv.v;porTipo[k].n++;});
+  const all=aeDados('todos','');const porEx={};all.comAcao.forEach(x=>{(porEx[x.ano]=porEx[x.ano]||[]).push(x);});
+  const linhaT=(nome,t,prev,aplica)=>`<tr><td>${nome}</td><td class="r text-green">${aplica?ctMoney(prev):'—'}</td><td class="r text-blue">${ctMoney(t.atualizado)}</td><td class="r" style="color:var(--amber)">${ctMoney(t.liquidado)}</td><td class="r text-green">${ctMoney(t.pago)}</td><td class="r">${ctSaldoHtml(t.saldo)}</td><td class="r">${ctMoney(t.aPagar)}</td><td class="r">${aePct2(t.liquidado,t.atualizado)}</td><td class="r">${aePct2(t.pago,t.liquidado)}</td></tr>`;
+  const TH=['Ação','Previsto','Empenhado','Liquidado','Pago','Saldo a liquidar','Saldo a pagar','% Execução','% Pagamento'];
+  const thead=(p)=>`<thead><tr>${[p].concat(TH.slice(1)).map((h,i)=>`<th class="${i?'r':''}">${h}</th>`).join('')}</tr></thead>`;
+  const maxM=Math.max(1,...B.m.map(b=>b.ini+b.ref-b.anu),...B.m.map(b=>b.liq),...B.m.map(b=>b.pago));
+  const barras=B.m.map((b,i)=>{const e=b.ini+b.ref-b.anu,w=v=>Math.max(v?2:0,Math.round(v*100/maxM));return`<div style="display:grid;grid-template-columns:38px 1fr;gap:8px;align-items:center;font-size:10px;color:var(--text3);margin:3px 0"><span>${AE_MESES_ABR[i]}</span><div title="Empenhado ${ctMoney(e)} · Liquidado ${ctMoney(b.liq)} · Pago ${ctMoney(b.pago)}"><div style="height:5px;width:${w(e)}%;background:var(--blue);border-radius:3px;margin-bottom:2px"></div><div style="height:5px;width:${w(b.liq)}%;background:var(--amber);border-radius:3px;margin-bottom:2px"></div><div style="height:5px;width:${w(b.pago)}%;background:var(--green);border-radius:3px"></div></div></div>`;}).join('');
+  const nOk=D.linhas.filter(l=>l.nivel==='ok').length,nAv=D.linhas.filter(l=>l.nivel==='aviso').length,nEr=D.linhas.filter(l=>l.nivel==='erro').length;
+  const linhasAud=aeAuditoriaLinhas(D);
+  el.innerHTML=topo+`
+    <div class="kpi-grid">
+      ${aeKpi('accent-gold','Total previsto'+(D.comp?' · '+ctEsc(aeEscopoTxt(D)):''),aePv(D,D.prevTot),D.acoes.length+' ações ativas · '+D.nExcl+' excluída(s)')}
+      ${aeKpi('accent-green','Total recebido',ctMoney(D.recebido),'Entradas — Assistência Estudantil')}
+      ${aeKpi('accent-blue','Total empenhado (atualizado)',ctMoney(T.atualizado),'inicial '+ctMoney(T.inicial)+' + reforços '+ctMoney(T.reforcos)+' − anulações '+ctMoney(T.anulacoes))}
+      ${aeKpi('accent-amber','Total liquidado',ctMoney(T.liquidado),aePct2(T.liquidado,T.atualizado)+' do empenhado')}
+      ${aeKpi('accent-green','Total pago',ctMoney(T.pago),aePct2(T.pago,T.liquidado)+' do liquidado')}
+      ${aeKpi(T.saldo<0?'accent-red':'accent-green','Saldo a liquidar',ctSaldoHtml(T.saldo),'empenhado − liquidado')}
+      ${aeKpi('accent-teal','Saldo a pagar',ctMoney(T.aPagar),'liquidado − pago')}
+      ${aeKpi(pExecGeral>=80?'accent-green':pExecGeral>=50?'accent-amber':'accent-red','% Execução geral',pExecGeral+'%',semaforo(pExecGeral)+' · Pago ÷ Recebido')}
+      ${aeKpi('accent-purple','Liquidações / favorecidos',T.qtdLiq+' / '+T.fav,T.qtdPagas+' paga(s) · favorecidos distintos (CNPJ/CPF)')}
+      ${aeKpi(nEr?'accent-red':(nAv?'accent-amber':'accent-green'),'Integridade das ações',nOk+' regular(es)',nAv+' atenção · '+nEr+' divergência')}
+    </div>
+    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Ações — Indicadores · ${ctEsc(aeEscopoTxt(D))}</div></div><div class="scroll-h"><table style="min-width:900px">${thead('Ação')}<tbody>
+      ${D.linhas.map(l=>linhaT(`<strong>${ctEsc(l.a.nome)}</strong> <span class="kpi-badge badge-blue">${ctEsc(l.a.tipo||'')}</span>`,l.tot,l.pv.v,l.pv.aplica)).join('')}
+      ${D.linhas.length?`<tr style="font-weight:700;background:var(--bg4);border-top:2px solid var(--gold-border)"><td style="color:var(--gold)">TOTAIS</td><td class="r">${aePv(D,D.prevTot)}</td><td class="r">${ctMoney(T.atualizado)}</td><td class="r">${ctMoney(T.liquidado)}</td><td class="r">${ctMoney(T.pago)}</td><td class="r">${ctSaldoHtml(T.saldo)}</td><td class="r">${ctMoney(T.aPagar)}</td><td class="r">${aePct2(T.liquidado,T.atualizado)}</td><td class="r">${aePct2(T.pago,T.liquidado)}</td></tr>`:''}</tbody></table></div></div>
+    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Distribuição por modalidade (tipo da ação)</div></div><div class="scroll-h"><table style="min-width:900px">${thead('Modalidade')}<tbody>${Object.keys(porTipo).sort().map(k=>linhaT(ctEsc(k)+' <span style="font-size:10px;color:var(--text3)">('+porTipo[k].n+' ação(ões))</span>',aeSoma(porTipo[k].emps),porTipo[k].prev,D.prevAplica)).join('')||'<tr class="empty-row"><td colspan="9">Sem dados</td></tr>'}</tbody></table></div></div>
+    <div class="tbl-wrap"><div class="tbl-head"><div class="tbl-title">Distribuição por exercício (todos os exercícios — sem mistura)</div></div><div class="scroll-h"><table style="min-width:900px">${thead('Exercício')}<tbody>${Object.keys(porEx).sort().map(y=>linhaT('<strong>'+y+'</strong> <span style="font-size:10px;color:var(--text3)">('+porEx[y].length+' empenho(s))</span>',aeSoma(porEx[y]),0,false)).join('')||'<tr class="empty-row"><td colspan="9">Sem empenhos</td></tr>'}</tbody></table></div></div>
+    <div class="card"><div class="card-title"><span class="card-title-dot" style="background:var(--blue)"></span>Evolução mensal ${ano} — <span style="color:var(--blue)">■</span> Empenhado · <span style="color:var(--amber)">■</span> Liquidado · <span style="color:var(--green)">■</span> Pago</div>${barras}</div>
+    <div class="card" style="margin-top:14px;padding:0;overflow:hidden;border:1px solid var(--gold-border)">
+      <div style="padding:12px 16px;background:var(--gold-bg);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><span style="font-size:13px;font-weight:800;color:var(--gold);letter-spacing:.05em">🔎 AUDITORIA DE CONSISTÊNCIA — Visão Geral × Gerenciar × Detalhe × Resumo Mensal × Dashboard</span><button class="btn btn-sec btn-sm" onclick="aeAuditoriaCsv()">⬇ Relatório de auditoria (CSV)</button></div>
+      <div style="padding:12px 16px"><div style="font-size:11px;color:var(--text3);margin-bottom:8px">Cada aba agrega os mesmos empenhos por um caminho próprio (cartões por ação · empenho→ação · grade mensal por ação · mês→todas as ações · por modalidade). Escopo: ${ctEsc(aeEscopoTxt(D))}. Validação executada em ${new Date().toLocaleString('pt-BR')}.</div>
+      <div class="scroll-h"><table style="width:100%;min-width:860px"><thead><tr><th style="${_TH}text-align:left">Informação</th>${['Visão Geral','Gerenciar','Detalhe','Resumo Mensal','Dashboard'].map(h=>`<th style="${_TH}text-align:right">${h}</th>`).join('')}<th style="${_TH}text-align:left">Resultado</th></tr></thead><tbody>
+      ${M.linhas.map(l=>{const f=v=>l.cnt?String(v):ctMoney(v);const vs=[l.vg,l.ger,l.det,l.men,l.dash];return`<tr><td style="${_TD}">${l.nome}</td>${vs.map(v=>`<td style="${_TD}${_NUM}">${f(v)}</td>`).join('')}<td style="${_TD}">${l.ok?'<span class="ctx-badge-ok">✓ Coincide</span>':'<span class="ctx-badge-err">✕ Diverge ('+f(Math.max(...vs)-Math.min(...vs))+')</span>'}</td></tr>`;}).join('')}</tbody></table></div></div>
+      <div style="padding:0 16px 14px"><div style="font-size:12px;font-weight:700;color:var(--text2);margin:6px 0">Relatório de auditoria por empenho (${linhasAud.length})</div>
+      <div class="scroll-h"><table style="min-width:1250px"><thead><tr>${['Ação','Empenho','Inicial','Reforços','Anulações','Empenhado','Liquidado','Saldo calculado','Saldo no módulo Empenho','Diferença','Possível causa','Situação','Providência recomendada'].map((h,i)=>`<th style="${_TH}text-align:${(i>=2&&i<=9)?'right':'left'}">${h}</th>`).join('')}</tr></thead><tbody>
+      ${linhasAud.map(r=>{const x=r.x,dif=x?Math.max(0,x.saldo)-x.saldoModulo:0,nv=r.alerts.some(z=>z.nivel==='erro')?'erro':(r.alerts.some(z=>z.nivel==='aviso')?'aviso':'ok');
+        return`<tr><td style="${_TD}font-size:11px">${ctEsc(r.acao)}</td><td style="${_TD}font-family:'IBM Plex Mono',monospace;font-size:11px">${ctEsc(r.emp)}</td>${x?`<td style="${_TD}${_NUM}">${ctMoney(x.inicial)}</td><td style="${_TD}${_NUM}">${ctMoney(x.reforcos)}</td><td style="${_TD}${_NUM}">${ctMoney(x.anulacoes)}</td><td style="${_TD}${_NUM}">${ctMoney(x.atualizado)}</td><td style="${_TD}${_NUM}">${ctMoney(x.liquidado)}</td><td style="${_TD}${_NUM}">${ctSaldoHtml(x.saldo)}</td><td style="${_TD}${_NUM}">${ctMoney(x.saldoModulo)}</td><td style="${_TD}${_NUM}${dif?'color:var(--red2);font-weight:800':''}">${ctMoney(dif)}</td>`:`<td colspan="8" style="${_TD}text-align:center;color:var(--text3)">sem empenho vinculado</td>`}<td style="${_TD}font-size:10.5px;color:var(--text3);min-width:230px;max-width:320px">${r.alerts.filter(z=>z.nivel!=='info').map(z=>ctEsc(z.origem||z.msg)).join(' · ')||'—'}</td><td style="${_TD}">${ctSelo(nv)}</td><td style="${_TD}font-size:10.5px;color:var(--text3);min-width:200px;max-width:260px">${[...new Set(r.alerts.map(z=>AE_PROV[z.cod]).filter(Boolean))].join(' ')||'—'}</td></tr>`;}).join('')||`<tr class="empty-row"><td colspan="13">Nenhum empenho</td></tr>`}</tbody></table></div></div></div>`;
+}
+function aeAuditoriaCsv(){
+  const D=aeDados(),L=aeAuditoriaLinhas(D);
+  const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',m=c=>(c/100).toFixed(2).replace('.',',');
+  const lines=[['Ação','ID da ação','Empenho','Exercício','Competência','Valor inicial','Reforços','Anulações','Empenhado atualizado','Liquidado','Pago','Saldo calculado','Saldo no módulo Empenho','Diferença','Possível causa','Situação','Providência recomendada'].map(q).join(';')];
+  L.forEach(r=>{const x=r.x;lines.push([r.acao,r.aid,r.emp,x?x.ano:'',x?x.e.competencia||'':'',x?m(x.inicial):'',x?m(x.reforcos):'',x?m(x.anulacoes):'',x?m(x.atualizado):'',x?m(x.liquidado):'',x?m(x.pago):'',x?m(x.saldo):'',x?m(x.saldoModulo):'',x?m(Math.max(0,x.saldo)-x.saldoModulo):'',
+    r.alerts.filter(z=>z.nivel!=='info').map(z=>z.origem||z.msg).join(' | '),r.alerts.some(z=>z.nivel==='erro')?'Divergência':(r.alerts.some(z=>z.nivel==='aviso')?'Atenção':'Regular'),[...new Set(r.alerts.map(z=>AE_PROV[z.cod]).filter(Boolean))].join(' ')].map(q).join(';'));});
+  downloadFile('﻿'+lines.join('\r\n'),'SUCO_Auditoria_AssistenciaEstudantil_'+new Date().toISOString().slice(0,10)+'.csv','text/csv;charset=utf-8');
+}
+// Reprocessa a aba AE ativa (após edição/exclusão/importação/carga da nuvem)
+function aeRefreshAtivo(){
+  ['acoes','gerenciar','detalhe','mensal','dashboard'].forEach(t=>{
+    const p=document.getElementById('ae-'+t);if(!p||p.style.display==='none')return;
+    ({acoes:renderAeAcoes,gerenciar:renderAeGerenciar,detalhe:renderAeDetalhe,mensal:renderAeMensal,dashboard:renderAeDash})[t]();
+  });
+}
+
 function openModalAcao(id){
   const a=id?state.acoes.find(x=>x.id===id):null;
   openModal(a?'Editar Ação':'Nova Ação de Assistência Estudantil','',()=>{
@@ -6872,194 +6994,6 @@ function init(){
 // ═══════════════════════════════════════════════════════════
 //  AE — DETALHE POR AÇÃO
 // ═══════════════════════════════════════════════════════════
-function renderAeDetalhe(){
-  const el=document.getElementById('ae-detalhe');
-  if(!el)return;
-  const acoes=state.acoes.filter(a=>aeAtivo(a));
-  if(!acoes.length){
-    el.innerHTML='<div class="info-box info"><span class="info-icon">ℹ</span><div>Nenhuma ação cadastrada.</div></div>';
-    return;
-  }
-  const selId='ae-detalhe-sel';
-  // Captura o valor atual ANTES de reescrever o DOM
-  const prevSel=el.querySelector('#'+selId);
-  const curSel=(prevSel&&prevSel.value&&acoes.some(a=>a.id===prevSel.value))?prevSel.value:acoes[0].id;
-  el.innerHTML=`
-    <div class="card">
-      <div class="card-title"><span class="card-title-dot" style="background:var(--gold)"></span>Selecionar Ação</div>
-      <div class="field" style="max-width:420px">
-        <select id="${selId}" onchange="renderAeDetalhe()">
-          ${acoes.map(a=>`<option value="${a.id}" ${a.id===curSel?'selected':''}>${a.nome} — ${a.tipo||'Benefício'}</option>`).join('')}
-        </select>
-      </div>
-    </div>`;
-  const a=acoes.find(x=>x.id===curSel)||acoes[0];
-  if(!a)return;
-  const comp=_aeFiltroComp;
-  const labelFiltro=comp?(()=>{const p=comp.split('-');return p.length===2?MESES_FULL[parseInt(p[1])-1]+'/'+p[0]:comp;})():'';
-  const pm=Array.isArray(a.previstoMensalArr)?a.previstoMensalArr:Array(12).fill(0);
-  const totPrev=comp?aePrevistoAcao(a,comp):(pm.reduce((s,v)=>s+v,0)||a.previsto||0);
-  const tAcao  = aeTotaisAcao(a.id, comp);
-  const emp    = tAcao.empenhado;
-  const liq    = tAcao.liquidado;
-  const pag    = tAcao.pago;
-  const saldoNEmp = totPrev - emp;
-  // ── grade de colunas da tabela (6 colunas fixas) ─────────────────────────
-  // MÊS | PREVISTO | TOTAL EMP. | LIQUIDADO | PAGO | SALDO
-  const TCOLS = '110px 1fr 1fr 1fr 1fr 1fr';
-  const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  el.innerHTML += `
-    <!-- ── KPI CARDS: 6 cards individuais ── -->
-    <div class="kpi-grid" style="grid-template-columns:repeat(6,1fr);margin-bottom:18px">
-      <div class="kpi accent-gold">
-        <div class="kpi-label">Previsto Total</div>
-        <div class="kpi-value text-gold" style="font-size:clamp(12px,1.6vw,22px)">${fmtBR(totPrev)}</div>
-        <div class="kpi-sub">valor previsto da ação</div>
-      </div>
-      <div class="kpi accent-blue">
-        <div class="kpi-label">Empenhado</div>
-        <div class="kpi-value text-blue" style="font-size:clamp(12px,1.6vw,22px)">${fmtBR(emp)}</div>
-        <div class="kpi-sub">módulo Empenho</div>
-      </div>
-      <div class="kpi accent-amber">
-        <div class="kpi-label">Liquidado</div>
-        <div class="kpi-value" style="color:var(--amber);font-size:clamp(12px,1.6vw,22px)">${fmtBR(liq)}</div>
-        <div class="kpi-sub">módulo Liquidação</div>
-      </div>
-      <div class="kpi accent-teal">
-        <div class="kpi-label">Pago</div>
-        <div class="kpi-value" style="color:var(--teal);font-size:clamp(12px,1.6vw,22px)">${fmtBR(pag)}</div>
-        <div class="kpi-sub">módulo Liquidação</div>
-      </div>
-      <div class="kpi ${saldoNEmp<0?'accent-red':'accent-green'}">
-        <div class="kpi-label">Saldo Não Empenhado</div>
-        <div class="kpi-value ${saldoNEmp<0?'text-red':'text-green'}" style="font-size:clamp(12px,1.6vw,22px)">${fmtBR(saldoNEmp)}</div>
-        <div class="kpi-sub">previsto − empenhado</div>
-      </div>
-      <div class="kpi accent-purple">
-        <div class="kpi-label">Tipo</div>
-        <div class="kpi-value" style="color:var(--purple);font-size:14px;padding-top:4px">${a.tipo||'Benefício'}</div>
-        <div class="kpi-sub">categoria da ação</div>
-      </div>
-    </div>
-
-    <!-- ── TABELA MENSAL ── -->
-    <div style="margin-top:0">
-      ${comp?`<div class="info-box info" style="margin-bottom:12px"><span class="info-icon">📅</span><div>Detalhe filtrado pela competência: <strong>${labelFiltro}</strong>.</div></div>`:''}
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 16px;background:rgba(0,166,81,.06);border:1px solid rgba(0,166,81,.2);border-radius:10px">
-        <span style="font-size:16px">📅</span>
-        <div style="font-size:12px;color:var(--text2);line-height:1.5">
-          Cada valor é exibido exclusivamente no <strong style="color:var(--exe)">mês de competência do registro original</strong>
-          — sem acumulação entre meses.
-        </div>
-      </div>
-
-      <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:12px;overflow:hidden">
-
-        <!-- cabeçalho da tabela -->
-        <div style="display:flex;align-items:center;gap:10px;padding:13px 18px;background:linear-gradient(135deg,rgba(68,138,255,.10),rgba(68,138,255,.03));border-bottom:1px solid var(--blue-border)">
-          <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px rgba(68,138,255,.5);flex-shrink:0"></div>
-          <span style="font-size:13px;font-weight:700;color:var(--blue);letter-spacing:.04em;text-transform:uppercase">${a.nome||a.tipo||'Ação'} — Competência Mensal</span>
-          <span style="font-size:10px;color:var(--text3);margin-left:auto">Previsto · Empenhado · Liquidado · Pago · Saldo</span>
-        </div>
-
-        <!-- linha de títulos das colunas -->
-        <div style="display:grid;grid-template-columns:${TCOLS};gap:0;padding:9px 18px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border-bottom:2px solid var(--border3)">
-          <div style="font-size:9px;font-weight:800;color:var(--text3);letter-spacing:.14em;text-transform:uppercase">MÊS</div>
-          <div style="font-size:9px;font-weight:800;color:var(--gold);letter-spacing:.14em;text-transform:uppercase;text-align:right">PREVISTO</div>
-          <div style="font-size:9px;font-weight:800;color:var(--blue2);letter-spacing:.14em;text-transform:uppercase;text-align:right;background:rgba(68,138,255,.09);border-radius:4px;padding:2px 6px">TOTAL EMP.</div>
-          <div style="font-size:9px;font-weight:800;color:var(--amber);letter-spacing:.14em;text-transform:uppercase;text-align:right">LIQUIDADO</div>
-          <div style="font-size:9px;font-weight:800;color:var(--teal);letter-spacing:.14em;text-transform:uppercase;text-align:right">PAGO</div>
-          <div style="font-size:9px;font-weight:800;color:var(--gold2);letter-spacing:.14em;text-transform:uppercase;text-align:right">SALDO</div>
-        </div>
-
-        <!-- linhas dos meses -->
-        ${(()=>{
-          const anoAtual = new Date().getFullYear();
-          return pm.map((v, i)=>{
-            // ── competência deste mês ──────────────────────────────────────
-            const prefix      = anoAtual + '-' + String(i+1).padStart(2,'0');
-            // Se há filtro de competência global e este mês não é o filtrado, exibe vazio
-            const mesOculto   = comp && prefix !== comp;
-            const previstoM   = mesOculto ? 0 : v;
-            // aeTotaisAcao com competência exata deste mês — sem acumulação
-            const tMes        = mesOculto
-              ? {empenhado:0, liquidado:0, pago:0}
-              : aeTotaisAcao(a.id, prefix);
-            const empM  = tMes.empenhado;
-            const liqM  = tMes.liquidado;
-            const pagM  = tMes.pago;
-            const saldoM = previstoM - empM;
-            const temDados = previstoM > 0 || empM > 0 || liqM > 0 || pagM > 0;
-            const mesAbr   = MESES_ABR[i];
-
-            // linha sem dados: exibe apagada
-            if(!temDados){
-              return '<div style="display:grid;grid-template-columns:'+TCOLS+';gap:0;padding:7px 18px;border-top:1px solid var(--border);opacity:.22">'
-                +'<div style="font-size:11px;font-weight:600;color:var(--text4)">'+mesAbr+'/'+anoAtual+'</div>'
-                +'<div style="text-align:right;font-size:11px;color:var(--text4)">—</div>'.repeat(5)
-                +'</div>';
-            }
-
-            // helpers de célula
-            const cel = (val, clr) => val > 0
-              ? '<span style="font-size:12px;font-weight:700;color:'+clr+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(val)+'</span>'
-              : '<span style="color:var(--text4);font-size:11px">—</span>';
-
-            const saldoClr  = saldoM < 0 ? 'var(--red)' : 'var(--gold)';
-            const saldoCel  = (previstoM > 0 || empM > 0)
-              ? '<span style="font-size:12px;font-weight:800;color:'+saldoClr+';font-family:\'IBM Plex Mono\',monospace">'+fmtBR(saldoM)+'</span>'
-              : '<span style="color:var(--text4);font-size:11px">—</span>';
-
-            // barra de progresso de empenho
-            const pct      = previstoM > 0 ? Math.min(100, Math.round(empM / previstoM * 100)) : 0;
-            const pctClr   = pct >= 80 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--red)';
-            const barHtml  = (previstoM > 0 || empM > 0)
-              ? '<div style="padding:0 18px 8px;display:flex;align-items:center;gap:8px">'
-                +'<div style="flex:1;height:3px;background:var(--bg5);border-radius:3px;overflow:hidden">'
-                +'<div style="height:100%;width:'+pct+'%;background:'+pctClr+';border-radius:3px;transition:width .4s"></div></div>'
-                +'<span style="font-size:9px;color:'+pctClr+';font-weight:700;white-space:nowrap">'+pct+'% emp.</span></div>'
-              : '';
-
-            const zebraBase = i % 2 === 0 ? 'rgba(255,255,255,.013)' : 'transparent';
-            return '<div style="border-top:1px solid var(--border);background:'+zebraBase+';overflow:hidden;transition:background .12s"'
-              +' onmouseover="this.style.background=\'rgba(68,138,255,.05)\'"'
-              +' onmouseout="this.style.background=\''+zebraBase+'\'">'
-              +'<div style="display:grid;grid-template-columns:'+TCOLS+';gap:0;padding:10px 18px;align-items:center">'
-              // MÊS
-              +'<div><div style="font-size:12px;font-weight:700;color:var(--gold)">'+mesAbr+'</div>'
-              +'<div style="font-size:9px;color:var(--text4)">'+anoAtual+'</div></div>'
-              // PREVISTO
-              +'<div style="text-align:right">'
-              +(previstoM > 0
-                ? '<span style="font-size:12px;font-weight:600;color:var(--text2);font-family:\'IBM Plex Mono\',monospace">'+fmtBR(previstoM)+'</span>'
-                : '<span style="color:var(--text4);font-size:11px">—</span>')
-              +'</div>'
-              // TOTAL EMP.
-              +'<div style="text-align:right;background:rgba(68,138,255,.05);border-radius:4px;padding:2px 4px">'+cel(empM,'var(--blue2)')+'</div>'
-              // LIQUIDADO
-              +'<div style="text-align:right">'+cel(liqM,'var(--amber)')+'</div>'
-              // PAGO
-              +'<div style="text-align:right">'+cel(pagM,'var(--teal)')+'</div>'
-              // SALDO
-              +'<div style="text-align:right">'+saldoCel+'</div>'
-              +'</div>'+barHtml+'</div>';
-          }).join('');
-        })()}
-
-        <!-- rodapé totais -->
-        <div style="display:grid;grid-template-columns:${TCOLS};gap:0;padding:13px 18px;background:linear-gradient(135deg,var(--bg4),var(--bg5));border-top:2px solid var(--gold-border)">
-          <div style="font-size:11px;font-weight:800;color:var(--gold);letter-spacing:.06em;align-self:center">TOTAL</div>
-          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--gold);font-family:'IBM Plex Mono',monospace">${fmtBR(totPrev)}</span></div>
-          <div style="text-align:right;background:rgba(68,138,255,.07);border-radius:4px;padding:2px 6px"><span style="font-size:12px;font-weight:800;color:var(--blue2);font-family:'IBM Plex Mono',monospace">${fmtBR(emp)}</span></div>
-          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--amber);font-family:'IBM Plex Mono',monospace">${fmtBR(liq)}</span></div>
-          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:var(--teal);font-family:'IBM Plex Mono',monospace">${fmtBR(pag)}</span></div>
-          <div style="text-align:right"><span style="font-size:12px;font-weight:800;color:${saldoNEmp<0?'var(--red)':'var(--gold)'};font-family:'IBM Plex Mono',monospace">${fmtBR(saldoNEmp)}</span></div>
-        </div>
-
-      </div>
-    </div>`; /* end renderAeDetalhe */
-}
 // ═══════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════
@@ -8402,7 +8336,7 @@ function limparCadastroEmpenho(){
 
 function cempLimparFiltros(){
   ['cemp-f-numero','cemp-f-de','cemp-f-ate','cemp-f-forn','cemp-f-global','cemp-f-vmin','cemp-f-vmax'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  ['cemp-f-cat','cemp-f-comp','cemp-f-saldo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['cemp-f-cat','cemp-f-comp','cemp-f-saldo','cemp-f-acao'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   cempFiltroOp('');
   cempFiltroTipo('');
 }
@@ -8413,6 +8347,7 @@ function cempFiltrosAtuais(){
     fNum:(document.getElementById('cemp-f-numero')?.value||'').toLowerCase().trim(),
     fCat:document.getElementById('cemp-f-cat')?.value||'',
     fComp:document.getElementById('cemp-f-comp')?.value||'',
+    fAcao:document.getElementById('cemp-f-acao')?.value||'',
     fDe:document.getElementById('cemp-f-de')?.value||'',
     fAte:document.getElementById('cemp-f-ate')?.value||'',
     fForn:(document.getElementById('cemp-f-forn')?.value||'').toLowerCase().trim(),
@@ -8429,6 +8364,8 @@ function cempPassaFiltro(e,f){
   if(f.fNum&&!(e.numero||'').toLowerCase().includes(f.fNum))return false;
   if(f.fCat&&e.categoria!==f.fCat)return false;
   if(f.fTipo&&(e.tipoEmp||'EXE')!==f.fTipo)return false;
+  if(f.fAcao==='__sem__'){if(e.acaoId)return false;}
+  else if(f.fAcao&&e.acaoId!==f.fAcao)return false;
   if(f.fComp&&(e.competencia||'')!==f.fComp)return false;
   if(f.fDe&&e.data<f.fDe)return false;
   if(f.fAte&&e.data>f.fAte)return false;
@@ -8470,6 +8407,24 @@ function renderCadastroEmpenhos(){
   if(catSel){
     const cur=catSel.value;
     catSel.innerHTML='<option value="">Todas</option>'+DEFAULT_CATS.map(c=>`<option ${c===cur?'selected':''}>${c}</option>`).join('');
+  }
+  // Populate ação vinculada filter (ações que possuem empenhos; restrito à categoria selecionada)
+  const acaoSel=document.getElementById('cemp-f-acao');
+  if(acaoSel){
+    const cur=acaoSel.value;
+    const catF=catSel?catSel.value:'';
+    const cont={};let semAcao=0;
+    state.empenhosCad.forEach(e=>{
+      if(e.status==='Excluído')return;
+      if(catF&&e.categoria!==catF)return;
+      if(e.acaoId)cont[e.acaoId]=(cont[e.acaoId]||0)+1;else semAcao++;
+    });
+    const ac=(state.acoes||[]).filter(a=>a.status!=='Excluído'&&(cont[a.id]||a.id===cur))
+      .sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
+    const esc=x=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    acaoSel.innerHTML='<option value="">Todas</option><option value="__sem__"'+(cur==='__sem__'?' selected':'')+'>Sem ação vinculada ('+semAcao+')</option>'
+      +ac.map(a=>`<option value="${esc(a.id)}" ${a.id===cur?'selected':''}>${esc(a.nome||a.id)} (${cont[a.id]||0})</option>`).join('');
+    if(cur&&acaoSel.value!==cur)acaoSel.value='';
   }
   // Populate competência filter
   const compSel=document.getElementById('cemp-f-comp');
@@ -14161,6 +14116,7 @@ function gerarPdfEmpenhosFiltrados(){
   filtrosTexto.push('Tipo: '+(f.fTipo||'Todos'));
   if(f.fOp) filtrosTexto.push('Operação: '+f.fOp);
   if(f.fComp) filtrosTexto.push('Competência: '+f.fComp);
+  if(f.fAcao) filtrosTexto.push('Ação: '+(f.fAcao==='__sem__'?'Sem ação vinculada':((state.acoes||[]).find(a=>a.id===f.fAcao)?.nome||f.fAcao)));
   if(f.fDe||f.fAte) filtrosTexto.push('Data: '+(f.fDe?fmtData(f.fDe):'—')+' a '+(f.fAte?fmtData(f.fAte):'—'));
   if(f.fForn) filtrosTexto.push('Fornecedor: '+f.fForn);
   if(f.fNum) filtrosTexto.push('Número: '+f.fNum);
