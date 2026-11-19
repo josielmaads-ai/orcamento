@@ -1411,6 +1411,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
         <div class="field"><label>Categoria</label><select id="liq-f-cat" onchange="renderLiquidacoes()"><option value="">Todas</option></select></div>
         <div class="field"><label>Data inicial</label><input type="date" id="liq-f-de" oninput="renderLiquidacoes()"></div>
         <div class="field"><label>Data final</label><input type="date" id="liq-f-ate" oninput="renderLiquidacoes()"></div>
+        <div class="field"><label>Nº do empenho</label><input type="text" id="liq-f-emp" list="liq-f-emp-list" placeholder="Digite ou escolha o empenho (ex: 2026NE000044)" autocomplete="off" oninput="renderLiquidacoes()" title="Busca antecipada: sugere os empenhos que já possuem liquidação e mostra quantas foram realizadas"><datalist id="liq-f-emp-list"></datalist></div>
         <div class="field"><label>Fornecedor</label><input type="text" id="liq-f-forn" placeholder="Buscar fornecedor..." oninput="renderLiquidacoes()"></div>
         <div class="field"><label>Mês de referência</label><input type="text" id="liq-f-mes" placeholder="Ex: 2026-05 ou Maio" oninput="renderLiquidacoes()"></div>
         <div class="field"><label>Status</label><select id="liq-f-status" onchange="renderLiquidacoes()"><option value="">Todos</option><option value="Sim">Pago</option><option value="Não">Não pago</option></select></div>
@@ -1419,6 +1420,7 @@ html{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-ser
       </div>
       <div class="btn-row" style="margin-top:10px"><button class="btn btn-sec btn-sm" onclick="limparFiltrosLiquidacao()">↺ Limpar filtros</button><button class="btn btn-amber btn-sm" onclick="gerarPdfLiquidacoesFiltradas()">⬇ Gerar PDF</button></div>
     </div>
+    <div id="liq-emp-resumo" style="display:none"></div>
     <div class="scroll-h"><table><thead><tr><th>Data</th><th>Categoria</th><th>Fornecedor</th><th>NF/Fatura</th><th>NP/DH</th><th class="r">Valor Bruto</th><th class="r">Retenções</th><th class="r">Valor Líquido</th><th>Pago?</th><th>Ações</th></tr></thead><tbody id="liq-tbody"></tbody></table></div>
   </div>
   <!-- Modal detalhe -->
@@ -9678,6 +9680,7 @@ function liqFiltrosAtuais(){
     fCat:document.getElementById('liq-f-cat')?.value||'',
     fDe:document.getElementById('liq-f-de')?.value||'',
     fAte:document.getElementById('liq-f-ate')?.value||'',
+    fEmp:(document.getElementById('liq-f-emp')?.value||'').toLowerCase().replace(/\s+/g,''),
     fForn:(document.getElementById('liq-f-forn')?.value||'').toLowerCase().trim(),
     fMes:(document.getElementById('liq-f-mes')?.value||'').toLowerCase().trim(),
     fStatus:document.getElementById('liq-f-status')?.value||'',
@@ -9691,6 +9694,7 @@ function liqPassaFiltro(l,f){
   if(f.fCat&&l.categoria!==f.fCat)return false;
   if(f.fDe&&l.data<f.fDe)return false;
   if(f.fAte&&l.data>f.fAte)return false;
+  if(f.fEmp&&!((l.nEmpenho||'').toLowerCase().replace(/\s+/g,'').includes(f.fEmp)||(l.nEmpenhoCosip||'').toLowerCase().replace(/\s+/g,'').includes(f.fEmp)))return false;
   if(f.fForn&&!(l.fornNome||'').toLowerCase().includes(f.fForn))return false;
   if(f.fMes&&!((l.mesRef||'').toLowerCase().includes(f.fMes)||(l.mesPag||'').toLowerCase().includes(f.fMes)))return false;
   if(f.fStatus&&((l.pago==='Sim'?'Sim':'Não')!==f.fStatus))return false;
@@ -9704,6 +9708,31 @@ function liqPassaFiltro(l,f){
   }
   return true;
 }
+/* ★ Busca antecipada por empenho (lista de sugestões com a quantidade de liquidações) + painel-resumo */
+function liqAtualizarBuscaEmpenho(all,f){
+  const ativas=(state.liquidacoes||[]).filter(l=>l.status!=='Excluído'&&l.nEmpenho);
+  const cont={};ativas.forEach(l=>{cont[l.nEmpenho]=(cont[l.nEmpenho]||0)+1;});
+  const nums=Object.keys(cont).sort();
+  const dl=document.getElementById('liq-f-emp-list');
+  if(dl){const sig=nums.map(n=>n+':'+cont[n]).join('|');
+    if(dl.dataset.sig!==sig){dl.dataset.sig=sig;dl.innerHTML=nums.map(n=>`<option value="${n}">${cont[n]} liquidação(ões)</option>`).join('');}}
+  const box=document.getElementById('liq-emp-resumo');if(!box)return;
+  if(!f.fEmp){box.style.display='none';box.innerHTML='';return;}
+  const emps=[...new Set(all.map(l=>l.nEmpenho))];
+  const n=all.length,pagas=all.filter(l=>l.pago==='Sim').length;
+  const soma=k=>all.reduce((s,l)=>s+(l[k]||0),0);
+  const bruto=soma('valorBruto'),ret=soma('totalRetencoes'),liq=all.reduce((s,l)=>s+(l.valorLiquido||0),0);
+  const card=(rot,val,cor)=>`<div style="flex:1;min-width:130px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;padding:10px 14px"><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:4px">${rot}</div><div style="font-size:18px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:${cor||'var(--text)'}">${val}</div></div>`;
+  const titulo=emps.length===1?'Empenho <strong style="color:var(--gold)">'+emps[0]+'</strong>':(emps.length?emps.length+' empenhos correspondem à busca':'Nenhum empenho encontrado');
+  box.style.display='block';
+  box.innerHTML=`<div style="margin:12px 16px 4px;padding:14px 16px;border-radius:14px;border:2px solid rgba(245,200,66,.35);background:linear-gradient(135deg,rgba(245,200,66,.10),rgba(245,200,66,.02));box-shadow:0 6px 18px rgba(0,0,0,.22)">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">🔎 ${titulo} — liquidações realizadas</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      ${card('Liquidações',n,'var(--gold)')}${card('Pagas',pagas,'var(--green)')}${card('A pagar',n-pagas,n-pagas?'var(--amber)':'var(--text3)')}
+      ${card('Valor bruto',fmtBR(bruto))}${card('Retenções',fmtBR(ret),'var(--red)')}${card('Valor líquido',fmtBR(liq),'var(--green)')}
+    </div></div>`;
+}
+
 function renderLiquidacoes(){
   if(!state.liquidacoes)state.liquidacoes=[];
   const catSel=document.getElementById('liq-f-cat');
@@ -9717,6 +9746,7 @@ function renderLiquidacoes(){
   const {slice,pg,totalPgs,total}=paginar(all,'liquidacoes');
   const totalBrutoFiltrado=all.reduce((s,l)=>s+(l.valorBruto||0),0);
   const el=document.getElementById('liq-count');if(el)el.textContent=total+' liquidação(ões)';
+  liqAtualizarBuscaEmpenho(all,f);
   const tbody=document.getElementById('liq-tbody');if(!tbody)return;
   // ★ Coluna Fornecedor/Vínculo — regra específica para ASSISTÊNCIA ESTUDANTIL:
   //   - Empenho vinculado a AÇÃO (modalidade diferente de Material de Consumo) → exibe a ação.
@@ -9762,7 +9792,7 @@ function renderLiquidacoes(){
 }
 
 function limparFiltrosLiquidacao(){
-  ['liq-f-de','liq-f-ate','liq-f-forn','liq-f-mes','liq-f-nfemi-de','liq-f-nfemi-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['liq-f-emp','liq-f-de','liq-f-ate','liq-f-forn','liq-f-mes','liq-f-nfemi-de','liq-f-nfemi-ate'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const cat=document.getElementById('liq-f-cat');if(cat)cat.value='';
   const st=document.getElementById('liq-f-status');if(st)st.value='';
   renderLiquidacoes();
@@ -10657,22 +10687,37 @@ function abrirDetalheLiquidacao(id){
     // gravado — assume-se 'MERCADORIA EM GERAL' pois era a única alíquota
     // aplicada antes da existência da seleção Gás GLP.
     const tipoProdutoMat=l.tipoProdutoMat||'MERCADORIA EM GERAL';
-    if(tipoProdutoMat==='GÁS GLP'){
-      sec2=secValoresDarf('2.1','Seção 2.1 — Valores',
-        'SEÇÃO 02.1 - GÁS GLP - COD DARF- 8739- ALIQUOTA 1,24 % - NAT RENDIMENTOS 17013',
-        valorTableRow('Valor Total NF',fmtBR(l.valorBruto))+
-        (!isSimples?valorTableRow('Retenção (1,24%)',fmtBR(retencao),'var(--red2)'):'')+
-        valorTableRow('Valor Líquido',fmtBR(l.valorLiquido),'var(--cyan)'),
-        '#00cfff','var(--cyan)'
-      );
-    } else {
-      sec2=secValoresDarf('2','Seção 2 — Valores',
-        'SEÇÃO 02 - MERCADORIAS EM GERAL - COD DARF- 6147 - ALIQUOTA 5,85% - NAT RENDIMENTOS 17009',
-        valorTableRow('Valor Total NF',fmtBR(l.valorBruto))+
-        (!isSimples?valorTableRow('Retenção (5,85%)',fmtBR(retencao),'var(--red)'):'')+
-        valorTableRow('Valor Líquido',fmtBR(l.valorLiquido),'var(--green)'),
-        '#ffab40','var(--amber)'
-      );
+    {
+      /* ★ SEÇÃO 2 / 2.1 — layout em tabela, cada dado em linha própria, com ícone de copiar */
+      const _glp=(tipoProdutoMat==='GÁS GLP');
+      const _cfg=_glp
+        ?{num:'2.1',tipo:'GÁS GLP',darf:'8739',aliq:'1,24%',nat:'17013',cor:'#00cfff',corTxt:'var(--cyan)',corLiq:'var(--cyan)',corRet:'var(--red2)'}
+        :{num:'2',tipo:'MERCADORIAS EM GERAL',darf:'6147',aliq:'5,85%',nat:'17009',cor:'#ffab40',corTxt:'var(--amber)',corLiq:'var(--green)',corRet:'var(--red)'};
+      const _cnpjEmp=(emp&&emp.cnpj)||l.cnpj||'';
+      const _cp=(v)=>`<button type="button" title="Copiar" aria-label="Copiar ${String(v).replace(/"/g,'')}" onclick="navigator.clipboard.writeText('${String(v).replace(/'/g,"\\'")}').then(()=>toast('Copiado: ${String(v).replace(/'/g,"\\'")}','success'))" style="margin-left:8px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid ${_cfg.cor}55;background:${_cfg.cor}14;color:${_cfg.cor};cursor:pointer;font-size:12px;line-height:1;padding:0;transition:all .12s" onmouseenter="this.style.background='${_cfg.cor}33'" onmouseleave="this.style.background='${_cfg.cor}14'">⧉</button>`;
+      const _ln=(rot,val,opts)=>{opts=opts||{};return `<tr>
+        <td style="padding:9px 6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid rgba(255,255,255,.06);width:46%">${rot}</td>
+        <td class="r" style="padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap"><span style="font-size:${opts.grande?'16':'14'}px;font-weight:${opts.grande?'800':'700'};font-family:'IBM Plex Mono',monospace;color:${opts.cor||'var(--text)'}">${val}</span>${opts.copiar?_cp(opts.copiar):''}</td>
+      </tr>`;};
+      const _sep=(t)=>`<tr><td colspan="2" style="padding:12px 6px 4px;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:${_cfg.corTxt};opacity:.85">${t}</td></tr>`;
+      sec2=`<div style="background:linear-gradient(135deg,${_cfg.cor}1f,${_cfg.cor}08);border:2px solid ${_cfg.cor}55;border-radius:14px;padding:16px 18px;margin-bottom:12px;box-shadow:0 6px 18px rgba(0,0,0,.25)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;padding-bottom:10px;border-bottom:1px solid ${_cfg.cor}40">
+          <div style="font-size:13px;font-weight:800;color:${_cfg.cor};letter-spacing:.08em;text-transform:uppercase">🔶 Seção ${_cfg.num} — Valores</div>
+          <span style="font-size:11px;font-weight:800;letter-spacing:.06em;color:${_cfg.corTxt};background:${_cfg.cor}1f;border:1px solid ${_cfg.cor}66;border-radius:999px;padding:3px 12px">${_cfg.tipo}</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse"><tbody>
+          ${_sep('Identificação da retenção')}
+          ${_ln('CNPJ do empenho',_cnpjEmp||'—',{copiar:_cnpjEmp})}
+          ${_ln('Código da dedução','DDF055',{copiar:'DDF055',cor:'var(--amber)'})}
+          ${_ln('COD DARF',_cfg.darf,{copiar:_cfg.darf,cor:_cfg.corTxt})}
+          ${_ln('Alíquota',_cfg.aliq)}
+          ${_ln('NAT Rendimentos',_cfg.nat,{copiar:_cfg.nat})}
+          ${_sep('Valores')}
+          ${_ln('Valor Total NF',fmtBR(l.valorBruto))}
+          ${!isSimples?_ln('Retenção ('+_cfg.aliq+')',fmtBR(retencao),{cor:_cfg.corRet}):''}
+          ${_ln('Valor Líquido',fmtBR(l.valorLiquido),{cor:_cfg.corLiq,grande:true})}
+        </tbody></table>
+      </div>`;
     }
 
     // Seção 3 — Dados Bancários e Informações Complementares
@@ -10700,17 +10745,15 @@ function abrirDetalheLiquidacao(id){
           <thead>
             <tr style="background:linear-gradient(135deg,rgba(255,171,64,.24),rgba(255,171,64,.08))">
               <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase;border-right:1px solid rgba(255,171,64,.22)">Descrição 2</th>
-              <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase;border-right:1px solid rgba(255,171,64,.22)">
-                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">DDF055
-                  <button class="btn btn-amber btn-xs" title="Copia apenas o código DDF055" onclick="navigator.clipboard.writeText('DDF055').then(()=>toast('Código copiado!','success'))">📋 Copiar Código</button>
-                  <button class="btn btn-sec btn-xs" title="Copia a Descrição 2 completa" onclick="navigator.clipboard.writeText('${safe}').then(()=>toast('Descrição copiada!','success'))">📄 Copiar Descrição</button>
-                </div>
-              </th>
+              <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase;border-right:1px solid rgba(255,171,64,.22)">DDF055</th>
               <th style="padding:10px 14px;text-align:left;font-size:10.5px;font-weight:800;color:var(--amber);letter-spacing:.06em;text-transform:uppercase">Retenção Tributos Federais</th>
             </tr>
           </thead>
         </table>
         <div style="padding:12px 14px;font-size:12px;line-height:1.8;color:var(--text2);font-family:'IBM Plex Mono',monospace;word-break:break-word;background:var(--bg3);border-top:1px solid rgba(255,171,64,.22)">${texto}</div>
+        <div style="padding:10px 14px;background:var(--bg3);border-top:1px solid rgba(255,171,64,.22)">
+          <button class="btn btn-amber" style="width:100%;justify-content:center;font-weight:800;letter-spacing:.04em;padding:10px 14px;box-shadow:0 2px 10px rgba(255,171,64,.25)" title="Copia a Descrição 2 completa" onclick="navigator.clipboard.writeText('${safe}').then(()=>toast('Descrição copiada!','success'))">📄 Copiar descrição</button>
+        </div>
       </div>`;
     }
 
@@ -13767,6 +13810,7 @@ function gerarPdfLiquidacoesFiltradas(){
   const filtrosTexto=[];
   filtrosTexto.push('Categoria: '+(f.fCat||'Todas'));
   if(f.fDe||f.fAte) filtrosTexto.push('Data: '+(f.fDe?fmtData(f.fDe):'—')+' a '+(f.fAte?fmtData(f.fAte):'—'));
+  if(f.fEmp) filtrosTexto.push('Empenho: '+(document.getElementById('liq-f-emp')?.value||'').trim()+' ('+rows.length+' liquidação(ões))');
   if(f.fForn) filtrosTexto.push('Fornecedor: '+f.fForn);
   if(f.fMes) filtrosTexto.push('Mês de referência: '+f.fMes);
   if(f.fStatus) filtrosTexto.push('Status: '+(f.fStatus==='Sim'?'Pago':'Não pago'));
@@ -14167,6 +14211,8 @@ function dados(){
   const L=(state.lancamentos||[]), hoje=hojeISO();
   const fornPorDoc=new Map();
   (state.fornecedores||[]).forEach(f=>{if(f&&f.status!=='Excluído'){const k=String(f.cnpj||f.documento||f.cpfCnpj||'').replace(/\D/g,'');if(k)fornPorDoc.set(k,f.nome||f.razaoSocial||'');}});
+  /* Coluna Fornecedor: empenhos de ASSISTÊNCIA ESTUDANTIL não têm fornecedor — exibem a AÇÃO vinculada (acaoId). A identidade do fornecedor (fkey/filtros) NÃO muda. */
+  const fornExibe=(cat,forn,acaoId)=>{if(cat!=='ASSISTÊNCIA ESTUDANTIL')return forn;const a=(state.acoes||[]).find(x=>x.id===acaoId&&x.status!=='Excluído');const t=a&&a.nome?'Ação: '+a.nome:'Ação não vinculada';return forn?forn+' — '+t:t;};
   const nomeForn=(cnpj,nome)=>{const k=String(cnpj||'').replace(/\D/g,'');return nome||fornPorDoc.get(k)||'';};
 
   const empsAtivos=(state.empenhosCad||[]).filter(empenhoCadAtivo);
@@ -14191,7 +14237,7 @@ function dados(){
       ini:a.inicial,ref:a.reforcos,anu:a.anulacoes,atu:a.atualizado,liq:a.liquidado,pago:a.pago,
       saldo:a.saldo,aPagar:a.liquidado-a.pago,qtdLiq:a.qtdLiq,qtdPag:a.qtdPagas,alerts:a.alerts,nivel:a.nivel,
       ult:a.ultimaMov,ts:e.tsModif||e.ts||'',liqs:[]};
-    R.fkey=fkeyOf(R.cnpj,R.forn);
+    R.fkey=fkeyOf(R.cnpj,R.forn);R.fornOrig=R.forn;R.forn=fornExibe(cat,R.forn,R.acao);
     E.push(R);
     /* eventos do empenho (a partir da memória de cálculo ctEmpAud.movs) */
     a.movs.forEach(m=>{
@@ -14229,7 +14275,7 @@ function dados(){
     const cat=normalizarCategoria(q.categoria||(r&&r.cat)||'');
     const rec=r?classe(r.e,q.data):(q.tipoRecurso||'EXE');
     Q.push({id:q.id,q,r,num:q.nEmpenho||(r&&r.num)||'',numCosip:q.nEmpenhoCosip||'',cat,rec,data:q.data||'',comp:validComp(q.competencia)?q.competencia:(r?r.comp:''),
-      forn:nomeForn(q.cnpj,q.fornNome)||(r&&r.forn)||'',cnpj:q.cnpj||(r&&r.cnpj)||'',fkey:fkeyOf(q.cnpj||(r&&r.cnpj),q.fornNome||(r&&r.forn)),
+      forn:fornExibe(cat,nomeForn(q.cnpj,q.fornNome)||(r&&r.fornOrig)||'',q.acaoId||(r&&r.acao)||''),fornOrig:nomeForn(q.cnpj,q.fornNome)||(r&&r.fornOrig)||'',cnpj:q.cnpj||(r&&r.cnpj)||'',fkey:fkeyOf(q.cnpj||(r&&r.cnpj),q.fornNome||(r&&r.fornOrig)),
       nf:q.nf||'',dataEmissao:q.dataEmissao||'',mesRef:q.mesRef||'',mesPag:q.mesPag||'',suap:q.suap||'',grupo:q.grupo||'',
       bruto,ret,liqd,pago,fonte:(r&&r.fonte)||'',ptres:(r&&r.ptres)||'',nd:(r&&r.nd)||'',pi:(r&&r.pi)||'',
       eid:r?r.id:'',cid:r?r.cid:'',acao:q.acaoId||(r&&r.acao)||'',
@@ -14267,7 +14313,7 @@ function dados(){
   semCad.forEach(l=>{
     const d=l.data||'';
     const base={eid:'',num:l.referencia||l.numeroEmpenho||'',cat:normalizarCategoria(l.categoria||''),fonte:l.fonte||'',ptres:l.ptres||'',nd:l.nd||'',pi:l.pi||'',
-      forn:l.fornNome||'',fkey:fkeyOf('',l.fornNome),cid:'',acao:l.acaoId||'',d,m:ym(d),y:yr(d),comp:validComp(l.competencia)?l.competencia:ym(d),
+      forn:fornExibe(normalizarCategoria(l.categoria||''),l.fornNome||'',l.acaoId||''),fkey:fkeyOf('',l.fornNome),cid:'',acao:l.acaoId||'',d,m:ym(d),y:yr(d),comp:validComp(l.competencia)?l.competencia:ym(d),
       rec:l.tipoRecurso||'EXE',recSis:l.tipoRecurso||'EXE',oid:l.id,otype:'lancamento',semCad:true,desc:(l.descricao||'')};
     if(l.tipo==='Empenho'){
       const reg=l.tipoRegistro||'';
@@ -14949,7 +14995,7 @@ function verificacoes(D){
   const RESTR=['ASSISTÊNCIA ESTUDANTIL','DIÁRIAS','PASSAGENS','SUPRIMENTOS DE FUNDOS'];
   add('RAP_RESTRITA','aviso','RAP em categoria que só admite EXE','Regra do sistema: essas categorias não admitem RAP.',E.filter(r=>r.rec==='RAP'&&RESTR.includes(r.cat)).map(r=>it('Empenho '+r.num,r.cat,r.atu)),'Revisar a classificação do empenho.');
   const exigeForn=['CONTRATOS','APOIO AO ENSINO','MATERIAL DE CONSUMO','RESTAURANTE','ENERGIA ELÉTRICA','COSIP','ÁGUA E ESGOTO','TAXAS E TRIBUTOS'];
-  add('EMP_SEM_FORN','aviso','Empenhos sem fornecedor/CNPJ','Categoria que exige fornecedor, sem CNPJ e sem nome.',E.filter(r=>exigeForn.includes(r.cat)&&!r.cnpj&&!r.forn).map(r=>it('Empenho '+r.num,r.cat,r.atu)),'Completar o cadastro do empenho.');
+  add('EMP_SEM_FORN','aviso','Empenhos sem fornecedor/CNPJ','Categoria que exige fornecedor, sem CNPJ e sem nome.',E.filter(r=>exigeForn.includes(r.cat)&&!r.cnpj&&!r.fornOrig).map(r=>it('Empenho '+r.num,r.cat,r.atu)),'Completar o cadastro do empenho.');
   add('EMP_SEM_COMP','aviso','Empenhos sem competência válida','Ficam fora da grade mensal e dos filtros por competência.',E.filter(r=>!validComp(r.comp)).map(r=>it('Empenho '+r.num,r.cat+' · competência "'+(r.comp||'vazia')+'"',r.atu)),'Informar a competência (AAAA-MM).');
   add('EMP_SEM_FONTE','info','Empenhos sem fonte, PTRES ou ND','Impedem análises por fonte/PTRES/ND.',E.filter(r=>!r.fonte||!r.ptres||!r.nd).map(r=>it('Empenho '+r.num,'faltam: '+[!r.fonte&&'fonte',!r.ptres&&'PTRES',!r.nd&&'ND'].filter(Boolean).join(', '),r.atu)),'Completar os campos orçamentários.');
   const naoPad=[];E.forEach(r=>{if(r.cat&&!DEFAULT_CATS.includes(r.cat))naoPad.push(it('Empenho '+r.num,'categoria "'+r.cat+'" fora do cadastro padrão',r.atu));});
@@ -14960,7 +15006,7 @@ function verificacoes(D){
   add('LIQ_ORFA','erro','Liquidações sem empenho vinculado','Não compõem o saldo de nenhum empenho cadastrado.',Q.filter(q=>!q.r).map(q=>it('Liquidação '+(q.nf?'NF '+q.nf:q.id),'empenho informado "'+(q.num||'—')+'" não localizado · '+q.forn,q.bruto)),'Corrigir o empenho da liquidação ou cadastrar o empenho.');
   add('LIQ_SEM_NF','aviso','Liquidações sem nota fiscal','Campo NF vazio.',Q.filter(q=>!q.nf).map(q=>it('Liquidação '+q.id,'empenho '+q.num+' · '+q.forn+' · '+fmtData(q.data),q.bruto)),'Informar a NF.');
   add('LIQ_SEM_DATA','aviso','Liquidações sem data','Não entram em filtros por data.',Q.filter(q=>!q.data).map(q=>it('Liquidação '+(q.nf||q.id),'empenho '+q.num,q.bruto)),'Informar a data.');
-  add('LIQ_SEM_FORN','aviso','Liquidações sem fornecedor','',Q.filter(q=>!q.forn&&!q.cnpj).map(q=>it('Liquidação '+(q.nf||q.id),'empenho '+q.num,q.bruto)),'Informar o fornecedor.');
+  add('LIQ_SEM_FORN','aviso','Liquidações sem fornecedor','',Q.filter(q=>!q.fornOrig&&!q.cnpj).map(q=>it('Liquidação '+(q.nf||q.id),'empenho '+q.num,q.bruto)),'Informar o fornecedor.');
   add('LIQ_VALOR','aviso','Bruto − Retenções ≠ Líquido','Diferença superior a 2 centavos entre o líquido gravado e o calculado.',Q.filter(q=>Math.abs(q.bruto-q.ret-q.liqd)>2).map(q=>it('Liquidação '+(q.nf?'NF '+q.nf:q.id),'bruto '+M(q.bruto)+' − ret. '+M(q.ret)+' ≠ líquido '+M(q.liqd),q.bruto-q.ret-q.liqd)),'Reeditar a liquidação para recalcular.');
   const espelho=new Map();L.forEach(l=>{if(l.liquidacaoId&&l.status==='Ativo')espelho.set(l.liquidacaoId,l);});
   const esp=[];Q.forEach(q=>{if(q.grupo==='__')return;const l=espelho.get(q.id);
